@@ -2,16 +2,37 @@
 
 import Link from "next/link";
 import Image, { type ImageLoader } from "next/image";
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LoginForm } from "./login-form";
 
 const passthroughLoader: ImageLoader = ({ src }) => src;
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const searchParamsString = searchParams?.toString() ?? "";
+  const registrationSuccess =
+    searchParams?.get("status") === "registration-success";
+
+  useEffect(() => {
+    if (!registrationSuccess) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams(searchParamsString);
+      params.delete("status");
+      const query = params.toString();
+      router.replace(query ? `/login?${query}` : "/login");
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [registrationSuccess, router, searchParamsString]);
+
   return (
     <>
       <div className="login-page-wrap">
         <div className="login-page-content">
+
           <div className="sign-up-cta mb-4 p-3 d-flex align-items-center justify-content-between flex-wrap">
             <div className="d-flex align-items-center">
               <span className="sign-up-icon d-inline-flex align-items-center justify-content-center mr-3">
@@ -31,6 +52,14 @@ export default function LoginPage() {
             </Link>
           </div>
           <div className="login-box">
+           {registrationSuccess ? (
+            <div
+              className="alert alert-success registration-success-alert"
+              role="alert"
+            >
+              School Registered successfully! 
+            </div>
+          ) : null}
             <div className="item-logo">
               <Image
                 src="/assets/img/logo2.png"
@@ -125,5 +154,13 @@ const styles = `
 .login-page-content .signup-footer .signup-footer-link:hover {
   color: #f95c2f;
   border-color: rgba(249, 92, 47, 0.7);
+}
+
+.registration-success-alert {
+  border-radius: 16px;
+  background: rgba(155, 136, 30, 0.12);
+  border: 1px solid rgba(167, 40, 150, 0.3);
+  color: #eb1414ff;
+  font-weight: 600;
 }
 `;

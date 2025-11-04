@@ -80,7 +80,7 @@ export default function RegisterPage() {
         );
       }
 
-      router.push("/login");
+      router.push("/login?status=registration-success");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Unable to register. Please try again.",
