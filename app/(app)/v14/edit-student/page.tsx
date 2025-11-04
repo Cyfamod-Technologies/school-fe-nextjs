@@ -498,7 +498,6 @@ export default function EditStudentPage() {
       ["current_term_id", "Term"],
       ["school_class_id", "Class"],
       ["class_arm_id", "Class arm"],
-      ["parent_id", "Parent"],
       ["status", "Status"],
     ];
 
@@ -526,7 +525,9 @@ export default function EditStudentPage() {
     if (form.class_section_id) {
       payload.append("class_section_id", form.class_section_id);
     }
-    payload.append("parent_id", form.parent_id);
+    if (form.parent_id) {
+      payload.append("parent_id", form.parent_id);
+    }
     payload.append("status", form.status);
     payload.append("address", form.address.trim());
     payload.append("medical_information", form.medical_information.trim());
@@ -889,7 +890,7 @@ export default function EditStudentPage() {
                 </select>
               </div>
               <div className="col-xl-3 col-lg-6 col-12 form-group">
-                <label>Assigned Parent *</label>
+                <label>Assigned Parent</label>
                 <select
                   id="parent-id"
                   className="form-control"
@@ -897,9 +898,8 @@ export default function EditStudentPage() {
                   onChange={(event) =>
                     setField("parent_id", event.target.value)
                   }
-                  required
                 >
-                  <option value="">Please Select Parent *</option>
+                  <option value="">Please Select Parent</option>
                   {parents.map((parent) => (
                     <option key={parent.id} value={parent.id}>
                       {`${parent.first_name ?? ""} ${parent.last_name ?? ""}`.trim() ||

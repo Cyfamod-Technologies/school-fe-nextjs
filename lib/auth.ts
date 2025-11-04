@@ -12,11 +12,22 @@ export interface LoginResponse {
   [key: string]: unknown;
 }
 
+export interface UserParent {
+  id: string | number;
+  first_name?: string | null;
+  last_name?: string | null;
+  phone?: string | null;
+  students_count?: number;
+  [key: string]: unknown;
+}
+
 export interface User {
   id: number;
   name: string;
   email: string;
   school?: School;
+  parents?: UserParent[];
+  linked_students_count?: number;
   [key: string]: unknown;
 }
 
@@ -50,6 +61,7 @@ export interface Term {
 export interface AuthenticatedUserResponse {
   user?: User;
   school?: School;
+  linked_students_count?: number;
   [key: string]: unknown;
 }
 
@@ -91,9 +103,15 @@ export async function getAuthenticatedUser(): Promise<User | null> {
       API_ROUTES.currentUser,
     );
     if (payload?.user) {
+      const linkedStudentsCount =
+        typeof payload.linked_students_count === "number"
+          ? payload.linked_students_count
+          : undefined;
+
       return {
         ...payload.user,
         school: payload.user.school ?? payload.school,
+        linked_students_count: linkedStudentsCount,
       };
     }
     if (payload?.school) {

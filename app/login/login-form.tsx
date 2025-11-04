@@ -85,7 +85,6 @@ export function LoginForm() {
             type="checkbox"
             className="form-check-input"
             id="remember-me"
-            disabled
           />
           <label htmlFor="remember-me" className="form-check-label">
             Remember Me

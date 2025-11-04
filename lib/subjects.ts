@@ -2,7 +2,7 @@ import { API_ROUTES } from "@/lib/config";
 import { apiFetch } from "@/lib/apiClient";
 
 export interface Subject {
-  id: number;
+  id: string;
   name: string;
   code?: string | null;
   description?: string | null;
@@ -67,11 +67,25 @@ export async function listAllSubjects(): Promise<Subject[]> {
   return payload.data ?? [];
 }
 
+type SubjectShowResponse = {
+  data?: Subject;
+  [key: string]: unknown;
+};
+
 export async function getSubject(
   subjectId: number | string,
 ): Promise<Subject | null> {
   try {
-    return await apiFetch<Subject>(`${API_ROUTES.subjects}/${subjectId}`);
+    const payload = await apiFetch<Subject | SubjectShowResponse>(
+      `${API_ROUTES.subjects}/${subjectId}`,
+    );
+
+    if (payload && typeof payload === "object" && "data" in payload) {
+      const data = (payload as SubjectShowResponse).data;
+      return (data ?? null) as Subject | null;
+    }
+
+    return payload as Subject;
   } catch (error) {
     console.error("Unable to load subject", error);
     return null;
