@@ -12,6 +12,8 @@ import {
   invalidateResultPin,
   listResultPins,
   type ResultPin,
+  type GenerateStudentPinPayload,
+  type BulkGeneratePinsPayload,
 } from "@/lib/resultPins";
 import { listStudents, type StudentSummary } from "@/lib/students";
 
@@ -63,6 +65,20 @@ const statusBadgeClass = (status: string | null | undefined): string => {
     return "badge badge-warning";
   }
   return "badge badge-secondary";
+};
+
+const formatUsage = (pin: ResultPin): string => {
+  const used = typeof pin.use_count === "number" ? pin.use_count : 0;
+  const limit =
+    typeof pin.max_usage === "number" && pin.max_usage > 0
+      ? pin.max_usage
+      : null;
+
+  if (limit !== null) {
+    return `${used} / ${limit}`;
+  }
+
+  return `${used} / Unlimited`;
 };
 
 const buildStudentLabel = (student: StudentSummary): string => {
@@ -125,6 +141,7 @@ export default function PinsPage() {
   } | null>(null);
 
   const [expiryDate, setExpiryDate] = useState<string>("");
+  const [maxUsage, setMaxUsage] = useState<string>("");
   const [regenerateExisting, setRegenerateExisting] = useState<boolean>(false);
 
   const [generatingSingle, setGeneratingSingle] = useState(false);
@@ -389,7 +406,7 @@ export default function PinsPage() {
   const handleGenerateSingle = async () => {
     if (!selectedStudent) {
       showFeedback(
-        "Select a student from the list before generating a PIN.",
+        "Select a student from the list, or use “Generate PINs for Class”.",
         "warning",
       );
       return;
@@ -402,15 +419,32 @@ export default function PinsPage() {
       return;
     }
 
+    const trimmedMaxUsage = maxUsage.trim();
+    let maxUsageValue: number | undefined;
+    if (trimmedMaxUsage) {
+      const parsed = Number.parseInt(trimmedMaxUsage, 10);
+      if (Number.isNaN(parsed) || parsed < 1) {
+        showFeedback("Enter a valid max usage (minimum 1).", "warning");
+        return;
+      }
+      maxUsageValue = parsed;
+    }
+
     setGeneratingSingle(true);
     resetFeedback();
     try {
-      await generateResultPinForStudent(selectedStudent, {
+      const payload: GenerateStudentPinPayload = {
         session_id: selectedSession,
         term_id: selectedTerm,
         regenerate: regenerateExisting,
         expires_at: expiryDate || null,
-      });
+      };
+
+      if (maxUsageValue !== undefined) {
+        payload.max_usage = maxUsageValue;
+      }
+
+      await generateResultPinForStudent(selectedStudent, payload);
       showFeedback("Result PIN generated successfully.", "success");
       await loadPins();
     } catch (error) {
@@ -435,17 +469,42 @@ export default function PinsPage() {
       return;
     }
 
+    if (!selectedClass) {
+      showFeedback(
+        "Select a class before generating PINs for the whole class.",
+        "warning",
+      );
+      return;
+    }
+
+    const trimmedMaxUsage = maxUsage.trim();
+    let maxUsageValue: number | undefined;
+    if (trimmedMaxUsage) {
+      const parsed = Number.parseInt(trimmedMaxUsage, 10);
+      if (Number.isNaN(parsed) || parsed < 1) {
+        showFeedback("Enter a valid max usage (minimum 1).", "warning");
+        return;
+      }
+      maxUsageValue = parsed;
+    }
+
     setGeneratingBulk(true);
     resetFeedback();
     try {
-      await bulkGenerateResultPins({
+      const payload: BulkGeneratePinsPayload = {
         session_id: selectedSession,
         term_id: selectedTerm,
-        school_class_id: selectedClass || undefined,
+        school_class_id: selectedClass,
         class_arm_id: selectedArm || undefined,
         regenerate: regenerateExisting,
         expires_at: expiryDate || null,
-      });
+      };
+
+      if (maxUsageValue !== undefined) {
+        payload.max_usage = maxUsageValue;
+      }
+
+      await bulkGenerateResultPins(payload);
       showFeedback("Result PINs generated successfully.", "success");
       await loadPins();
     } catch (error) {
@@ -470,16 +529,33 @@ export default function PinsPage() {
       return;
     }
 
+    const trimmedMaxUsage = maxUsage.trim();
+    let maxUsageValue: number | undefined;
+    if (trimmedMaxUsage) {
+      const parsed = Number.parseInt(trimmedMaxUsage, 10);
+      if (Number.isNaN(parsed) || parsed < 1) {
+        showFeedback("Enter a valid max usage (minimum 1).", "warning");
+        return;
+      }
+      maxUsageValue = parsed;
+    }
+
     const actionKey = `regen-${studentId}`;
     setPinActionKey(actionKey);
     resetFeedback();
     try {
-      await generateResultPinForStudent(studentId, {
+      const payload: GenerateStudentPinPayload = {
         session_id: selectedSession,
         term_id: selectedTerm,
         regenerate: true,
         expires_at: expiryDate || null,
-      });
+      };
+
+      if (maxUsageValue !== undefined) {
+        payload.max_usage = maxUsageValue;
+      }
+
+      await generateResultPinForStudent(studentId, payload);
       showFeedback("Result PIN regenerated successfully.", "success");
       await loadPins();
     } catch (error) {
@@ -652,7 +728,7 @@ export default function PinsPage() {
                   }}
                   disabled={classesLoading}
                 >
-                  <option value="">All classes</option>
+                  <option value="">Select class</option>
                   {classes.map((item) => (
                     <option key={item.id} value={String(item.id)}>
                       {item.name}
@@ -682,9 +758,11 @@ export default function PinsPage() {
                   ))}
                 </select>
               </div>
-              <div className="form-group col-md-3">
+            </div>
+            <div className="form-row">
+              <div className="form-group col-md-4 col-12">
                 <label htmlFor="pin-student" className="text-dark-medium">
-                  Student
+                  Student (single PIN)
                 </label>
                 <select
                   id="pin-student"
@@ -707,10 +785,11 @@ export default function PinsPage() {
                     </option>
                   ))}
                 </select>
+                <small className="form-text text-muted">
+                  Leave blank to generate PINs for the whole class.
+                </small>
               </div>
-            </div>
-            <div className="form-row">
-              <div className="form-group col-md-3">
+              <div className="form-group col-md-3 col-12">
                 <label htmlFor="pin-expiry" className="text-dark-medium">
                   Expiry Date
                 </label>
@@ -724,7 +803,23 @@ export default function PinsPage() {
                   }}
                 />
               </div>
-              <div className="form-group col-md-3 d-flex align-items-end">
+              <div className="form-group col-md-3 col-12">
+                <label htmlFor="pin-max-usage" className="text-dark-medium">
+                  Max Uses
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  id="pin-max-usage"
+                  className="form-control"
+                  placeholder="Leave blank for unlimited"
+                  value={maxUsage}
+                  onChange={(event) => {
+                    setMaxUsage(event.target.value);
+                  }}
+                />
+              </div>
+              <div className="form-group col-md-2 col-12 d-flex align-items-end">
                 <div className="form-check">
                   <input
                     className="form-check-input"
@@ -740,31 +835,47 @@ export default function PinsPage() {
                   </label>
                 </div>
               </div>
-              <div className="form-group col-md-6 text-right">
-                <button
-                  type="button"
-                  id="pin-generate-single"
-                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-3"
-                  onClick={() => {
-                    void handleGenerateSingle();
-                  }}
-                  disabled={generatingSingle}
-                >
-                  {generatingSingle
-                    ? "Generating…"
-                    : "Generate PIN for Student"}
-                </button>
-                <button
-                  type="button"
-                  id="pin-generate-bulk"
-                  className="btn-fill-lg btn-dark btn-hover-yellow"
-                  onClick={() => {
-                    void handleBulkGenerate();
-                  }}
-                  disabled={generatingBulk}
-                >
-                  {generatingBulk ? "Generating…" : "Bulk Generate PINs"}
-                </button>
+            </div>
+            <div className="form-row">
+              <div className="form-group col-12">
+                <div className="d-flex flex-column flex-md-row justify-content-md-end align-items-md-center">
+                  <button
+                    type="button"
+                    id="pin-generate-single"
+                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mb-2 mb-md-0 mr-md-3"
+                    onClick={() => {
+                      void handleGenerateSingle();
+                    }}
+                    disabled={generatingSingle || !selectedStudent}
+                    title={
+                      selectedStudent
+                        ? undefined
+                        : "Pick a student to enable this action."
+                    }
+                  >
+                    {generatingSingle
+                      ? "Generating…"
+                      : "Generate PIN for Student"}
+                  </button>
+                  <div className="d-flex flex-column">
+                    <button
+                      type="button"
+                      id="pin-generate-bulk"
+                      className="btn-fill-lg btn-dark btn-hover-yellow"
+                      onClick={() => {
+                        void handleBulkGenerate();
+                      }}
+                      disabled={generatingBulk}
+                    >
+                      {generatingBulk
+                        ? "Generating…"
+                        : "Generate PINs for Class"}
+                    </button>
+                    <small className="text-muted mt-1">
+                      Select a class above and click once to create PINs for every student.
+                    </small>
+                  </div>
+                </div>
               </div>
             </div>
           </form>
@@ -777,6 +888,7 @@ export default function PinsPage() {
                   <th>Session</th>
                   <th>Term</th>
                   <th>PIN</th>
+                  <th>Usage</th>
                   <th>Status</th>
                   <th>Expires</th>
                   <th>Updated</th>
@@ -786,7 +898,7 @@ export default function PinsPage() {
               <tbody id="pin-table-body">
                 {tableMessage ? (
                   <tr>
-                    <td colSpan={8}>{tableMessage}</td>
+                    <td colSpan={9}>{tableMessage}</td>
                   </tr>
                 ) : (
                   pins.map((pin) => {
@@ -799,6 +911,7 @@ export default function PinsPage() {
                         <td>
                           <code>{maskPin(pin.pin_code)}</code>
                         </td>
+                        <td>{formatUsage(pin)}</td>
                         <td>
                           <span className={statusBadgeClass(pin.status)}>
                             {(pin.status ?? "unknown").toLowerCase()}

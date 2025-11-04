@@ -775,7 +775,7 @@ export default function EditStudentPage() {
                 />
               </div>
               <div className="col-xl-3 col-lg-6 col-12 form-group">
-                <label>House</label>
+                <label>House (optional)</label>
                 <input
                   type="text"
                   className="form-control"
@@ -784,7 +784,7 @@ export default function EditStudentPage() {
                 />
               </div>
               <div className="col-xl-3 col-lg-6 col-12 form-group">
-                <label>Club</label>
+                <label>Club (optional)</label>
                 <input
                   type="text"
                   className="form-control"

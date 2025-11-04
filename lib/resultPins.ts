@@ -25,6 +25,8 @@ export interface ResultPin {
   status?: string;
   expires_at?: string | null;
   updated_at?: string | null;
+  use_count?: number;
+  max_usage?: number | null;
   student?: ResultPinStudent;
   session?: ResultPinSessionOrTerm;
   term?: ResultPinSessionOrTerm;
@@ -101,6 +103,7 @@ export interface GenerateStudentPinPayload {
   term_id: string | number;
   regenerate?: boolean;
   expires_at?: string | null;
+  max_usage?: number | null;
 }
 
 interface PinMutationResponse {
@@ -148,6 +151,7 @@ export interface BulkGeneratePinsPayload {
   class_arm_id?: string | number | null;
   regenerate?: boolean;
   expires_at?: string | null;
+  max_usage?: number | null;
 }
 
 export async function bulkGenerateResultPins(
