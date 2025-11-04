@@ -477,30 +477,31 @@ export default function AssignClassTeachersPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="col-12 form-group">
-                    <label htmlFor="class-teacher-section">Class Section</label>
-                    <select
-                      id="class-teacher-section"
-                      className="form-control"
-                      value={form.class_section_id}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          class_section_id: event.target.value,
-                        }))
-                      }
-                      disabled={
-                        !form.class_arm_id || sectionsForForm.length === 0
-                      }
-                    >
-                      <option value="">All sections</option>
-                      {sectionsForForm.map((section) => (
-                        <option key={section.id} value={section.id}>
-                          {section.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {/*
+                    Class section selection hidden per request
+                    <div className="col-12 form-group">
+                      <label htmlFor="class-teacher-section">Class Section</label>
+                      <select
+                        id="class-teacher-section"
+                        className="form-control"
+                        value={form.class_section_id}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            class_section_id: event.target.value,
+                          }))
+                        }
+                        disabled={!form.class_arm_id || sectionsForForm.length === 0}
+                      >
+                        <option value="">All sections</option>
+                        {sectionsForForm.map((section) => (
+                          <option key={section.id} value={section.id}>
+                            {section.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  */}
                   <div className="col-12 form-group">
                     <label htmlFor="class-teacher-session">Session *</label>
                     <select
@@ -684,31 +685,32 @@ export default function AssignClassTeachersPage() {
                     ))}
                   </select>
                 </div>
-                <div className="col-md-3 col-12 form-group">
-                  <label htmlFor="class-teacher-filter-section">Section</label>
-                  <select
-                    id="class-teacher-filter-section"
-                    className="form-control"
-                    value={filters.class_section_id}
-                    onChange={(event) => {
-                      setFilters((prev) => ({
-                        ...prev,
-                        class_section_id: event.target.value,
-                      }));
-                      setPage(1);
-                    }}
-                    disabled={
-                      !filters.class_arm_id || sectionsForFilter.length === 0
-                    }
-                  >
-                    <option value="">All sections</option>
-                    {sectionsForFilter.map((section) => (
-                      <option key={section.id} value={section.id}>
-                        {section.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/*
+                  Class section filter hidden per request
+                  <div className="col-md-3 col-12 form-group">
+                    <label htmlFor="class-teacher-filter-section">Section</label>
+                    <select
+                      id="class-teacher-filter-section"
+                      className="form-control"
+                      value={filters.class_section_id}
+                      onChange={(event) => {
+                        setFilters((prev) => ({
+                          ...prev,
+                          class_section_id: event.target.value,
+                        }));
+                        setPage(1);
+                      }}
+                      disabled={!filters.class_arm_id || sectionsForFilter.length === 0}
+                    >
+                      <option value="">All sections</option>
+                      {sectionsForFilter.map((section) => (
+                        <option key={section.id} value={section.id}>
+                          {section.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                */}
                 <div className="col-md-3 col-12 form-group">
                   <label htmlFor="class-teacher-filter-session">Session</label>
                   <select
@@ -797,7 +799,7 @@ export default function AssignClassTeachersPage() {
                       <th>Teacher</th>
                       <th>Class</th>
                       <th>Arm</th>
-                      <th>Section</th>
+                      {/* <th>Section</th> */}
                       <th>Session</th>
                       <th>Term</th>
                       <th>Updated</th>
@@ -807,13 +809,13 @@ export default function AssignClassTeachersPage() {
                   <tbody>
                     {loadingList ? (
                       <tr>
-                        <td colSpan={8} className="text-center">
+                        <td colSpan={7} className="text-center">
                           Loading assignments…
                         </td>
                       </tr>
                     ) : assignments.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="text-center">
+                        <td colSpan={7} className="text-center">
                           No assignments found.
                         </td>
                       </tr>
@@ -827,7 +829,7 @@ export default function AssignClassTeachersPage() {
                           </td>
                           <td>{assignment.school_class?.name ?? "N/A"}</td>
                           <td>{assignment.class_arm?.name ?? "N/A"}</td>
-                          <td>{assignment.class_section?.name ?? "All"}</td>
+                          {/* <td>{assignment.class_section?.name ?? "All"}</td> */}
                           <td>{assignment.session?.name ?? "N/A"}</td>
                           <td>{assignment.term?.name ?? "N/A"}</td>
                           <td>

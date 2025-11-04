@@ -452,28 +452,31 @@ export default function StudentPromotionPage() {
                     ))}
                   </select>
                 </div>
-                <div className="col-md-6 col-12 form-group">
-                  <label htmlFor="promotion-section">Class Section</label>
-                  <select
-                    id="promotion-section"
-                    className="form-control"
-                    value={filters.class_section_id}
-                    onChange={(event) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        class_section_id: event.target.value,
-                      }))
-                    }
-                    disabled={!filters.class_arm_id || sectionsForFilter.length === 0}
-                  >
-                    <option value="">All sections</option>
-                    {sectionsForFilter.map((section) => (
-                      <option key={section.id} value={section.id}>
-                        {section.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/*
+                  Class section filter hidden per request
+                  <div className="col-md-6 col-12 form-group">
+                    <label htmlFor="promotion-section">Class Section</label>
+                    <select
+                      id="promotion-section"
+                      className="form-control"
+                      value={filters.class_section_id}
+                      onChange={(event) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          class_section_id: event.target.value,
+                        }))
+                      }
+                      disabled={!filters.class_arm_id || sectionsForFilter.length === 0}
+                    >
+                      <option value="">All sections</option>
+                      {sectionsForFilter.map((section) => (
+                        <option key={section.id} value={section.id}>
+                          {section.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                */}
               </div>
 
               <div className="mt-3">
@@ -549,28 +552,31 @@ export default function StudentPromotionPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="col-md-6 col-12 form-group">
-                    <label htmlFor="target-section">Target Section</label>
-                    <select
-                      id="target-section"
-                      className="form-control"
-                      value={target.class_section_id}
-                      onChange={(event) =>
-                        setTarget((prev) => ({
-                          ...prev,
-                          class_section_id: event.target.value,
-                        }))
-                      }
-                      disabled={!target.class_arm_id || targetSections.length === 0}
-                    >
-                      <option value="">All sections</option>
-                      {targetSections.map((section) => (
-                        <option key={section.id} value={section.id}>
-                          {section.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {/*
+                    Target class section selection hidden per request
+                    <div className="col-md-6 col-12 form-group">
+                      <label htmlFor="target-section">Target Section</label>
+                      <select
+                        id="target-section"
+                        className="form-control"
+                        value={target.class_section_id}
+                        onChange={(event) =>
+                          setTarget((prev) => ({
+                            ...prev,
+                            class_section_id: event.target.value,
+                          }))
+                        }
+                        disabled={!target.class_arm_id || targetSections.length === 0}
+                      >
+                        <option value="">All sections</option>
+                        {targetSections.map((section) => (
+                          <option key={section.id} value={section.id}>
+                            {section.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  */}
                   <div className="col-12 form-group">
                     <div className="form-check">
                       <input

@@ -669,25 +669,28 @@ export default function AddStudentPage() {
                   ))}
                 </select>
               </div>
-              <div className="col-xl-3 col-lg-6 col-12 form-group">
-                <label>Assigned Class Section</label>
-                <select
-                  id="class-section-id"
-                  className="form-control"
-                  value={form.class_section_id}
-                  onChange={(event) =>
-                    setField("class_section_id", event.target.value)
-                  }
-                  disabled={!form.class_arm_id}
-                >
-                  <option value="">Please Select Section</option>
-                  {classSections.map((section) => (
-                    <option key={section.id} value={section.id}>
-                      {section.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/*
+                Class section selection hidden per request
+                <div className="col-xl-3 col-lg-6 col-12 form-group">
+                  <label>Assigned Class Section</label>
+                  <select
+                    id="class-section-id"
+                    className="form-control"
+                    value={form.class_section_id}
+                    onChange={(event) =>
+                      setField("class_section_id", event.target.value)
+                    }
+                    disabled={!form.class_arm_id}
+                  >
+                    <option value="">Please Select Section</option>
+                    {classSections.map((section) => (
+                      <option key={section.id} value={section.id}>
+                        {section.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              */}
               <div className="col-xl-3 col-lg-6 col-12 form-group">
                 <label>Assigned Parent</label>
                 <select

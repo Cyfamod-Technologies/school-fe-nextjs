@@ -54,7 +54,7 @@ const menuSections: MenuSection[] = [
     links: [
       { label: "Class", href: "/v12/all-classes" },
       { label: "Class Arm", href: "/v12/all-class-arms" },
-      { label: "Class Section", href: "/v12/all-class-arm-sections" },
+      // { label: "Class Section", href: "/v12/all-class-arm-sections" },
     ],
   },
   {

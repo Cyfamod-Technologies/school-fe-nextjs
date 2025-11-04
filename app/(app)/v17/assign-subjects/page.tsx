@@ -561,28 +561,31 @@ export default function AssignSubjectsPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="col-12 form-group">
-                    <label htmlFor="form-section">Class Section</label>
-                    <select
-                      id="form-section"
-                      className="form-control"
-                      value={form.class_section_id}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          class_section_id: event.target.value,
-                        }))
-                      }
-                      disabled={!form.class_arm_id || sectionsForSelection.length === 0}
-                    >
-                      <option value="">All sections</option>
-                      {sectionsForSelection.map((section) => (
-                        <option key={section.id} value={section.id}>
-                          {section.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {/*
+                    Class section selection hidden per request
+                    <div className="col-12 form-group">
+                      <label htmlFor="form-section">Class Section</label>
+                      <select
+                        id="form-section"
+                        className="form-control"
+                        value={form.class_section_id}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            class_section_id: event.target.value,
+                          }))
+                        }
+                        disabled={!form.class_arm_id || sectionsForSelection.length === 0}
+                      >
+                        <option value="">All sections</option>
+                        {sectionsForSelection.map((section) => (
+                          <option key={section.id} value={section.id}>
+                            {section.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  */}
                   <div className="col-12 form-group d-flex justify-content-between">
                     <button
                       type="submit"
@@ -698,29 +701,32 @@ export default function AssignSubjectsPage() {
                     ))}
                   </select>
                 </div>
-                <div className="col-md-2 col-12 form-group">
-                  <label htmlFor="filter-section">Section</label>
-                  <select
-                    id="filter-section"
-                    className="form-control"
-                    value={filters.class_section_id}
-                    onChange={(event) => {
-                      setFilters((prev) => ({
-                        ...prev,
-                        class_section_id: event.target.value,
-                      }));
-                      setPage(1);
-                    }}
-                    disabled={!filters.class_arm_id || filterSections.length === 0}
-                  >
-                    <option value="">All</option>
-                    {filterSections.map((section) => (
-                      <option key={section.id} value={section.id}>
-                        {section.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/*
+                  Class section filter hidden per request
+                  <div className="col-md-2 col-12 form-group">
+                    <label htmlFor="filter-section">Section</label>
+                    <select
+                      id="filter-section"
+                      className="form-control"
+                      value={filters.class_section_id}
+                      onChange={(event) => {
+                        setFilters((prev) => ({
+                          ...prev,
+                          class_section_id: event.target.value,
+                        }));
+                        setPage(1);
+                      }}
+                      disabled={!filters.class_arm_id || filterSections.length === 0}
+                    >
+                      <option value="">All</option>
+                      {filterSections.map((section) => (
+                        <option key={section.id} value={section.id}>
+                          {section.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                */}
                 <div className="col-12 d-flex justify-content-end mt-2">
                   <button
                     className="btn btn-outline-secondary mr-2"
@@ -759,7 +765,7 @@ export default function AssignSubjectsPage() {
                       <th>Subject</th>
                       <th>Class</th>
                       <th>Arm</th>
-                      <th>Section</th>
+                      {/* <th>Section</th> */}
                       <th>Updated</th>
                       <th />
                     </tr>
@@ -767,13 +773,13 @@ export default function AssignSubjectsPage() {
                   <tbody>
                     {loadingList ? (
                       <tr>
-                        <td colSpan={6} className="text-center">
+                        <td colSpan={5} className="text-center">
                           Loading assignments…
                         </td>
                       </tr>
                     ) : assignments.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="text-center">
+                        <td colSpan={5} className="text-center">
                           No assignments found.
                         </td>
                       </tr>
@@ -788,12 +794,10 @@ export default function AssignSubjectsPage() {
                           </td>
                           <td>{assignment.school_class?.name ?? "N/A"}</td>
                           <td>{assignment.class_arm?.name ?? "N/A"}</td>
-                          <td>{assignment.class_section?.name ?? "All"}</td>
+                          {/* <td>{assignment.class_section?.name ?? "All"}</td> */}
                           <td>
                             {assignment.updated_at
-                              ? new Date(
-                                  assignment.updated_at,
-                                ).toLocaleString()
+                              ? new Date(assignment.updated_at).toLocaleString()
                               : "—"}
                           </td>
                           <td>
