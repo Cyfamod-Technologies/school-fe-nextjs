@@ -1,0 +1,21 @@
+.form-group .form-control,
+.form-control {
+  background-color: #ffffff;
+  color: #111111;
+  border: 1px solid rgba(4, 44, 84, 0.2);
+  border-radius: 6px;
+  padding: 8px 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-group .form-control:focus,
+.form-control:focus {
+  background-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(64, 118, 255, 0.15);
+  border-color: rgba(64, 118, 255, 0.6);
+}
+
+.form-group textarea.form-control,
+textarea.form-control {
+  background-color: #ffffff;
+}
