@@ -72,7 +72,7 @@ export const menuSections: MenuSection[] = [
   },
   {
     label: "Assign",
-    icon: "flaticon-maths-class-materials-cross-of-a-pencil-and-a-ruler",
+    icon: "flaticon-settings-work-tool",
     links: [
       { label: "Subject to Class", href: "/v17/assign-subjects" },
       { label: "Teachers to Subject", href: "/v17/assign-teachers" },
