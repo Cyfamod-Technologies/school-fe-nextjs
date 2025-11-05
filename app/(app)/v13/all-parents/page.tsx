@@ -195,14 +195,14 @@ export default function AllParentsPage() {
                     </td>
                   </tr>
                 ) : (
-                  parents.map((item) => (
-                    <tr key={item.id}>
-                      <td>
-                        {item.first_name} {item.last_name}
-                      </td>
-                      <td>{item.phone || "—"}</td>
-                      <td>{getEmail(item)}</td>
-                      <td>{item.students_count ?? 0}</td>
+              parents.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    {item.first_name} {item.last_name}
+                  </td>
+                  <td>{item.phone || "—"}</td>
+                  <td>{getEmail(item)}</td>
+                  <td>{item.students_count ?? item.students?.length ?? 0}</td>
                       <td>
                         <div className="d-flex gap-2">
                           <Link

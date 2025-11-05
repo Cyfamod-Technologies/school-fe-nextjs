@@ -43,7 +43,7 @@ export async function listParents(): Promise<Parent[]> {
 
 export async function searchParents(query: string): Promise<Parent[]> {
   const payload = await apiFetch<ParentsResponse>(
-    `${API_ROUTES.parentsSearch}?q=${encodeURIComponent(query)}`,
+    `${API_ROUTES.parentsSearch}?search=${encodeURIComponent(query)}`,
   );
   return normalizeParents(payload);
 }
