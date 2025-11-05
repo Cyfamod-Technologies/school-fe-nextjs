@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -40,6 +40,13 @@ export default function DashboardPage() {
   const roleNames = useMemo(() => normalizeRoleNames(user), [user]);
   const isParent = roleNames.includes("parent");
 
+  const formatNumber = useCallback((value: number | undefined) => {
+    if (typeof value !== "number" || Number.isNaN(value)) {
+      return "0";
+    }
+    return value.toLocaleString();
+  }, []);
+
   const linkedStudents = useMemo(() => {
     if (!user) {
       return 0;
@@ -55,6 +62,10 @@ export default function DashboardPage() {
     }
     return 0;
   }, [user]);
+
+  const studentCount = user?.student_count ?? 0;
+  const parentCount = user?.parent_count ?? 0;
+  const teacherCount = user?.teacher_count ?? 0;
 
   const parentDashboard = (
     <div className="row gutters-20">
@@ -101,10 +112,21 @@ export default function DashboardPage() {
     <>
       <div className="row gutters-20">
         {[
-          { icon: "flaticon-classmates", title: "Students", value: "1,50,000" },
-          { icon: "flaticon-multiple-users-silhouette", title: "Teachers", value: "2,250" },
-          { icon: "flaticon-couple", title: "Parents", value: "5,690" },
-          { icon: "flaticon-money", title: "Earnings", value: "$1,93,000" },
+          {
+            icon: "flaticon-classmates",
+            title: "Students",
+            value: formatNumber(studentCount),
+          },
+          {
+            icon: "flaticon-multiple-users-silhouette",
+            title: "Teachers",
+            value: formatNumber(teacherCount),
+          },
+          {
+            icon: "flaticon-couple",
+            title: "Parents",
+            value: formatNumber(parentCount),
+          },
         ].map((item) => (
           <div key={item.title} className="col-xl-3 col-sm-6 col-12">
             <div className="dashboard-summery-one mg-b-20">
@@ -134,12 +156,13 @@ export default function DashboardPage() {
             <div className="card-body">
               <div className="heading-layout1">
                 <div className="item-title">
-                  <h3>Earnings Overview</h3>
+                  <h3>Quick Stats</h3>
                 </div>
               </div>
               <p className="text-muted mb-0">
-                This section can display earnings charts or revenue metrics.
-                Replace this placeholder with real analytics when available.
+                These counts reflect the total number of students, teachers, and
+                parents registered for your school. Keep the data up to date by
+                managing enrolments and staff profiles.
               </p>
             </div>
           </div>
@@ -149,12 +172,12 @@ export default function DashboardPage() {
             <div className="card-body">
               <div className="heading-layout1 mg-b-17">
                 <div className="item-title">
-                  <h3>Events</h3>
+                  <h3>Tips</h3>
                 </div>
               </div>
               <p className="text-muted mb-0">
-                Upcoming events, meetings or reminders will appear here. Update
-                this card with live data when the feature is ready.
+                Need to update these figures? Add new students, onboard teachers,
+                or invite parents from the relevant management pages.
               </p>
             </div>
           </div>

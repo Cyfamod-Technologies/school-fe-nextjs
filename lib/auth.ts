@@ -28,6 +28,9 @@ export interface User {
   school?: School;
   parents?: UserParent[];
   linked_students_count?: number;
+  student_count?: number;
+  parent_count?: number;
+  teacher_count?: number;
   [key: string]: unknown;
 }
 
@@ -62,6 +65,9 @@ export interface AuthenticatedUserResponse {
   user?: User;
   school?: School;
   linked_students_count?: number;
+  student_count?: number;
+  parent_count?: number;
+  teacher_count?: number;
   [key: string]: unknown;
 }
 
@@ -107,11 +113,26 @@ export async function getAuthenticatedUser(): Promise<User | null> {
         typeof payload.linked_students_count === "number"
           ? payload.linked_students_count
           : undefined;
+      const studentCount =
+        typeof payload.student_count === "number"
+          ? payload.student_count
+          : undefined;
+      const parentCount =
+        typeof payload.parent_count === "number"
+          ? payload.parent_count
+          : undefined;
+      const teacherCount =
+        typeof payload.teacher_count === "number"
+          ? payload.teacher_count
+          : undefined;
 
       return {
         ...payload.user,
         school: payload.user.school ?? payload.school,
         linked_students_count: linkedStudentsCount,
+        student_count: studentCount,
+        parent_count: parentCount,
+        teacher_count: teacherCount,
       };
     }
     if (payload?.school) {
