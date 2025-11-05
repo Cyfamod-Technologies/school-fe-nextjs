@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Menubar } from "@/components/layout/Menubar";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { OnboardingVideo } from "@/components/layout/OnboardingVideo";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function AppLayout({
@@ -57,6 +58,7 @@ export default function AppLayout({
         <Sidebar />
         <div className="dashboard-content-one">{children}</div>
       </div>
+      <OnboardingVideo />
     </div>
   );
 }

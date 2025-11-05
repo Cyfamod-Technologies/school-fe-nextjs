@@ -36,6 +36,10 @@ export function LoginForm() {
       setSubmitting(true);
       await login({ email, password });
 
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("onboarding-video-shown");
+      }
+
       const next = searchParams?.get("next");
       router.push(next || "/v10/dashboard");
     } catch (err) {
