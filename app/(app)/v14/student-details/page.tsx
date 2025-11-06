@@ -75,9 +75,11 @@ export default function StudentDetailsPage() {
     rating_value: "3",
   });
 
+  const defaultTeacherComment = "This student is good.";
+  const defaultPrincipalComment = "This student is hardworking.";
   const [termSummary, setTermSummary] = useState<StudentTermSummary>({
-    class_teacher_comment: "",
-    principal_comment: "",
+    class_teacher_comment: defaultTeacherComment,
+    principal_comment: defaultPrincipalComment,
   });
   const [termSummaryFeedback, setTermSummaryFeedback] = useState<string | null>(null);
   const [termSummaryFeedbackType, setTermSummaryFeedbackType] =
@@ -149,8 +151,10 @@ export default function StudentDetailsPage() {
         term_id: selectedTerm,
       });
       setTermSummary({
-        class_teacher_comment: summary.class_teacher_comment ?? "",
-        principal_comment: summary.principal_comment ?? "",
+        class_teacher_comment:
+          summary.class_teacher_comment?.trim() || defaultTeacherComment,
+        principal_comment:
+          summary.principal_comment?.trim() || defaultPrincipalComment,
       });
       setTermSummaryFeedback(null);
       setTermSummaryFeedbackType("success");
@@ -1135,6 +1139,7 @@ export default function StudentDetailsPage() {
                 <label className="text-dark-medium">Class Teacher Comment</label>
                 <textarea
                   className="form-control"
+                  style={{ backgroundColor: "#f8f8f8" }}
                   rows={4}
                   maxLength={2000}
                   value={termSummary.class_teacher_comment ?? ""}
@@ -1151,6 +1156,7 @@ export default function StudentDetailsPage() {
                 <label className="text-dark-medium">Principal Comment</label>
                 <textarea
                   className="form-control"
+                  style={{ backgroundColor: "#f8f8f8" }}
                   rows={4}
                   maxLength={2000}
                   value={termSummary.principal_comment ?? ""}
