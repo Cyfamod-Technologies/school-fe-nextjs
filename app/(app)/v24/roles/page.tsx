@@ -345,6 +345,12 @@ export default function RolesPage() {
     null,
   );
 
+  const isSystemRoleName = useCallback((name: string): boolean => {
+    const n = name.trim().toLowerCase();
+    // disallow admin and super_admin variants
+    return /\b(super[ _-]?admin|admin)\b/i.test(n);
+  }, []);
+
   const showFeedback = useCallback(
     (message: string, type: FeedbackType) => {
       setFeedback({ message, type });
@@ -504,6 +510,11 @@ export default function RolesPage() {
 
     if (trimmedName.length === 0) {
       setFormError("Role name is required.");
+      return;
+    }
+
+    if (isSystemRoleName(trimmedName)) {
+      setFormError("Role name cannot contain 'admin' or 'super_admin'.");
       return;
     }
 
@@ -682,25 +693,36 @@ export default function RolesPage() {
                       <td>{summarizeRolePermissions(role)}</td>
                       <td>{formatDateTime(role.updated_at)}</td>
                       <td className="text-right">
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-primary mr-1"
-                          onClick={() => {
-                            openEditModal(role);
-                          }}
-                        >
-                          <i className="fas fa-edit" />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-danger"
-                          onClick={() => {
-                            void handleDeleteRole(role);
-                          }}
-                          disabled={deletingRoleId === role.id}
-                        >
-                          <i className="fas fa-trash" />
-                        </button>
+                        {isSystemRoleName(role.name || "") ? (
+                          <span
+                            className="badge badge-light text-muted"
+                            title="System roles cannot be edited"
+                          >
+                            Locked
+                          </span>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-primary mr-1"
+                              onClick={() => {
+                                openEditModal(role);
+                              }}
+                            >
+                              <i className="fas fa-edit" />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-danger"
+                              onClick={() => {
+                                void handleDeleteRole(role);
+                              }}
+                              disabled={deletingRoleId === role.id}
+                            >
+                              <i className="fas fa-trash" />
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))
