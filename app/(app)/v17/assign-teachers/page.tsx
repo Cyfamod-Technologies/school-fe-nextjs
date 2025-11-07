@@ -6,6 +6,12 @@ import { listAllSubjects, type Subject } from "@/lib/subjects";
 import { listStaffForDropdown, type Staff } from "@/lib/staff";
 import { listSessions, type Session } from "@/lib/sessions";
 import { listTermsBySession, type Term } from "@/lib/terms";
+import { listClasses, type SchoolClass } from "@/lib/classes";
+import { listClassArms, type ClassArm } from "@/lib/classArms";
+import {
+  listClassArmSections,
+  type ClassArmSection,
+} from "@/lib/classArmSections";
 import {
   createSubjectTeacherAssignment,
   deleteSubjectTeacherAssignment,
@@ -20,6 +26,9 @@ interface AssignmentForm {
   staff_id: string;
   session_id: string;
   term_id: string;
+  school_class_id: string;
+  class_arm_id: string;
+  class_section_id: string;
 }
 
 const initialForm: AssignmentForm = {
@@ -27,6 +36,9 @@ const initialForm: AssignmentForm = {
   staff_id: "",
   session_id: "",
   term_id: "",
+  school_class_id: "",
+  class_arm_id: "",
+  class_section_id: "",
 };
 
 interface AssignmentFilters {
@@ -35,6 +47,9 @@ interface AssignmentFilters {
   staff_id: string;
   session_id: string;
   term_id: string;
+  school_class_id: string;
+  class_arm_id: string;
+  class_section_id: string;
 }
 
 const initialFilters: AssignmentFilters = {
@@ -43,6 +58,9 @@ const initialFilters: AssignmentFilters = {
   staff_id: "",
   session_id: "",
   term_id: "",
+  school_class_id: "",
+  class_arm_id: "",
+  class_section_id: "",
 };
 
 type TermsCache = Record<string, Term[]>;
@@ -52,11 +70,16 @@ export default function AssignTeachersPage() {
   const [teachers, setTeachers] = useState<Staff[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [termsCache, setTermsCache] = useState<TermsCache>({});
+  const [classes, setClasses] = useState<SchoolClass[]>([]);
+  const [classArmsByClass, setClassArmsByClass] = useState<Record<string, ClassArm[]>>({});
+  const [classSectionsByKey, setClassSectionsByKey] = useState<
+    Record<string, ClassArmSection[]>
+  >({});
 
   const [form, setForm] = useState<AssignmentForm>(initialForm);
   const [filters, setFilters] = useState<AssignmentFilters>(initialFilters);
 
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
   const perPage = 10;
@@ -87,6 +110,46 @@ export default function AssignTeachersPage() {
     [termsCache],
   );
 
+  const ensureClassArms = useCallback(
+    async (classId: string) => {
+      if (!classId || classArmsByClass[classId]) {
+        return;
+      }
+      try {
+        const arms = await listClassArms(classId);
+        setClassArmsByClass((prev) => ({
+          ...prev,
+          [classId]: arms,
+        }));
+      } catch (error) {
+        console.error("Unable to load class arms", error);
+      }
+    },
+    [classArmsByClass],
+  );
+
+  const ensureClassSections = useCallback(
+    async (classId: string, armId: string) => {
+      if (!classId || !armId) {
+        return;
+      }
+      const key = `${classId}:${armId}`;
+      if (classSectionsByKey[key]) {
+        return;
+      }
+      try {
+        const sections = await listClassArmSections(classId, armId);
+        setClassSectionsByKey((prev) => ({
+          ...prev,
+          [key]: sections,
+        }));
+      } catch (error) {
+        console.error("Unable to load class sections", error);
+      }
+    },
+    [classSectionsByKey],
+  );
+
   const termsForForm = useMemo(() => {
     if (!form.session_id) {
       return [];
@@ -101,6 +164,36 @@ export default function AssignTeachersPage() {
     return termsCache[filters.session_id] ?? [];
   }, [termsCache, filters.session_id]);
 
+  const classArmsForForm = useMemo(() => {
+    if (!form.school_class_id) {
+      return [];
+    }
+    return classArmsByClass[form.school_class_id] ?? [];
+  }, [classArmsByClass, form.school_class_id]);
+
+  const classSectionsForForm = useMemo(() => {
+    if (!form.school_class_id || !form.class_arm_id) {
+      return [];
+    }
+    const key = `${form.school_class_id}:${form.class_arm_id}`;
+    return classSectionsByKey[key] ?? [];
+  }, [classSectionsByKey, form.school_class_id, form.class_arm_id]);
+
+  const classArmsForFilter = useMemo(() => {
+    if (!filters.school_class_id) {
+      return [];
+    }
+    return classArmsByClass[filters.school_class_id] ?? [];
+  }, [classArmsByClass, filters.school_class_id]);
+
+  const classSectionsForFilter = useMemo(() => {
+    if (!filters.school_class_id || !filters.class_arm_id) {
+      return [];
+    }
+    const key = `${filters.school_class_id}:${filters.class_arm_id}`;
+    return classSectionsByKey[key] ?? [];
+  }, [classSectionsByKey, filters.school_class_id, filters.class_arm_id]);
+
   useEffect(() => {
     listAllSubjects()
       .then(setSubjects)
@@ -111,6 +204,9 @@ export default function AssignTeachersPage() {
     listSessions()
       .then(setSessions)
       .catch((err) => console.error("Unable to load sessions", err));
+    listClasses()
+      .then(setClasses)
+      .catch((err) => console.error("Unable to load classes", err));
   }, []);
 
   useEffect(() => {
@@ -125,6 +221,34 @@ export default function AssignTeachersPage() {
     }
   }, [filters.session_id, ensureTerms]);
 
+  useEffect(() => {
+    if (form.school_class_id) {
+      ensureClassArms(form.school_class_id).catch((err) => console.error(err));
+    }
+  }, [form.school_class_id, ensureClassArms]);
+
+  useEffect(() => {
+    if (form.school_class_id && form.class_arm_id) {
+      ensureClassSections(form.school_class_id, form.class_arm_id).catch((err) =>
+        console.error(err),
+      );
+    }
+  }, [form.school_class_id, form.class_arm_id, ensureClassSections]);
+
+  useEffect(() => {
+    if (filters.school_class_id) {
+      ensureClassArms(filters.school_class_id).catch((err) => console.error(err));
+    }
+  }, [filters.school_class_id, ensureClassArms]);
+
+  useEffect(() => {
+    if (filters.school_class_id && filters.class_arm_id) {
+      ensureClassSections(filters.school_class_id, filters.class_arm_id).catch(
+        (err) => console.error(err),
+      );
+    }
+  }, [filters.school_class_id, filters.class_arm_id, ensureClassSections]);
+
   const fetchAssignments = useCallback(async () => {
     setLoadingList(true);
     try {
@@ -136,6 +260,9 @@ export default function AssignTeachersPage() {
         staff_id: filters.staff_id || undefined,
         session_id: filters.session_id || undefined,
         term_id: filters.term_id || undefined,
+        school_class_id: filters.school_class_id || undefined,
+        class_arm_id: filters.class_arm_id || undefined,
+        class_section_id: filters.class_section_id || undefined,
       });
       setData(response);
       setAssignments(response.data ?? []);
@@ -164,23 +291,27 @@ export default function AssignTeachersPage() {
       setFormError("Please complete all required fields.");
       return;
     }
+    if (!form.school_class_id) {
+      setFormError("Please select a class for this assignment.");
+      return;
+    }
+
+    const payload = {
+      subject_id: form.subject_id,
+      staff_id: form.staff_id,
+      session_id: form.session_id,
+      term_id: form.term_id,
+      school_class_id: form.school_class_id,
+      class_arm_id: form.class_arm_id || null,
+      class_section_id: form.class_section_id || null,
+    };
 
     setSubmitting(true);
     try {
       if (editingId) {
-        await updateSubjectTeacherAssignment(editingId, {
-          subject_id: form.subject_id,
-          staff_id: form.staff_id,
-          session_id: form.session_id,
-          term_id: form.term_id,
-        });
+        await updateSubjectTeacherAssignment(editingId, payload);
       } else {
-        await createSubjectTeacherAssignment({
-          subject_id: form.subject_id,
-          staff_id: form.staff_id,
-          session_id: form.session_id,
-          term_id: form.term_id,
-        });
+        await createSubjectTeacherAssignment(payload);
       }
       setEditingId(null);
       setForm(initialForm);
@@ -202,6 +333,17 @@ export default function AssignTeachersPage() {
 
     const sessionId = `${assignment.session_id}`;
     await ensureTerms(sessionId);
+    const classId = assignment.school_class_id ? `${assignment.school_class_id}` : "";
+    if (classId) {
+      await ensureClassArms(classId);
+    }
+    const armId = assignment.class_arm_id ? `${assignment.class_arm_id}` : "";
+    if (classId && armId) {
+      await ensureClassSections(classId, armId);
+    }
+    const sectionId = assignment.class_section_id
+      ? `${assignment.class_section_id}`
+      : "";
 
     startTransition(() => {
       setForm({
@@ -209,6 +351,9 @@ export default function AssignTeachersPage() {
         staff_id: `${assignment.staff_id}`,
         session_id: sessionId,
         term_id: `${assignment.term_id}`,
+        school_class_id: classId,
+        class_arm_id: armId,
+        class_section_id: sectionId,
       });
     });
   };
@@ -312,6 +457,98 @@ export default function AssignTeachersPage() {
                             teacher.user?.name ??
                             teacher.email ??
                             `Staff #${teacher.id}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-12 form-group">
+                    <label htmlFor="teacher-class">Class *</label>
+                    <select
+                      id="teacher-class"
+                      className="form-control"
+                      value={form.school_class_id}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setForm((prev) => ({
+                          ...prev,
+                          school_class_id: value,
+                          class_arm_id: "",
+                          class_section_id: "",
+                        }));
+                        if (value) {
+                          ensureClassArms(value).catch((err) =>
+                            console.error(err),
+                          );
+                        }
+                      }}
+                      required
+                    >
+                      <option value="">Select class</option>
+                      {classes.map((schoolClass) => (
+                        <option key={schoolClass.id} value={schoolClass.id}>
+                          {schoolClass.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-12 form-group">
+                    <label htmlFor="teacher-class-arm">
+                      Class Arm <span className="text-muted">(optional)</span>
+                    </label>
+                    <select
+                      id="teacher-class-arm"
+                      className="form-control"
+                      value={form.class_arm_id}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setForm((prev) => ({
+                          ...prev,
+                          class_arm_id: value,
+                          class_section_id: "",
+                        }));
+                        if (value && form.school_class_id) {
+                          ensureClassSections(
+                            form.school_class_id,
+                            value,
+                          ).catch((err) => console.error(err));
+                        }
+                      }}
+                      disabled={
+                        !form.school_class_id || classArmsForForm.length === 0
+                      }
+                    >
+                      <option value="">Select class arm (optional)</option>
+                      {classArmsForForm.map((arm) => (
+                        <option key={arm.id} value={arm.id}>
+                          {arm.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-12 form-group">
+                    <label htmlFor="teacher-class-section">
+                      Class Section <span className="text-muted">(optional)</span>
+                    </label>
+                    <select
+                      id="teacher-class-section"
+                      className="form-control"
+                      value={form.class_section_id}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          class_section_id: event.target.value,
+                        }))
+                      }
+                      disabled={
+                        !form.school_class_id ||
+                        !form.class_arm_id ||
+                        classSectionsForForm.length === 0
+                      }
+                    >
+                      <option value="">Select class section (optional)</option>
+                      {classSectionsForForm.map((section) => (
+                        <option key={section.id} value={section.id}>
+                          {section.name}
                         </option>
                       ))}
                     </select>
@@ -474,6 +711,98 @@ export default function AssignTeachersPage() {
                   </select>
                 </div>
                 <div className="col-md-4 col-12 form-group">
+                  <label htmlFor="teacher-filter-class">Class</label>
+                  <select
+                    id="teacher-filter-class"
+                    className="form-control"
+                    value={filters.school_class_id}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setFilters((prev) => ({
+                        ...prev,
+                        school_class_id: value,
+                        class_arm_id: "",
+                        class_section_id: "",
+                      }));
+                      if (value) {
+                        ensureClassArms(value).catch((err) =>
+                          console.error(err),
+                        );
+                      }
+                      setPage(1);
+                    }}
+                  >
+                    <option value="">All classes</option>
+                    {classes.map((schoolClass) => (
+                      <option key={schoolClass.id} value={schoolClass.id}>
+                        {schoolClass.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-md-4 col-12 form-group">
+                  <label htmlFor="teacher-filter-class-arm">Class Arm</label>
+                  <select
+                    id="teacher-filter-class-arm"
+                    className="form-control"
+                    value={filters.class_arm_id}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setFilters((prev) => ({
+                        ...prev,
+                        class_arm_id: value,
+                        class_section_id: "",
+                      }));
+                      if (value && filters.school_class_id) {
+                        ensureClassSections(
+                          filters.school_class_id,
+                          value,
+                        ).catch((err) => console.error(err));
+                      }
+                      setPage(1);
+                    }}
+                    disabled={
+                      !filters.school_class_id || classArmsForFilter.length === 0
+                    }
+                  >
+                    <option value="">All class arms</option>
+                    {classArmsForFilter.map((arm) => (
+                      <option key={arm.id} value={arm.id}>
+                        {arm.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-md-4 col-12 form-group">
+                  <label htmlFor="teacher-filter-class-section">
+                    Class Section
+                  </label>
+                  <select
+                    id="teacher-filter-class-section"
+                    className="form-control"
+                    value={filters.class_section_id}
+                    onChange={(event) => {
+                      setFilters((prev) => ({
+                        ...prev,
+                        class_section_id: event.target.value,
+                      }));
+                      setPage(1);
+                    }}
+                    disabled={
+                      !filters.school_class_id ||
+                      !filters.class_arm_id ||
+                      classSectionsForFilter.length === 0
+                    }
+                  >
+                    <option value="">All class sections</option>
+                    {classSectionsForFilter.map((section) => (
+                      <option key={section.id} value={section.id}>
+                        {section.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-md-4 col-12 form-group">
                   <label htmlFor="teacher-filter-session">Session</label>
                   <select
                     id="teacher-filter-session"
@@ -560,6 +889,9 @@ export default function AssignTeachersPage() {
                     <tr>
                       <th>Subject</th>
                       <th>Teacher</th>
+                      <th>Class</th>
+                      <th>Class Arm</th>
+                      <th>Class Section</th>
                       <th>Session</th>
                       <th>Term</th>
                       <th>Updated</th>
@@ -569,13 +901,13 @@ export default function AssignTeachersPage() {
                   <tbody>
                     {loadingList ? (
                       <tr>
-                        <td colSpan={6} className="text-center">
+                        <td colSpan={9} className="text-center">
                           Loading assignments…
                         </td>
                       </tr>
                     ) : assignments.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="text-center">
+                        <td colSpan={9} className="text-center">
                           No assignments found.
                         </td>
                       </tr>
@@ -593,6 +925,9 @@ export default function AssignTeachersPage() {
                               assignment.staff?.user?.name ??
                               "N/A"}
                           </td>
+                          <td>{assignment.school_class?.name ?? "—"}</td>
+                          <td>{assignment.class_arm?.name ?? "—"}</td>
+                          <td>{assignment.class_section?.name ?? "—"}</td>
                           <td>{assignment.session?.name ?? "N/A"}</td>
                           <td>{assignment.term?.name ?? "N/A"}</td>
                           <td>

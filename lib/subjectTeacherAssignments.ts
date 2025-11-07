@@ -4,19 +4,28 @@ import type { Subject } from "@/lib/subjects";
 import type { Staff } from "@/lib/staff";
 import type { Session } from "@/lib/auth";
 import type { Term } from "@/lib/auth";
+import type { SchoolClass } from "@/lib/classes";
+import type { ClassArm } from "@/lib/classArms";
+import type { ClassArmSection } from "@/lib/classArmSections";
 
 export interface SubjectTeacherAssignment {
-  id: number;
-  subject_id: number;
-  staff_id: number;
-  session_id: number;
-  term_id: number;
+  id: string;
+  subject_id: string;
+  staff_id: string;
+  session_id: string;
+  term_id: string;
+  school_class_id?: string | null;
+  class_arm_id?: string | null;
+  class_section_id?: string | null;
   created_at?: string;
   updated_at?: string;
   subject?: Subject | null;
   staff?: Staff | null;
   session?: Session | null;
   term?: Term | null;
+  school_class?: SchoolClass | null;
+  class_arm?: ClassArm | null;
+  class_section?: ClassArmSection | null;
   [key: string]: unknown;
 }
 
@@ -39,6 +48,9 @@ export interface SubjectTeacherFilters {
   staff_id?: string;
   session_id?: string;
   term_id?: string;
+  school_class_id?: string;
+  class_arm_id?: string;
+  class_section_id?: string;
 }
 
 function buildQuery(params: Record<string, string | number | undefined>): string {
@@ -63,6 +75,9 @@ export async function listSubjectTeacherAssignments(
     staff_id: filters.staff_id,
     session_id: filters.session_id,
     term_id: filters.term_id,
+    school_class_id: filters.school_class_id,
+    class_arm_id: filters.class_arm_id,
+    class_section_id: filters.class_section_id,
   });
 
   const payload = await apiFetch<SubjectTeacherAssignmentListResponse>(
@@ -79,13 +94,18 @@ export async function listSubjectTeacherAssignments(
   return payload;
 }
 
+type AssignmentMutationPayload = {
+  subject_id: string | number;
+  staff_id: string | number;
+  session_id: string | number;
+  term_id: string | number;
+  school_class_id?: string | number | null;
+  class_arm_id?: string | number | null;
+  class_section_id?: string | number | null;
+};
+
 export async function createSubjectTeacherAssignment(
-  payload: {
-    subject_id: string | number;
-    staff_id: string | number;
-    session_id: string | number;
-    term_id: string | number;
-  },
+  payload: AssignmentMutationPayload,
 ): Promise<SubjectTeacherAssignment> {
   return apiFetch<SubjectTeacherAssignment>(API_ROUTES.subjectTeacherAssignments, {
     method: "POST",
@@ -95,12 +115,7 @@ export async function createSubjectTeacherAssignment(
 
 export async function updateSubjectTeacherAssignment(
   assignmentId: number | string,
-  payload: {
-    subject_id: string | number;
-    staff_id: string | number;
-    session_id: string | number;
-    term_id: string | number;
-  },
+  payload: AssignmentMutationPayload,
 ): Promise<SubjectTeacherAssignment> {
   return apiFetch<SubjectTeacherAssignment>(
     `${API_ROUTES.subjectTeacherAssignments}/${assignmentId}`,
