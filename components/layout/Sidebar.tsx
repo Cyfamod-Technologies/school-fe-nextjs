@@ -117,7 +117,6 @@ export const menuSections: MenuSection[] = [
         requiredPermissions: "assessment.manage",
       },
       { label: "Academic-Rollover", href: "/v20/academic-rollover", requiredPermissions: "sessions.manage" },
-      { label: "School-settings", href: "/v10/profile", requiredPermissions: "profile.view" },
     ],
   },
   {

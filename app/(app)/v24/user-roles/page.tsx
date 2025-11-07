@@ -544,7 +544,7 @@ export default function UserRolesPage() {
           display: modalOpen ? "block" : "none",
           backgroundColor: modalOpen ? "rgba(0, 0, 0, 0.5)" : undefined,
         }}
-        aria-hidden={!modalOpen}
+        {...(modalOpen ? {} : { "aria-hidden": true })}
       >
         <div className="modal-dialog modal-lg" role="document">
           <div className="modal-content">
