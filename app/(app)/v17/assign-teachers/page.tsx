@@ -525,6 +525,7 @@ export default function AssignTeachersPage() {
                       ))}
                     </select>
                   </div>
+                  {/*
                   <div className="col-12 form-group">
                     <label htmlFor="teacher-class-section">
                       Class Section <span className="text-muted">(optional)</span>
@@ -553,6 +554,7 @@ export default function AssignTeachersPage() {
                       ))}
                     </select>
                   </div>
+                  */}
                   <div className="col-12 form-group">
                     <label htmlFor="teacher-session">Session *</label>
                     <select
@@ -773,6 +775,7 @@ export default function AssignTeachersPage() {
                     ))}
                   </select>
                 </div>
+                {/*
                 <div className="col-md-4 col-12 form-group">
                   <label htmlFor="teacher-filter-class-section">
                     Class Section
@@ -802,6 +805,7 @@ export default function AssignTeachersPage() {
                     ))}
                   </select>
                 </div>
+                */}
                 <div className="col-md-4 col-12 form-group">
                   <label htmlFor="teacher-filter-session">Session</label>
                   <select
@@ -891,7 +895,7 @@ export default function AssignTeachersPage() {
                       <th>Teacher</th>
                       <th>Class</th>
                       <th>Class Arm</th>
-                      <th>Class Section</th>
+                {/* <th>Class Section</th> */}
                       <th>Session</th>
                       <th>Term</th>
                       <th>Updated</th>
@@ -901,13 +905,13 @@ export default function AssignTeachersPage() {
                   <tbody>
                     {loadingList ? (
                       <tr>
-                        <td colSpan={9} className="text-center">
+                        <td colSpan={8} className="text-center">
                           Loading assignments…
                         </td>
                       </tr>
                     ) : assignments.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="text-center">
+                        <td colSpan={8} className="text-center">
                           No assignments found.
                         </td>
                       </tr>
@@ -927,7 +931,7 @@ export default function AssignTeachersPage() {
                           </td>
                           <td>{assignment.school_class?.name ?? "—"}</td>
                           <td>{assignment.class_arm?.name ?? "—"}</td>
-                          <td>{assignment.class_section?.name ?? "—"}</td>
+                          {/* <td>{assignment.class_section?.name ?? "—"}</td> */}
                           <td>{assignment.session?.name ?? "N/A"}</td>
                           <td>{assignment.term?.name ?? "N/A"}</td>
                           <td>

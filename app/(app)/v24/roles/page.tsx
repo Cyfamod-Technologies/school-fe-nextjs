@@ -658,7 +658,7 @@ export default function RolesPage() {
                                     className="col-sm-6 col-lg-4 mb-2"
                                     key={item.id}
                                   >
-                                    <div className="custom-control custom-checkbox">
+                                    <div className="custom-control custom-switch">
                                       <input
                                         type="checkbox"
                                         className="custom-control-input permission-checkbox"

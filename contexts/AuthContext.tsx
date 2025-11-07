@@ -26,6 +26,8 @@ interface AuthState {
   user: User | null;
   schoolContext: SchoolContext;
   loading: boolean;
+  permissions: Set<string>;
+  hasPermission: (permission?: string | string[] | null) => boolean;
   login: (payload: LoginPayload) => Promise<void>;
   logout: () => Promise<void>;
   refreshSchoolContext: () => Promise<void>;
@@ -40,11 +42,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     createEmptySchoolContext,
   );
   const [loading, setLoading] = useState(true);
+  const [permissions, setPermissions] = useState<Set<string>>(new Set());
 
   const hydrate = useCallback(async () => {
     const token = getCookie("token");
     if (!token) {
       setUser(null);
+      setPermissions(new Set());
       setSchoolContext(createEmptySchoolContext());
       setLoading(false);
       return;
@@ -57,10 +61,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         fetchSchoolContext(),
       ]);
       setUser(userResponse);
+      setPermissions(
+        new Set(
+          Array.isArray(userResponse?.permissions)
+            ? (userResponse.permissions as string[])
+            : [],
+        ),
+      );
       setSchoolContext(school);
     } catch (error) {
       console.error("Failed to hydrate auth context", error);
       setUser(null);
+      setPermissions(new Set());
       setSchoolContext(createEmptySchoolContext());
       deleteCookie("token");
     } finally {
@@ -84,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await logoutRequest();
     deleteCookie("token");
     setUser(null);
+    setPermissions(new Set());
     setSchoolContext(createEmptySchoolContext());
   }, []);
 
@@ -96,11 +109,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await hydrate();
   }, [hydrate]);
 
+  const hasPermission = useCallback(
+    (required?: string | string[] | null) => {
+      if (!required) {
+        return true;
+      }
+      const requiredList = Array.isArray(required) ? required : [required];
+      if (requiredList.length === 0) {
+        return true;
+      }
+
+      return requiredList.some((permission) => permissions.has(permission));
+    },
+    [permissions],
+  );
+
   const value = useMemo(
     () => ({
       user,
       schoolContext,
       loading,
+      permissions,
+      hasPermission,
       login,
       logout,
       refreshSchoolContext,
@@ -110,6 +140,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       schoolContext,
       loading,
+      permissions,
+      hasPermission,
       login,
       logout,
       refreshSchoolContext,
