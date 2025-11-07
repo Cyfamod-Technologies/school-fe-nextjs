@@ -49,28 +49,7 @@ const filterRolesByTerm = (roles: Role[], term: string): Role[] => {
   });
 };
 
-const SYSTEM_ROLE_NAMES = new Set(["admin", "super_admin"]);
-
-const isProtectedSystemUser = (user: ManagedUser | null): boolean => {
-  if (!user) {
-    return false;
-  }
-  const directRole =
-    typeof (user as { role?: unknown }).role === "string"
-      ? (user as { role?: string }).role?.toLowerCase()
-      : "";
-  if (directRole && SYSTEM_ROLE_NAMES.has(directRole)) {
-    return true;
-  }
-  if (!Array.isArray(user.roles)) {
-    return false;
-  }
-  return user.roles.some((role) => {
-    const roleName =
-      typeof role?.name === "string" ? role.name.toLowerCase() : "";
-    return roleName && SYSTEM_ROLE_NAMES.has(roleName);
-  });
-};
+// All users are editable; no protected system users.
 
 export default function UserRolesPage() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
@@ -195,9 +174,6 @@ export default function UserRolesPage() {
   const selectedRolesCount = selectedRoleIds.size;
 
   const handleOpenModal = (user: ManagedUser) => {
-    if (isProtectedSystemUser(user)) {
-      return;
-    }
     setSelectedUser(user);
     const ids = new Set<string>();
     if (Array.isArray(user.roles)) {
@@ -462,25 +438,16 @@ export default function UserRolesPage() {
                       <td>{user.email || "—"}</td>
                       <td>{buildRoleSummary(user)}</td>
                       <td className="text-right">
-                        {isProtectedSystemUser(user) ? (
-                          <span
-                            className="badge badge-light text-muted"
-                            title="System roles cannot be modified"
-                          >
-                            Locked
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-primary"
-                            onClick={() => {
-                              handleOpenModal(user);
-                            }}
-                          >
-                            <i className="fas fa-user-shield mr-1" />
-                            Assign Roles
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary"
+                          onClick={() => {
+                            handleOpenModal(user);
+                          }}
+                        >
+                          <i className="fas fa-user-shield mr-1" />
+                          Assign Roles
+                        </button>
                       </td>
                     </tr>
                   ))
