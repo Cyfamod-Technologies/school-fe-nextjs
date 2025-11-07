@@ -87,13 +87,23 @@ interface PermissionGroupTemplate {
   key: string;
   title: string;
   patterns: Array<string | RegExp>;
+  sections?: Array<{
+    label: string;
+    patterns: Array<string | RegExp>;
+  }>;
 }
 
 const SIDEBAR_PERMISSION_GROUPS: PermissionGroupTemplate[] = [
   {
     key: "management",
     title: "Management",
-    patterns: ["sessions.", "terms.", "subjects.", "result.pin."],
+    patterns: [],
+    sections: [
+      { label: "Sessions", patterns: ["sessions."] },
+      { label: "Terms", patterns: ["terms."] },
+      { label: "Subjects", patterns: ["subjects."] },
+      { label: "Result Pin", patterns: ["result.pin."] },
+    ],
   },
   {
     key: "parent",
@@ -183,32 +193,54 @@ const collectPermissionGroups = (
   const groups: PermissionGroup[] = [];
 
   SIDEBAR_PERMISSION_GROUPS.forEach((template) => {
-    const matched = remaining.filter((permission) => {
-      const name = String(permission?.name ?? "");
-      return template.patterns.some((pattern) => matchesPattern(name, pattern));
-    });
+    const sectionEntries: PermissionGroup[] = [];
+    let matchedIds = new Set<number | string>();
 
-    if (!matched.length) {
+    const processSection = (sectionLabel: string | null, patterns: Array<string | RegExp>) => {
+      const sectionMatches = remaining.filter((permission) => {
+        const name = String(permission?.name ?? "");
+        return patterns.some((pattern) => matchesPattern(name, pattern));
+      });
+
+      if (!sectionMatches.length) {
+        return;
+      }
+
+      matchedIds = new Set([...matchedIds, ...sectionMatches.map((permission) => permission.id)]);
+
+      sectionEntries.push({
+        key: sectionLabel ? `${template.key}-${sectionLabel.toLowerCase().replace(/\s+/g, "-")}` : template.key,
+        title: sectionLabel ?? template.title,
+        items: sectionMatches
+          .map((permission) => {
+            const labelMeta = formatPermissionLabels(String(permission?.name ?? ""));
+            return {
+              id: String(permission.id),
+              permission,
+              displayName: labelMeta.primaryLabel,
+              subtitle: labelMeta.subtitle,
+            };
+          })
+          .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+      });
+    };
+
+    if (Array.isArray(template.sections) && template.sections.length) {
+      template.sections.forEach((section) => {
+        processSection(section.label, section.patterns);
+      });
+    }
+
+    if (template.patterns.length) {
+      processSection(template.sections && template.sections.length ? "Other" : null, template.patterns);
+    }
+
+    if (!sectionEntries.length) {
       return;
     }
 
-    groups.push({
-      key: template.key,
-      title: template.title,
-      items: matched
-        .map((permission) => {
-          const labelMeta = formatPermissionLabels(String(permission?.name ?? ""));
-          return {
-            id: String(permission.id),
-            permission,
-            displayName: labelMeta.primaryLabel,
-            subtitle: labelMeta.subtitle,
-          };
-        })
-        .sort((a, b) => a.displayName.localeCompare(b.displayName)),
-    });
+    sectionEntries.forEach((entry) => groups.push(entry));
 
-    const matchedIds = new Set(matched.map((permission) => permission.id));
     remaining = remaining.filter(
       (permission) => !matchedIds.has(permission.id),
     );
