@@ -37,20 +37,6 @@ export const sidebarQuickLinks: SidebarQuickLink[] = [
     icon: "flaticon-dashboard",
     requiredPermissions: "dashboard.view",
   },
-  {
-    id: "account",
-    label: "Account",
-    href: "/v10/profile",
-    icon: "flaticon-user",
-    requiredPermissions: "profile.view",
-  },
-  {
-    id: "staff-dashboard",
-    label: "Staff Dashboard",
-    href: "/v25/staff-dashboard",
-    icon: "flaticon-teacher",
-    requiredRoles: ["teacher"],
-  },
 ];
 
 export const menuSections: MenuSection[] = [
@@ -222,15 +208,8 @@ export function Sidebar() {
   );
 
   const filteredQuickLinks = useMemo(() => {
-    return sidebarQuickLinks
-      .map((link) => {
-        if (link.id === "account" && roleSet.has("teacher")) {
-          return { ...link, href: "/v25/profile" };
-        }
-        return link;
-      })
-      .filter(linkVisible);
-  }, [linkVisible, roleSet]);
+    return sidebarQuickLinks.filter(linkVisible);
+  }, [linkVisible]);
 
   const filteredSections = useMemo(() => {
     return menuSections

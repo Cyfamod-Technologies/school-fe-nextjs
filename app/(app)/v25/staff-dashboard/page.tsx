@@ -245,7 +245,7 @@ export default function StaffDashboardPage() {
                         data-toggle="dropdown"
                         aria-expanded="false"
                       >
-                        ...
+                        
                       </a>
                       <div className="dropdown-menu dropdown-menu-right">
                         <Link className="dropdown-item" href="/v17/assign-teachers">
