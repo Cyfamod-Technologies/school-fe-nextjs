@@ -68,14 +68,6 @@ export const menuSections: MenuSection[] = [
     ],
   },
   {
-    label: "Account",
-    icon: "flaticon-account",
-    links: [
-      { label: "User Accounts", href: "/v24/user-accounts", requiredPermissions: "users.view" },
-      { label: "Create Account", href: "/v24/create-account", requiredPermissions: "users.create" },
-    ],
-  },
-  {
     label: "Parent",
     icon: "flaticon-couple",
     links: [
@@ -160,6 +152,13 @@ export const menuSections: MenuSection[] = [
       { label: "User Roles", href: "/v24/user-roles", requiredPermissions: "users.assignRoles" },
     ],
   },
+  {
+    label: "School Settings",
+    icon: "flaticon-settings",
+    links: [
+      { label: "School Settings", href: "/v10/profile" },
+    ],
+  },
 ];
 
 export function Sidebar() {
@@ -214,8 +213,14 @@ export function Sidebar() {
 
   const linkVisible = useCallback(
     (link: MenuLink) => {
+      // If a link requires permissions and the current user doesn't have them,
+      // allow users with admin-like roles to still see the link in the sidebar.
       if (link.requiredPermissions && !hasPermission(link.requiredPermissions)) {
-        return false;
+        const isAdminRole =
+          roleSet.has("admin") || roleSet.has("superadmin") || roleSet.has("administrator");
+        if (!isAdminRole) {
+          return false;
+        }
       }
       if (link.excludeRoles) {
         const excludedRoles = Array.isArray(link.excludeRoles)
