@@ -8,6 +8,11 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  getCurrentTeacherAssignments,
+  type TeacherAssignments,
+} from "@/lib/teacherAssignments";
 import { listSessions, type Session } from "@/lib/sessions";
 import { listTermsBySession, type Term } from "@/lib/terms";
 import { listClasses, type SchoolClass } from "@/lib/classes";
@@ -116,6 +121,18 @@ const statusLabel = (status: ResultRowStatus): string => {
 };
 
 export default function ResultsEntryPage() {
+  const { user } = useAuth();
+  const [teacherAssignments, setTeacherAssignments] = useState<TeacherAssignments | null>(null);
+
+  const normalizedRole = String(user?.role ?? "").toLowerCase();
+  const isTeacher =
+    normalizedRole.includes("teacher") ||
+    (Array.isArray(user?.roles)
+      ? user?.roles?.some((role) =>
+          String(role?.name ?? "").toLowerCase().includes("teacher"),
+        )
+      : false);
+
   const [filters, setFilters] = useState<FiltersState>(emptyFilters);
 
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -190,6 +207,33 @@ export default function ResultsEntryPage() {
     const key = `${selectedClass}:${selectedArm}`;
     return sectionsCache[key] ?? [];
   }, [selectedClass, selectedArm, sectionsCache]);
+
+  // Filter subjects based on the selected class and teacher assignments
+  const filteredSubjects = useMemo(() => {
+    // If user is not a teacher, show all available subjects
+    if (!isTeacher || !teacherAssignments) {
+      return subjects;
+    }
+
+    // If no class is selected, don't filter - show all subjects the teacher has access to
+    if (!selectedClass) {
+      return subjects;
+    }
+
+    // Get subject IDs for the selected class from teacher's subject assignments
+    // Note: The backend TeacherAccessService already handles the logic:
+    // - If teacher is class teacher for this class: subject_assignments includes ALL subjects for the class
+    // - If teacher is only subject teacher: subject_assignments includes ONLY assigned subjects
+    const subjectIdsForClass = new Set(
+      teacherAssignments.subject_assignments
+        .filter((assignment) => String(assignment.school_class_id) === selectedClass)
+        .map((assignment) => String(assignment.subject_id))
+        .filter(Boolean)
+    );
+
+    // Filter to show only subjects that are linked to the selected class
+    return subjects.filter((subject) => subjectIdsForClass.has(String(subject.id)));
+  }, [subjects, selectedClass, isTeacher, teacherAssignments]);
 
   const ensureTerms = useCallback(
     async (sessionId: string): Promise<Term[]> => {
@@ -297,6 +341,16 @@ export default function ResultsEntryPage() {
           ? String(context.current_term_id)
           : "";
 
+        // Fetch teacher assignments if user is a teacher
+        if (isTeacher && contextSessionId && contextTermId) {
+          try {
+            const assignments = await getCurrentTeacherAssignments(contextSessionId, contextTermId);
+            setTeacherAssignments(assignments);
+          } catch (error) {
+            console.error("Failed to load teacher assignments", error);
+          }
+        }
+
         if (contextSessionId) {
           await ensureTerms(contextSessionId);
         }
@@ -334,7 +388,7 @@ export default function ResultsEntryPage() {
     return () => {
       active = false;
     };
-  }, [ensureTerms, updateFilters]);
+  }, [isTeacher, ensureTerms, updateFilters]);
 
   useEffect(() => {
     if (!selectedSession) {
@@ -678,6 +732,11 @@ export default function ResultsEntryPage() {
     if (!selectedClass) missing.push("class");
     if (!selectedSubject) missing.push("subject");
 
+    // For teachers, assessment component is required
+    if (isTeacher && !selectedComponent) {
+      missing.push("assessment component");
+    }
+
     if (missing.length) {
       setFeedback({
         type: "warning",
@@ -766,6 +825,7 @@ export default function ResultsEntryPage() {
       setTableLoading(false);
     }
   }, [
+    isTeacher,
     resetMessages,
     selectedSession,
     selectedTerm,
@@ -1076,7 +1136,7 @@ export default function ResultsEntryPage() {
                   disabled={initializing}
                 >
                   <option value="">Select subject</option>
-                  {subjects.map((subject) => {
+                  {filteredSubjects.map((subject) => {
                     const label = subject.code
                       ? `${subject.name} (${subject.code})`
                       : subject.name;
