@@ -1157,7 +1157,7 @@ export default function ResultsEntryPage() {
                   className="form-control"
                   value={selectedSection}
                   onChange={handleSectionChange}
-                  disabled={!selectedClass || !selectedArm}
+                  disabled={!selectedClass}
                 >
                   <option value="">All sections</option>
                   {sections.map((section) => (

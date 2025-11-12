@@ -529,7 +529,7 @@ export default function StudentPromotionPage() {
                     </select>
                   </div>
                   <div className="col-md-6 col-12 form-group">
-                    <label htmlFor="target-arm">Target Arm *</label>
+                    <label htmlFor="target-arm">Target Arm</label>
                     <select
                       id="target-arm"
                       className="form-control"
@@ -542,9 +542,8 @@ export default function StudentPromotionPage() {
                         }))
                       }
                       disabled={!target.school_class_id || targetArms.length === 0}
-                      required
                     >
-                      <option value="">Select class arm</option>
+                      <option value="">All arms</option>
                       {targetArms.map((arm) => (
                         <option key={arm.id} value={arm.id}>
                           {arm.name}

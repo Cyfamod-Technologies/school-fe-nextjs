@@ -497,7 +497,6 @@ export default function EditStudentPage() {
       ["current_session_id", "Academic session"],
       ["current_term_id", "Term"],
       ["school_class_id", "Class"],
-      ["class_arm_id", "Class arm"],
       ["status", "Status"],
     ];
 
@@ -851,7 +850,7 @@ export default function EditStudentPage() {
                 </select>
               </div>
               <div className="col-xl-3 col-lg-6 col-12 form-group">
-                <label>Assigned Class Arm *</label>
+                <label>Assigned Class Arm</label>
                 <select
                   id="class-arm-id"
                   className="form-control"
@@ -860,9 +859,8 @@ export default function EditStudentPage() {
                     setField("class_arm_id", event.target.value)
                   }
                   disabled={!form.school_class_id}
-                  required
                 >
-                  <option value="">Please Select Class Arm *</option>
+                  <option value="">All arms</option>
                   {classArms.map((arm) => (
                     <option key={arm.id} value={arm.id}>
                       {arm.name}

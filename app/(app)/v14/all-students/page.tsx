@@ -342,7 +342,7 @@ export default function AllStudentsPage() {
                     class_section_id: event.target.value,
                   }));
                 }}
-                disabled={!filters.class_arm_id || classSections.length === 0}
+                disabled={!filters.school_class_id || classSections.length === 0}
               >
                 <option value="">All Sections</option>
                 {classSections.map((section) => (
