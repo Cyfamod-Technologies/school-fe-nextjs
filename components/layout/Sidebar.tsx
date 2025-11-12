@@ -156,7 +156,7 @@ export const menuSections: MenuSection[] = [
     label: "School Settings",
     icon: "flaticon-settings",
     links: [
-      { label: "School Settings", href: "/v10/profile" },
+      { label: "School Settings", href: "/v10/profile", requiredRoles: ["admin"] },
     ],
   },
 ];
