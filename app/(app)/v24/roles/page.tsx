@@ -76,6 +76,10 @@ const formatPermissionLabels = (permissionName: string): {
   if (actionPart === "update") {
     actionPart = "edit";
   }
+  // Normalize "enter" action to "Entry" for UX consistency
+  if (actionPart === "enter") {
+    actionPart = "entry";
+  }
 
   const subtitle =
     contextParts.length > 0 ? toTitle(contextParts.join(" ")) : groupPart === "general" ? null : toTitle(groupPart);
@@ -872,22 +876,24 @@ export default function RolesPage() {
                                     key={item.id}
                                   >
                                     <div className="custom-control custom-switch">
-                                      <input
-                                        type="checkbox"
-                                        className="custom-control-input permission-checkbox"
-                                        id={checkboxId}
-                                        value={item.id}
-                                        checked={checked}
-                                        onChange={(event) => {
-                                          togglePermissionSelection(
-                                            item.id,
-                                            event.target.checked,
-                                            item.permission,
-                                          );
-                                        }}
-                                        disabled={saving || isLocked}
-                                        title={isLocked ? "This permission is locked for teacher role" : undefined}
-                                      />
+              <input
+                type="checkbox"
+                className="custom-control-input permission-checkbox"
+                id={checkboxId}
+                value={item.id}
+                checked={checked}
+                onChange={(event) => {
+                  togglePermissionSelection(
+                    item.id,
+                    event.target.checked,
+                    item.permission,
+                  );
+                }}
+                disabled={saving || isLocked}
+                title={isLocked ? "This permission is locked for teacher role" : undefined}
+                aria-label={`Permission ${item.displayName}`}
+                role="switch"
+              />
                                       <label
                                         className="custom-control-label"
                                         htmlFor={checkboxId}
