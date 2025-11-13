@@ -263,15 +263,20 @@ export function Sidebar() {
 
   const toggleSection = useCallback((label: string) => {
     setOpenSections((prev) => {
-      const isCurrentlyOpen = prev[label] ?? false;
-      if (isCurrentlyOpen) {
-        const next = { ...prev };
-        delete next[label];
-        return next;
+      const hasExplicit = Object.prototype.hasOwnProperty.call(prev, label);
+      if (!hasExplicit) {
+        // No explicit user choice yet — set explicit state to the opposite of
+        // whether the section is currently active. This allows closing an
+        // active section when the user clicks it.
+        const section = filteredSections.find((s) => s.label === label);
+        const active = section ? isSectionActive(section) : false;
+        return { ...prev, [label]: !active };
       }
-      return { [label]: true };
+
+      // If there is an explicit value, just toggle it.
+      return { ...prev, [label]: !prev[label] };
     });
-  }, []);
+  }, [filteredSections, isSectionActive]);
 
   return (
     <div
