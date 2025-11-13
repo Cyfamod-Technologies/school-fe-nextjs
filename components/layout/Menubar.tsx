@@ -91,12 +91,59 @@ export function Menubar() {
     return [...quickLinks, ...sectionLinks];
   }, []);
 
+  // Simple natural language intent parser for the quick navigation
+  const parseIntent = useCallback((input: string): string | null => {
+    const t = input.toLowerCase().trim();
+    // direct patterns
+    const patterns: Array<[RegExp, string]> = [
+      [/\b(add|create|register)\s+(student|pupil)\b/, "/v14/add-student"],
+      [/\b(add|create|register)\s+(staff|teacher)\b/, "/v15/add-staff"],
+      [/\b(view|list|all)\s+(students|pupils)\b/, "/v14/all-students"],
+      [/\b(results?\s*entry)\b/, "/v19/results-entry"],
+      [/\b(bulk\s+upload)\b/, "/v22/bulk-student-upload"],
+      [/\b(assign\s+teachers?)\b/, "/v17/assign-teachers"],
+      [/\b(assign\s+subjects?)\b/, "/v17/assign-subjects"],
+      [/\b(profile|my profile|manage profile)\b/, 
+        String((user as { role?: string | null })?.role ?? "").toLowerCase().includes("teacher") ? "/v25/profile" : "/v10/profile"
+      ],
+      [/\b(dashboard)\b/, dashboardPath],
+      [/\b(assessment\s*component|components|assessment settings)\b/, "/v19/assessment-components"],
+      [/\b(grade\s*scale|grading)\b/, "/v19/grade-scales"],
+      [/\b(attendance)\b/, "/v21/student-attendance"],
+    ];
+
+    for (const [re, route] of patterns) {
+      if (re.test(t)) {
+        return route;
+      }
+    }
+
+    // If user typed something like "I want to add student" try to extract key nouns
+    if (/\badd\b/.test(t) && /\bstudent|pupil\b/.test(t)) return "/v14/add-student";
+    if (/\badd\b/.test(t) && /\bstaff|teacher\b/.test(t)) return "/v15/add-staff";
+
+    return null;
+  }, [dashboardPath, user]);
+
   const handleSearchSubmit = useCallback(() => {
     const term = searchTerm.trim();
     if (!term) {
       setSearchError("Enter a keyword to search.");
       return;
     }
+
+    // Try NLP intent parsing first
+    const intentRoute = parseIntent(term);
+    if (intentRoute) {
+      setSearching(true);
+      setSearchError(null);
+      router.push(intentRoute);
+      setSearchTerm("");
+      setTimeout(() => setSearching(false), 250);
+      return;
+    }
+
+    // Fallback: match by label
     const normalized = term.toLowerCase();
     const matches = searchableItems.filter((item) =>
       item.label.toLowerCase().includes(normalized),
@@ -110,7 +157,7 @@ export function Menubar() {
     router.push(matches[0].href);
     setSearchTerm("");
     setTimeout(() => setSearching(false), 250);
-  }, [router, searchTerm, searchableItems]);
+  }, [router, searchTerm, searchableItems, parseIntent]);
 
   const handleLogout = useCallback(async () => {
     await logout();
