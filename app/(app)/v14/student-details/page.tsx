@@ -547,8 +547,15 @@ export default function StudentDetailsPage() {
             errorMessage = "Your session has expired. Please log in again.";
           } else {
             const text = await response.text().catch(() => "");
-            // Try to extract message from HTML if possible, otherwise use status
-            errorMessage = text.trim() || `Unable to load printable result (${response.status}).`;
+            const trimmed = text.trim();
+            if (trimmed.length > 0 && /^<\s*(!DOCTYPE|html)/i.test(trimmed)) {
+              errorMessage =
+                response.status === 422
+                  ? "Results have not been added for this student in the selected session/term."
+                  : "Unable to load printable result. Please try again.";
+            } else {
+              errorMessage = trimmed || `Unable to load printable result (${response.status}).`;
+            }
           }
         }
         

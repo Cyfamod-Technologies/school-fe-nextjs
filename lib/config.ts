@@ -56,6 +56,7 @@ export const API_ROUTES = {
   skillTypes: "/api/v1/settings/skill-types",
   assessmentComponents: "/api/v1/settings/assessment-components",
   results: "/api/v1/results",
+  resultsBulkPrint: "/api/v1/results/bulk/print",
   resultBatch: "/api/v1/results/batch",
   resultPins: "/api/v1/result-pins",
   permissions: "/api/v1/permissions",
