@@ -283,32 +283,36 @@ export function Sidebar() {
       className="sidebar-main sidebar-menu-one sidebar-expand-md sidebar-color"
       style={{ backgroundColor: "#042C54" }}
     >
-      <div className="mobile-sidebar-header d-md-none">
+      <div
+        className="mobile-sidebar-header d-md-none"
+        style={{ borderBottom: "none", paddingBottom: 8 }}
+      >
         <div className="header-logo d-flex align-items-center">
           <Link href={dashboardPath} className="d-flex align-items-center">
             <Image
               id="sidebar-school-logo"
               src={logoSrc}
               alt="Sidebar logo"
-              width={120}
-              height={36}
+              width={80}
+              height={24}
               unoptimized
               style={{
                 height: "auto",
+                maxWidth: 80,
                 width: "auto",
-                marginRight: 6,
+                marginRight: 10,
               }}
               loader={passthroughLoader}
             />
-            <span className="sidebar-brand-text font-weight-bold text-primary">
+            <span className="sidebar-brand-text font-weight-bold text-primary" style={{ marginLeft: 6 }}>
               {brandText}
             </span>
           </Link>
         </div>
       </div>
 
-      <div className="sidebar-menu-content">
-        <ul className="nav nav-sidebar-menu sidebar-toggle-view">
+      <div className="sidebar-menu-content" style={{ paddingTop: 10 }}>
+        <ul className="nav nav-sidebar-menu sidebar-toggle-view" style={{ paddingTop: 6 }}>
           {filteredQuickLinks.map((link) => (
             <li
               key={link.id}
@@ -321,13 +325,15 @@ export function Sidebar() {
             </li>
           ))}
 
-          {filteredSections.map((section) => {
+          {filteredSections.map((section, idx) => {
             const active = isSectionActive(section);
             const open = openSections[section.label] ?? active;
+            const isFirstSection = idx === 0;
             return (
               <li
                 key={section.label}
                 className={`nav-item sidebar-nav-item ${open ? "open active" : ""}`}
+                style={isFirstSection ? { borderTop: "none" } : undefined}
               >
                 <a
                   href="#"
