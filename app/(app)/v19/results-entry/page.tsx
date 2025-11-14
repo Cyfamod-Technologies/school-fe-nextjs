@@ -168,6 +168,37 @@ export default function ResultsEntryPage() {
   const selectedSubject = filters.subjectId;
   const selectedComponent = filters.componentId;
 
+  const selectedComponentDetails = useMemo(() => {
+    if (!selectedComponent) {
+      return null;
+    }
+    return (
+      components.find(
+        (component) => String(component.id) === selectedComponent,
+      ) ?? null
+    );
+  }, [components, selectedComponent]);
+
+  const componentMaxScore = useMemo(() => {
+    if (!selectedComponentDetails) {
+      return 100;
+    }
+    const weightValue = Number(selectedComponentDetails.weight);
+    if (!Number.isFinite(weightValue) || weightValue <= 0) {
+      return 100;
+    }
+    return weightValue;
+  }, [selectedComponentDetails]);
+
+  const componentMaxScoreLabel = useMemo(() => {
+    if (!Number.isFinite(componentMaxScore)) {
+      return "100";
+    }
+    return Number.isInteger(componentMaxScore)
+      ? componentMaxScore.toString()
+      : componentMaxScore.toFixed(2).replace(/\.?0+$/, "");
+  }, [componentMaxScore]);
+
   const updateFilters = useCallback(
     (updater: (current: FiltersState) => FiltersState) => {
       setFilters((prev) => {
@@ -935,10 +966,14 @@ export default function ResultsEntryPage() {
       }
 
       const scoreValue = Number(scoreInput);
-      if (Number.isNaN(scoreValue) || scoreValue < 0 || scoreValue > 100) {
+      if (
+        Number.isNaN(scoreValue) ||
+        scoreValue < 0 ||
+        scoreValue > componentMaxScore
+      ) {
         nextRows[index] = {
           ...row,
-          rowError: "Score must be a number between 0 and 100.",
+          rowError: `Score must be a number between 0 and ${componentMaxScoreLabel}.`,
           status: "pending",
         };
         hasErrors = true;
@@ -1045,6 +1080,8 @@ export default function ResultsEntryPage() {
       setSaving(false);
     }
   }, [
+    componentMaxScore,
+    componentMaxScoreLabel,
     resetMessages,
     rows,
     selectedSession,
@@ -1263,7 +1300,9 @@ export default function ResultsEntryPage() {
                   <th>Student</th>
                   <th>Admission No</th>
                   <th>Class</th>
-                  <th style={{ width: "120px" }}>Score (0 - 100)</th>
+                  <th style={{ width: "120px" }}>
+                    Score (0 - {componentMaxScoreLabel})
+                  </th>
                   {/* Remark column commented out per request - UI hidden but data preserved
                   <th style={{ width: "280px" }}>Remark</th>
                   */}
@@ -1299,7 +1338,7 @@ export default function ResultsEntryPage() {
                             type="number"
                             className="form-control"
                             min={0}
-                            max={100}
+                            max={componentMaxScore}
                             step={0.01}
                             value={row.score}
                             onChange={(event) =>
