@@ -385,7 +385,7 @@ export default function AssignTeachersPage() {
   return (
     <>
       <div className="breadcrumbs-area">
-        <h3>Teacher Assignments</h3>
+        <h3>Teacher to Subjects</h3>
         <ul>
           <li>
             <Link href="/v10/dashboard">Home</Link>
@@ -603,11 +603,11 @@ export default function AssignTeachersPage() {
         </div>
 
         <div className="col-lg-7">
-          <div className="card height-auto">
+              <div className="card height-auto">
             <div className="card-body">
               <div className="heading-layout1">
                 <div className="item-title">
-                  <h3>Assignments</h3>
+                  <h3>Filter</h3>
                 </div>
               </div>
 
