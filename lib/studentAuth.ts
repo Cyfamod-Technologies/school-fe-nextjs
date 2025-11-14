@@ -13,11 +13,30 @@ export interface StudentProfile {
   middle_name?: string | null;
   last_name: string;
   gender?: string | null;
+  date_of_birth?: string | null;
+  state_of_origin?: string | null;
+  nationality?: string | null;
+  address?: string | null;
+  lga_of_origin?: string | null;
+  house?: string | null;
+  club?: string | null;
+  medical_information?: string | null;
+  blood_group?: {
+    id: string;
+    name: string;
+  } | null;
   subjects?: Array<{ id: string; name: string }>;
   school?: {
     id: string;
     name: string;
     logo_url?: string | null;
+    address?: string | null;
+    phone?: string | null;
+  } | null;
+  parent?: {
+    id: string;
+    name: string;
+    phone?: string | null;
   } | null;
   current_session?: {
     id: string;
