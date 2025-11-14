@@ -195,6 +195,28 @@ export default function StudentMyResultPage() {
         {results ? (
           <div className="mt-4">
             <h4 className="mb-3">Result Summary</h4>
+            <div className="d-flex justify-content-end mb-3">
+              <button
+                type="button"
+                className="btn btn-outline-primary"
+                onClick={() => {
+                  if (!selectedSession || !selectedTerm) {
+                    setError("Select session and term before printing.");
+                    return;
+                  }
+                  const params = new URLSearchParams();
+                  params.set("session_id", selectedSession);
+                  params.set("term_id", selectedTerm);
+                  const url = `/student/print-result?${params.toString()}`;
+                  const printWindow = window.open(url, "_blank", "noopener,noreferrer");
+                  if (!printWindow) {
+                    setError("Unable to open print window. Please allow pop-ups.");
+                  }
+                }}
+              >
+                Print Result
+              </button>
+            </div>
             {results.length === 0 ? (
               <p className="text-muted mb-0">
                 No results found for the selected session and term.
