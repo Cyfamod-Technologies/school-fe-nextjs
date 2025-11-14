@@ -1,14 +1,18 @@
 import { BACKEND_URL } from "@/lib/config";
 import { getCookie } from "@/lib/cookies";
 
-type FetchOptions = RequestInit & { skipAuth?: boolean };
+type FetchOptions = RequestInit & {
+  skipAuth?: boolean;
+  authScope?: "staff" | "student";
+};
 
 export async function apiFetch<T = unknown>(
   path: string,
   options: FetchOptions = {},
 ): Promise<T> {
-  const { skipAuth = false, headers, ...rest } = options;
-  const token = getCookie("token");
+  const { skipAuth = false, authScope = "staff", headers, ...rest } = options;
+  const tokenName = authScope === "student" ? "student_token" : "token";
+  const token = getCookie(tokenName);
   const resolvedHeaders = new Headers(headers);
 
   const isFormData =
@@ -32,7 +36,7 @@ export async function apiFetch<T = unknown>(
   if (!response.ok) {
     // For 403 (Forbidden) errors, return empty data instead of throwing
     // This allows UI to hide elements gracefully without showing errors
-    if (response.status === 403) {
+    if (response.status === 403 && authScope === "staff") {
       // Return appropriate empty value based on expected return type
       return [] as T;
     }

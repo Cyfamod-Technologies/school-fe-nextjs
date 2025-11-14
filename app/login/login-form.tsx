@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
@@ -165,6 +166,13 @@ export function LoginForm() {
           {submitting ? "Signing in..." : "Login"}
         </button>
       </div>
+      <p className="text-center text-muted small">
+        Are you a student?{" "}
+        <Link href="/student-login" className="font-weight-bold">
+          Use the student login
+        </Link>{" "}
+        with your admission number.
+      </p>
     </form>
   );
 }
