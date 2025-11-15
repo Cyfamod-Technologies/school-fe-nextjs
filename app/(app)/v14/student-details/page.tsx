@@ -1162,7 +1162,7 @@ export default function StudentDetailsPage() {
           <form className="mb-3" onSubmit={handleTermSummarySubmit}>
             <div className="row">
               <div className="col-md-6 col-12 form-group">
-                <label className="text-dark-medium">Class Teacher Comment</label>
+                <label className="text-dark-medium">Class Teacher&apos;s Comment</label>
                 <textarea
                   className="form-control"
                   style={{ backgroundColor: "#f8f8f8" }}
@@ -1179,7 +1179,7 @@ export default function StudentDetailsPage() {
                 />
               </div>
               <div className="col-md-6 col-12 form-group">
-                <label className="text-dark-medium">Principal Comment</label>
+                <label className="text-dark-medium">Principal&apos;s Comment</label>
                 <textarea
                   className="form-control"
                   style={{ backgroundColor: "#f8f8f8" }}
