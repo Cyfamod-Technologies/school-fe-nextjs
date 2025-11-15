@@ -7,6 +7,7 @@ import {
   useStudentAuth,
 } from "@/contexts/StudentAuthContext";
 import { useEffect, useState } from "react";
+import { OnboardingVideo } from "@/components/layout/OnboardingVideo";
 
 function StudentGuard({ children }: { children: React.ReactNode }) {
   const { student, loading, logout } = useStudentAuth();
@@ -85,6 +86,7 @@ export default function StudentDashboardLayout({
   return (
     <StudentAuthProvider>
       <StudentGuard>{children}</StudentGuard>
+      <OnboardingVideo />
     </StudentAuthProvider>
   );
 }
