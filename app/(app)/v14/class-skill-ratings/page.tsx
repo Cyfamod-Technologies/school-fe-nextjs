@@ -28,7 +28,7 @@ import {
   type StudentSkillRating,
   type StudentSkillType,
 } from "@/lib/studentSkillRatings";
-import { listSkillTypes, type SkillType as RawSkillType } from "@/lib/skills";
+import { listSkillTypes } from "@/lib/skills";
 import {
   fetchTeacherDashboard,
   type TeacherDashboardResponse,
@@ -114,12 +114,12 @@ export default function ClassSkillRatingsPage() {
       try {
         const types = await listSkillTypes();
         if (cancelled) return;
-        const mapped: StudentSkillType[] = types.map((type: RawSkillType) => ({
+        const mapped: StudentSkillType[] = types.map((type) => ({
           id: String(type.id),
-          name: type.name,
-          description: type.description ?? null,
-          skill_category_id: type.skill_category_id,
-          category: type.category ?? null,
+          name: String(type.name ?? ""),
+          description: (type as any).description ?? null,
+          skill_category_id: (type as any).skill_category_id ?? "",
+          category: (type as any).category ?? null,
         }));
         setSkillTypes(mapped);
       } catch (err) {
