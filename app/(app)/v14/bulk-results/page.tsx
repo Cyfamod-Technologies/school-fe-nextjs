@@ -35,9 +35,7 @@ const buildQueryString = (filters: Filters, autoPrint: boolean) => {
   if (filters.classArmId) {
     params.set("class_arm_id", filters.classArmId);
   }
-  if (filters.classSectionId) {
-    params.set("class_section_id", filters.classSectionId);
-  }
+  // Class section is intentionally omitted from bulk result filters for now.
   if (autoPrint) {
     params.set("autoprint", "1");
   }
@@ -102,20 +100,8 @@ export default function BulkResultsPage() {
   }, [filters.classId, filters.classArmId]);
 
   useEffect(() => {
-    if (!filters.classId || !filters.classArmId) {
-      return;
-    }
-
-    listClassArmSections(filters.classId, filters.classArmId)
-      .then((sections) => {
-        setClassSections(sections);
-        if (!sections.find((section) => `${section.id}` === filters.classSectionId)) {
-          setFilters((prev) => ({ ...prev, classSectionId: "" }));
-        }
-      })
-      .catch((error) => {
-        console.error("Unable to load class sections", error);
-      });
+    // Class sections are not used in bulk result filters for now.
+    return;
   }, [filters.classId, filters.classArmId, filters.classSectionId]);
 
   const terms = useMemo(() => {
@@ -333,28 +319,7 @@ export default function BulkResultsPage() {
           </div>
 
           <div className="row">
-            <div className="col-lg-3 col-12 form-group">
-              <label htmlFor="bulk-section">Class Section</label>
-              <select
-                id="bulk-section"
-                className="form-control"
-                value={filters.classSectionId}
-                onChange={(event) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    classSectionId: event.target.value,
-                  }))
-                }
-                disabled={!filters.classArmId || classSections.length === 0}
-              >
-                <option value="">All sections</option>
-                {classSections.map((section) => (
-                  <option key={section.id} value={section.id}>
-                    {section.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Class Section filter intentionally hidden for now */}
             <div className="col-lg-9 col-12 d-flex align-items-end justify-content-end">
               <div className="d-flex flex-wrap align-items-center">
                 <button
