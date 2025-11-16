@@ -6,6 +6,7 @@ import { Menubar } from "@/components/layout/Menubar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { OnboardingVideo } from "@/components/layout/OnboardingVideo";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMemo } from "react";
 
 export default function AppLayout({
   children,
@@ -16,14 +17,47 @@ export default function AppLayout({
   const router = useRouter();
   const pathname = usePathname();
 
+  const isTeacherUser = useMemo(() => {
+    if (!user) {
+      return false;
+    }
+    const normalizedRole = String((user as { role?: string | null }).role ?? "").toLowerCase();
+    if (normalizedRole.includes("teacher")) {
+      return true;
+    }
+    const roles = (user as { roles?: Array<{ name?: string | null }> }).roles;
+    if (Array.isArray(roles)) {
+      return roles.some((role) =>
+        String(role?.name ?? "").toLowerCase().includes("teacher"),
+      );
+    }
+    return false;
+  }, [user]);
+
+  const defaultDashboardPath = isTeacherUser ? "/v25/staff-dashboard" : "/v10/dashboard";
+
   useEffect(() => {
     if (loading) {
       return;
     }
     if (!user) {
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      return;
     }
-  }, [loading, user, router, pathname]);
+
+    // Enforce role-aware routing inside the authenticated app segment.
+    // Teachers should stay on /v25/*, while non-teacher staff/admin stay on /v10–/v24 routes.
+    const currentPath = pathname || "/";
+    const isTeacherArea = currentPath.startsWith("/v25");
+
+    const requiresRedirect =
+      (!isTeacherUser && isTeacherArea) ||
+      (isTeacherUser && !isTeacherArea);
+
+    if (requiresRedirect && currentPath !== defaultDashboardPath) {
+      router.replace(defaultDashboardPath);
+    }
+  }, [loading, user, router, pathname, isTeacherUser, defaultDashboardPath]);
 
   useEffect(() => {
     if (loading || !user) {
