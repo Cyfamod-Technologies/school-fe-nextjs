@@ -7,6 +7,7 @@ import {
   type TeacherAssignmentSummary,
   type TeacherDashboardResponse,
 } from "@/lib/staff";
+import { fetchSchoolContext, type SchoolContext } from "@/lib/schoolContext";
 import { useAuth } from "@/contexts/AuthContext";
 
 const iconClasses = [
@@ -22,6 +23,7 @@ const formatLabel = (label: string | null | undefined): string =>
 export default function StaffDashboardPage() {
   const { user, hasPermission } = useAuth();
   const [data, setData] = useState<TeacherDashboardResponse | null>(null);
+  const [schoolContext, setSchoolContext] = useState<SchoolContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,12 +47,13 @@ export default function StaffDashboardPage() {
     setLoading(true);
     setError(null);
 
-    void fetchTeacherDashboard()
-      .then((response) => {
+    void Promise.all([fetchTeacherDashboard(), fetchSchoolContext()])
+      .then(([dashboard, context]) => {
         if (!isMounted) {
           return;
         }
-        setData(response);
+        setData(dashboard);
+        setSchoolContext(context);
       })
       .catch((err) => {
         if (!isMounted) {
@@ -60,9 +63,10 @@ export default function StaffDashboardPage() {
         setError(
           err instanceof Error
             ? err.message
-            : "Unable to load teacher assignments. Please try again.",
+            : "Unable to load teacher dashboard. Please try again.",
         );
         setData(null);
+        setSchoolContext(null);
       })
       .finally(() => {
         if (isMounted) {
@@ -156,6 +160,22 @@ export default function StaffDashboardPage() {
 
       {!loading && data ? (
         <>
+          {schoolContext ? (
+            <div className="row mb-3">
+              <div className="col-12">
+                <div className="alert alert-secondary d-flex justify-content-between align-items-center mb-0" role="status">
+                  <div>
+                    <strong>Current Session:</strong>{" "}
+                    {schoolContext.current_session?.name ?? "Not set"}
+                    {" · "}
+                    <strong>Current Term:</strong>{" "}
+                    {schoolContext.current_term?.name ?? "Not set"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="row">
             {summaryCards.map((card, index) => (
               <div className="col-lg-4 col-md-6 col-12" key={card.label}>
