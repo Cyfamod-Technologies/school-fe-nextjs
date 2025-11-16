@@ -168,6 +168,8 @@ export default function ResultsEntryPage() {
   const selectedSubject = filters.subjectId;
   const selectedComponent = filters.componentId;
 
+  const lockSessionAndTerm = true;
+
   const selectedComponentDetails = useMemo(() => {
     if (!selectedComponent) {
       return null;
@@ -376,9 +378,14 @@ export default function ResultsEntryPage() {
         setClasses(classList);
         setSubjects(subjectList);
 
-        const contextSessionId = context.current_session_id
+        const contextSessionIdRaw = context.current_session_id
           ? String(context.current_session_id)
           : "";
+        const fallbackSessionId =
+          !contextSessionIdRaw && sessionList.length > 0
+            ? String(sessionList[0].id)
+            : "";
+        const contextSessionId = contextSessionIdRaw || fallbackSessionId;
         const contextTermId = context.current_term_id
           ? String(context.current_term_id)
           : "";
@@ -696,6 +703,9 @@ export default function ResultsEntryPage() {
   ]);
 
   const handleSessionChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    if (lockSessionAndTerm) {
+      return;
+    }
     const value = event.target.value;
     updateFilters((prev) => ({
       ...prev,
@@ -706,6 +716,9 @@ export default function ResultsEntryPage() {
   };
 
   const handleTermChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    if (lockSessionAndTerm) {
+      return;
+    }
     const value = event.target.value;
     updateFilters((prev) => ({
       ...prev,
@@ -1126,11 +1139,11 @@ export default function ResultsEntryPage() {
                   className="form-control"
                   value={selectedSession}
                   onChange={handleSessionChange}
-                  disabled={initializing}
+                  disabled={initializing || lockSessionAndTerm}
                 >
                   <option value="">Select session</option>
                   {sessions.map((session) => (
-                    <option key={session.id} value={session.id}>
+                    <option key={session.id} value={String(session.id)}>
                       {session.name}
                     </option>
                   ))}
@@ -1143,11 +1156,11 @@ export default function ResultsEntryPage() {
                   className="form-control"
                   value={selectedTerm}
                   onChange={handleTermChange}
-                  disabled={initializing || !selectedSession}
+                  disabled={initializing || !selectedSession || lockSessionAndTerm}
                 >
                   <option value="">Select term</option>
                   {terms.map((term) => (
-                    <option key={term.id} value={term.id}>
+                    <option key={term.id} value={String(term.id)}>
                       {term.name}
                     </option>
                   ))}

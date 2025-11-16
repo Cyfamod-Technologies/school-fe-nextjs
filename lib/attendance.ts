@@ -19,6 +19,8 @@ export interface StudentAttendanceRecord {
   date?: string;
   status?: string;
   notes?: string | null;
+  metadata?: Record<string, unknown> | null;
+  comment?: string | null;
   student_id?: number | string;
   student?: {
     id?: number | string;

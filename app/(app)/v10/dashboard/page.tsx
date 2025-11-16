@@ -235,7 +235,7 @@ export default function DashboardPage() {
               </div>
               <p className="text-muted mb-0">
                 These counts reflect the total number of students, teachers, and
-                parents registered for your school. Keep the data up to date by
+                parents registered in your school. Keep the data up to date by
                 managing enrolments and staff profiles.
               </p>
             </div>

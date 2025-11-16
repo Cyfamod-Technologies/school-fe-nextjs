@@ -106,6 +106,8 @@ export default function ClassSkillRatingsPage() {
   const selectedSection = filters.sectionId;
   const selectedSkillTypeId = filters.skillTypeId;
 
+  const lockSessionAndTerm = isTeacher;
+
   // Load skill types once so the Skill dropdown is available without needing
   // to click "Load Students & Skills" first.
   useEffect(() => {
@@ -257,9 +259,14 @@ export default function ClassSkillRatingsPage() {
         setSessions(sessionList);
         setClasses(classList);
 
-        const contextSessionId = context.current_session_id
+        const contextSessionIdRaw = context.current_session_id
           ? String(context.current_session_id)
           : "";
+        const fallbackSessionId =
+          !contextSessionIdRaw && sessionList.length > 0
+            ? String(sessionList[0].id)
+            : "";
+        const contextSessionId = contextSessionIdRaw || fallbackSessionId;
         const contextTermId = context.current_term_id
           ? String(context.current_term_id)
           : "";
@@ -589,11 +596,11 @@ export default function ClassSkillRatingsPage() {
                 className="form-control"
                 value={selectedSession}
                 onChange={handleFilterChange("sessionId")}
-                disabled={loadingFilters}
+                disabled={loadingFilters || lockSessionAndTerm}
               >
                 <option value="">Select session</option>
                 {sessions.map((session) => (
-                  <option key={session.id} value={session.id}>
+                  <option key={session.id} value={String(session.id)}>
                     {session.name}
                   </option>
                 ))}
@@ -606,11 +613,11 @@ export default function ClassSkillRatingsPage() {
                 className="form-control"
                 value={selectedTerm}
                 onChange={handleFilterChange("termId")}
-                disabled={!selectedSession}
+                disabled={!selectedSession || lockSessionAndTerm}
               >
                 <option value="">Select term</option>
                 {terms.map((term) => (
-                  <option key={term.id} value={term.id}>
+                  <option key={term.id} value={String(term.id)}>
                     {term.name}
                   </option>
                 ))}

@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   deleteStudent,
   getStudent,
@@ -48,6 +49,7 @@ export default function StudentDetailsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const studentId = searchParams.get("id");
+  const { schoolContext } = useAuth();
 
   const [student, setStudent] = useState<StudentDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -475,14 +477,18 @@ export default function StudentDetailsPage() {
     params.set("student_id", studentId);
     const sessionCandidate =
       selectedSession ||
-      (student?.current_session_id != null
-        ? String(student.current_session_id)
-        : "");
+      (schoolContext.current_session_id != null
+        ? String(schoolContext.current_session_id)
+        : student?.current_session_id != null
+          ? String(student.current_session_id)
+          : "");
     const termCandidate =
       selectedTerm ||
-      (student?.current_term_id != null
-        ? String(student.current_term_id)
-        : "");
+      (schoolContext.current_term_id != null
+        ? String(schoolContext.current_term_id)
+        : student?.current_term_id != null
+          ? String(student.current_term_id)
+          : "");
     if (sessionCandidate) {
       params.set("session_id", sessionCandidate);
     }
@@ -495,6 +501,8 @@ export default function StudentDetailsPage() {
     selectedTerm,
     student?.current_session_id,
     student?.current_term_id,
+    schoolContext.current_session_id,
+    schoolContext.current_term_id,
     studentId,
   ]);
 
@@ -676,7 +684,10 @@ export default function StudentDetailsPage() {
       if (prev) {
         return prev;
       }
-      if (student.current_session_id) {
+      if (schoolContext.current_session_id != null) {
+        return String(schoolContext.current_session_id);
+      }
+      if (student.current_session_id != null) {
         return String(student.current_session_id);
       }
       return "";
@@ -685,12 +696,15 @@ export default function StudentDetailsPage() {
       if (prev) {
         return prev;
       }
-      if (student.current_term_id) {
+      if (schoolContext.current_term_id != null) {
+        return String(schoolContext.current_term_id);
+      }
+      if (student.current_term_id != null) {
         return String(student.current_term_id);
       }
       return "";
     });
-  }, [student]);
+  }, [student, schoolContext.current_session_id, schoolContext.current_term_id]);
 
   useEffect(() => {
     listSessions()
