@@ -34,8 +34,6 @@ export default function AppLayout({
     return false;
   }, [user]);
 
-  const defaultDashboardPath = isTeacherUser ? "/v25/staff-dashboard" : "/v10/dashboard";
-
   useEffect(() => {
     if (loading) {
       return;
@@ -44,20 +42,7 @@ export default function AppLayout({
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
       return;
     }
-
-    // Enforce role-aware routing inside the authenticated app segment.
-    // Teachers should stay on /v25/*, while non-teacher staff/admin stay on /v10–/v24 routes.
-    const currentPath = pathname || "/";
-    const isTeacherArea = currentPath.startsWith("/v25");
-
-    const requiresRedirect =
-      (!isTeacherUser && isTeacherArea) ||
-      (isTeacherUser && !isTeacherArea);
-
-    if (requiresRedirect && currentPath !== defaultDashboardPath) {
-      router.replace(defaultDashboardPath);
-    }
-  }, [loading, user, router, pathname, isTeacherUser, defaultDashboardPath]);
+  }, [loading, user, router, pathname]);
 
   useEffect(() => {
     if (loading || !user) {
