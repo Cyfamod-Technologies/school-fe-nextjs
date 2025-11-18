@@ -168,7 +168,7 @@ export default function ResultsEntryPage() {
   const selectedSubject = filters.subjectId;
   const selectedComponent = filters.componentId;
 
-  const lockSessionAndTerm = true;
+  const lockSessionAndTerm = isTeacher;
 
   const selectedComponentDetails = useMemo(() => {
     if (!selectedComponent) {
