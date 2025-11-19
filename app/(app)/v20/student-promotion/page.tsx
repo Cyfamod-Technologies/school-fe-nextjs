@@ -284,10 +284,10 @@ export default function StudentPromotionPage() {
       return;
     }
 
-    if (!target.session_id || !target.school_class_id || !target.class_arm_id) {
+    if (!target.session_id || !target.school_class_id) {
       setFeedback({
         type: "warning",
-        message: "Select the target session, class, and class arm.",
+        message: "Select the target session and class.",
       });
       return;
     }
