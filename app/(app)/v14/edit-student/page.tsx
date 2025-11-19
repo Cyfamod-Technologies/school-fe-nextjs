@@ -395,7 +395,11 @@ export default function EditStudentPage() {
           (state.name ?? "").toLowerCase() === stateId.toLowerCase(),
       ) ?? null;
 
-    const effectiveStateId = matchedState ? `${matchedState.id}` : stateId;
+    // Only load LGAs once we can resolve the state to a known ID.
+    if (!matchedState) {
+      return;
+    }
+    const effectiveStateId = `${matchedState.id}`;
 
     listLgas(effectiveStateId)
       .then((data) => {
