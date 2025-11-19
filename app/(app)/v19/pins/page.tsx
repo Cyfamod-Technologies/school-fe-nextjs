@@ -315,7 +315,6 @@ export default function PinsPage() {
     try {
       const response = await listStudents({
         per_page: 200,
-        session_id: selectedSession,
         school_class_id: selectedClass,
         class_arm_id: selectedArm || undefined,
       });
