@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image, { type ImageLoader } from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { resolveBackendUrl } from "@/lib/config";
 
@@ -31,6 +31,19 @@ export default function SchoolProfilePage() {
     : null;
 
   const passthroughLoader: ImageLoader = ({ src }) => src;
+
+  const schoolNameLines = useMemo(() => {
+    const raw = school?.name ?? "";
+    const value = typeof raw === "string" ? raw.trim() : "";
+    if (!value) {
+      return ["N/A"];
+    }
+    // Support manual line breaks via <br>, <br/>, or <br /> in the name field.
+    return value
+      .split(/<br\s*\/?>/i)
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+  }, [school?.name]);
 
   const adminRole =
     user != null
@@ -145,7 +158,12 @@ export default function SchoolProfilePage() {
                             id="school-name"
                             className="font-medium text-dark-medium"
                           >
-                            {school?.name ?? "N/A"}
+                            {schoolNameLines.map((line, index) => (
+                              <span key={index}>
+                                {index > 0 && <br />}
+                                {line}
+                              </span>
+                            ))}
                           </td>
                         </tr>
                         <tr>
