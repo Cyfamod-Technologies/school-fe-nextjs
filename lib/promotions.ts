@@ -64,9 +64,14 @@ export async function bulkPromoteStudents(
   return apiFetch<PromotionResponse>(API_ROUTES.promotionsBulk, {
     method: "POST",
     body: JSON.stringify({
-      ...payload,
-      class_section_id: payload.target_class_section_id ?? null,
+      target_session_id: payload.target_session_id,
+      target_class_id: payload.target_school_class_id,
+      // Treat target arm as optional for now; let backend
+      // infer or leave null rather than failing on a mismatch.
+      // target_class_arm_id is intentionally omitted.
+      target_section_id: payload.target_class_section_id ?? null,
       retain_subjects: Boolean(payload.retain_subjects),
+      student_ids: payload.student_ids,
     }),
   });
 }

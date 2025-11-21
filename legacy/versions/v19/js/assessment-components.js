@@ -124,7 +124,14 @@ function populateSubjectOptions() {
         if (!componentState.subjects.length) {
             componentEls.subjectsContainer.innerHTML = '<p class="text-muted mb-0">No subjects available.</p>';
         } else {
-            componentEls.subjectsContainer.innerHTML = componentState.subjects
+            const selectAllCheckbox = `
+                <div class="form-check mb-2 pb-2 border-bottom">
+                    <input class="form-check-input" type="checkbox" id="select-all-subjects">
+                    <label class="form-check-label fw-bold" for="select-all-subjects">Select All</label>
+                </div>
+            `;
+
+            const subjectCheckboxes = componentState.subjects
                 .map((subject) => {
                     const label = `${subject.name}${subject.code ? ` (${subject.code})` : ''}`;
                     return `
@@ -135,6 +142,29 @@ function populateSubjectOptions() {
                     `;
                 })
                 .join('');
+
+            componentEls.subjectsContainer.innerHTML = selectAllCheckbox + subjectCheckboxes;
+
+            // Add event listener for select all checkbox
+            const selectAllEl = document.getElementById('select-all-subjects');
+            if (selectAllEl) {
+                selectAllEl.addEventListener('change', function(e) {
+                    const checkboxes = componentEls.subjectsContainer.querySelectorAll('.component-subject-checkbox');
+                    checkboxes.forEach(checkbox => {
+                        checkbox.checked = e.target.checked;
+                    });
+                });
+
+                // Update select all checkbox when individual checkboxes change
+                const subjectCheckboxes = componentEls.subjectsContainer.querySelectorAll('.component-subject-checkbox');
+                subjectCheckboxes.forEach(checkbox => {
+                    checkbox.addEventListener('change', function() {
+                        const allCheckboxes = componentEls.subjectsContainer.querySelectorAll('.component-subject-checkbox');
+                        const checkedCount = componentEls.subjectsContainer.querySelectorAll('.component-subject-checkbox:checked').length;
+                        selectAllEl.checked = checkedCount === allCheckboxes.length;
+                    });
+                });
+            }
         }
     }
 

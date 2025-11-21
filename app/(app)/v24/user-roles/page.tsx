@@ -49,6 +49,29 @@ const filterRolesByTerm = (roles: Role[], term: string): Role[] => {
   });
 };
 
+const SYSTEM_ROLE_NAMES = new Set(["admin", "super_admin"]);
+
+const userHasAdminRole = (user: ManagedUser | null): boolean => {
+  if (!user) {
+    return false;
+  }
+  const directRole =
+    typeof (user as { role?: unknown }).role === "string"
+      ? (user as { role?: string }).role?.toLowerCase()
+      : "";
+  if (directRole === "admin") {
+    return true;
+  }
+  if (!Array.isArray(user.roles)) {
+    return false;
+  }
+  return user.roles.some((role) => {
+    const roleName =
+      typeof role?.name === "string" ? role.name.toLowerCase() : "";
+    return roleName === "admin";
+  });
+};
+
 export default function UserRolesPage() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -172,6 +195,9 @@ export default function UserRolesPage() {
   const selectedRolesCount = selectedRoleIds.size;
 
   const handleOpenModal = (user: ManagedUser) => {
+    if (userHasAdminRole(user)) {
+      return;
+    }
     setSelectedUser(user);
     const ids = new Set<string>();
     if (Array.isArray(user.roles)) {
@@ -195,7 +221,26 @@ export default function UserRolesPage() {
     setSaving(false);
   };
 
-  const toggleRoleSelection = (roleId: string, checked: boolean) => {
+  const userHasTeacherRole = useCallback((): boolean => {
+    if (!selectedUser || !Array.isArray(selectedUser.roles)) {
+      return false;
+    }
+    return selectedUser.roles.some((role) => {
+      const roleName = typeof role?.name === "string" ? role.name.toLowerCase() : "";
+      return roleName === "teacher";
+    });
+  }, [selectedUser]);
+
+  const isTeacherRole = useCallback((role: Role): boolean => {
+    const roleName = typeof role?.name === "string" ? role.name.toLowerCase() : "";
+    return roleName === "teacher";
+  }, []);
+
+  const toggleRoleSelection = (roleId: string, checked: boolean, role?: Role) => {
+    // Prevent unchecking teacher role if user has it
+    if (!checked && role && isTeacherRole(role) && userHasTeacherRole()) {
+      return;
+    }
     setSelectedRoleIds((previous) => {
       const next = new Set(previous);
       if (checked) {
@@ -436,16 +481,25 @@ export default function UserRolesPage() {
                       <td>{user.email || "—"}</td>
                       <td>{buildRoleSummary(user)}</td>
                       <td className="text-right">
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-primary"
-                          onClick={() => {
-                            handleOpenModal(user);
-                          }}
-                        >
-                          <i className="fas fa-user-shield mr-1" />
-                          Assign Roles
-                        </button>
+                        {userHasAdminRole(user) ? (
+                          <span
+                            className="badge badge-light text-muted"
+                            title="Admin account cannot be modified"
+                          >
+                            Locked
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-primary"
+                            onClick={() => {
+                              handleOpenModal(user);
+                            }}
+                          >
+                            <i className="fas fa-user-shield mr-1" />
+                            Assign Roles
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -509,7 +563,7 @@ export default function UserRolesPage() {
           display: modalOpen ? "block" : "none",
           backgroundColor: modalOpen ? "rgba(0, 0, 0, 0.5)" : undefined,
         }}
-        aria-hidden={!modalOpen}
+        {...(modalOpen ? {} : { "aria-hidden": true })}
       >
         <div className="modal-dialog modal-lg" role="document">
           <div className="modal-content">
@@ -575,10 +629,17 @@ export default function UserRolesPage() {
                             String(b.name || ""),
                           ),
                         )
+                        .filter((role) => {
+                          const n = String(role?.name || "").toLowerCase();
+                          return !SYSTEM_ROLE_NAMES.has(n);
+                        })
                         .map((role) => {
                           const checkboxId = `assign-role-${role.id}`;
                           const roleId = String(role.id);
                           const checked = selectedRoleIds.has(roleId);
+                          const isTeacher = isTeacherRole(role);
+                          const hasTeacherRole = userHasTeacherRole();
+                          const isLocked = isTeacher && hasTeacherRole;
                           return (
                             <div
                               className="custom-control custom-checkbox mb-2"
@@ -594,15 +655,22 @@ export default function UserRolesPage() {
                                   toggleRoleSelection(
                                     roleId,
                                     event.target.checked,
+                                    role,
                                   );
                                 }}
-                                disabled={saving}
+                                disabled={saving || isLocked}
+                                title={isLocked ? "Teacher role cannot be removed from this user" : undefined}
                               />
                               <label
                                 className="custom-control-label"
                                 htmlFor={checkboxId}
                               >
                                 {role.name || ""}
+                                {isLocked ? (
+                                  <small className="text-muted ml-1" title="Locked - cannot be removed">
+                                    🔒
+                                  </small>
+                                ) : null}
                                 {role.description ? (
                                   <small className="d-block text-muted">
                                     {role.description}

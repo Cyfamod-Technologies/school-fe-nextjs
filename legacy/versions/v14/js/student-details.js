@@ -145,11 +145,37 @@ document.addEventListener('DOMContentLoaded', async () => {
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Accept': 'text/html',
+                        'X-Requested-With': 'XMLHttpRequest',
                     },
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Failed to load result. (${response.status})`);
+                    // Try to parse as JSON first (for API error responses)
+                    let errorMessage = 'Unable to load printable result.';
+                    const contentType = response.headers.get('content-type') || '';
+                    
+                    if (contentType.includes('application/json')) {
+                        try {
+                            const errorData = await response.json();
+                            errorMessage = errorData.message || errorData.error || errorMessage;
+                        } catch {
+                            // If JSON parsing fails, fall back to text
+                            const text = await response.text().catch(() => '');
+                            errorMessage = text.trim() || errorMessage;
+                        }
+                    } else {
+                        // For HTML responses, extract a user-friendly message
+                        if (response.status === 403) {
+                            errorMessage = 'You do not have permission to print student results.';
+                        } else if (response.status === 401) {
+                            errorMessage = 'Your session has expired. Please log in again.';
+                        } else {
+                            const text = await response.text().catch(() => '');
+                            errorMessage = text.trim() || `Unable to load printable result (${response.status}).`;
+                        }
+                    }
+                    
+                    throw new Error(errorMessage);
                 }
 
                 const html = await response.text();

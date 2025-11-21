@@ -138,6 +138,25 @@ export default function AssessmentComponentsPage() {
     });
   };
 
+  const handleSelectAllSubjects = (checked: boolean) => {
+    setForm((prev) => {
+      if (checked) {
+        // Select all subjects
+        const allSubjectIds = new Set(subjectOptions.map((s) => s.value));
+        return {
+          ...prev,
+          subjectIds: allSubjectIds,
+        };
+      } else {
+        // Deselect all subjects
+        return {
+          ...prev,
+          subjectIds: new Set<string>(),
+        };
+      }
+    });
+  };
+
   const resetForm = () => {
     setForm({
       ...emptyForm,
@@ -592,28 +611,50 @@ export default function AssessmentComponentsPage() {
                 <label>Subjects *</label>
                 <div className="border rounded p-2 subject-checkbox-list">
                   {subjectOptions.length ? (
-                    subjectOptions.map((subject) => (
-                      <div className="form-check" key={subject.value}>
+                    <>
+                      <div className="form-check mb-2 pb-2 border-bottom">
                         <input
                           className="form-check-input"
                           type="checkbox"
-                          id={`subject-${subject.value}`}
-                          checked={selectedSubjectIds.has(subject.value)}
+                          id="select-all-subjects"
+                          checked={
+                            subjectOptions.length > 0 &&
+                            selectedSubjectIds.size === subjectOptions.length
+                          }
                           onChange={(event) =>
-                            handleSubjectToggle(
-                              subject.value,
-                              event.target.checked,
-                            )
+                            handleSelectAllSubjects(event.target.checked)
                           }
                         />
                         <label
-                          className="form-check-label"
-                          htmlFor={`subject-${subject.value}`}
+                          className="form-check-label fw-bold"
+                          htmlFor="select-all-subjects"
                         >
-                          {subject.label}
+                          Select All
                         </label>
                       </div>
-                    ))
+                      {subjectOptions.map((subject) => (
+                        <div className="form-check" key={subject.value}>
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id={`subject-${subject.value}`}
+                            checked={selectedSubjectIds.has(subject.value)}
+                            onChange={(event) =>
+                              handleSubjectToggle(
+                                subject.value,
+                                event.target.checked,
+                              )
+                            }
+                          />
+                          <label
+                            className="form-check-label"
+                            htmlFor={`subject-${subject.value}`}
+                          >
+                            {subject.label}
+                          </label>
+                        </div>
+                      ))}
+                    </>
                   ) : (
                     <p className="text-muted mb-0">No subjects available.</p>
                   )}

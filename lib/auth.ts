@@ -1,6 +1,7 @@
 import { API_ROUTES } from "@/lib/config";
 import { apiFetch } from "@/lib/apiClient";
 import { deleteCookie, setCookie } from "@/lib/cookies";
+import type { Staff } from "@/lib/staff";
 
 export interface LoginPayload {
   email: string;
@@ -21,12 +22,28 @@ export interface UserParent {
   [key: string]: unknown;
 }
 
+export interface UserRole {
+  id: number;
+  name: string;
+  description?: string | null;
+  permissions?: UserPermission[];
+}
+
+export interface UserPermission {
+  id: number;
+  name: string;
+  description?: string | null;
+}
+
 export interface User {
   id: number;
   name: string;
   email: string;
   school?: School;
   parents?: UserParent[];
+  roles?: UserRole[];
+  permissions?: string[];
+  staff?: Staff | null;
   linked_students_count?: number;
   student_count?: number;
   parent_count?: number;
@@ -68,6 +85,7 @@ export interface AuthenticatedUserResponse {
   student_count?: number;
   parent_count?: number;
   teacher_count?: number;
+  permissions?: string[];
   [key: string]: unknown;
 }
 
@@ -133,6 +151,11 @@ export async function getAuthenticatedUser(): Promise<User | null> {
         student_count: studentCount,
         parent_count: parentCount,
         teacher_count: teacherCount,
+        permissions: Array.isArray(payload.permissions)
+          ? payload.permissions
+          : Array.isArray(payload.user.permissions)
+            ? (payload.user.permissions as string[])
+            : [],
       };
     }
     if (payload?.school) {
@@ -146,6 +169,16 @@ export async function getAuthenticatedUser(): Promise<User | null> {
     return null;
   } catch (error) {
     console.error("Unable to fetch authenticated user", error);
+    return null;
+  }
+}
+
+export async function getPermissionHierarchy(): Promise<any> {
+  try {
+    const payload = await apiFetch(API_ROUTES.permissionHierarchy);
+    return payload;
+  } catch (error) {
+    console.error("Unable to fetch permission hierarchy", error);
     return null;
   }
 }

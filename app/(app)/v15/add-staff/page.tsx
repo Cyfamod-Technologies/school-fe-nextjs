@@ -57,13 +57,6 @@ export default function AddStaffPage() {
     }));
   };
 
-  const resetForm = () => {
-    setForm(initialFormState);
-    setPhoto(null);
-    setError(null);
-    setSuccess(null);
-  };
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
@@ -302,15 +295,7 @@ export default function AddStaffPage() {
               </div>
             </div>
 
-            <div className="d-flex justify-content-between">
-              <button
-                type="button"
-                className="btn btn-outline-secondary"
-                onClick={resetForm}
-                disabled={submitting}
-              >
-                Reset
-              </button>
+            <div className="d-flex justify-content-end">
               <button
                 type="submit"
                 className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"

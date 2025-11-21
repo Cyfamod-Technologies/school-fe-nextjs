@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image, { type ImageLoader } from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { listSessions, type Session } from "@/lib/sessions";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import {
@@ -39,6 +40,17 @@ const initialFilters: FilterState = {
 };
 
 export default function AllStudentsPage() {
+  const { user, schoolContext } = useAuth();
+
+  const normalizedRole = String(user?.role ?? "").toLowerCase();
+  const isTeacher =
+    normalizedRole.includes("teacher") ||
+    (Array.isArray(user?.roles)
+      ? user?.roles?.some((role) =>
+          String(role?.name ?? "").toLowerCase().includes("teacher"),
+        )
+      : false);
+
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [sortBy, setSortBy] = useState<string>("last_name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -92,6 +104,34 @@ export default function AllStudentsPage() {
       .then(setClasses)
       .catch((err) => console.error("Unable to load classes", err));
   }, []);
+
+  useEffect(() => {
+    if (!isTeacher) {
+      return;
+    }
+
+    if (!filters.current_session_id) {
+      const contextSessionId = schoolContext.current_session_id
+        ? String(schoolContext.current_session_id)
+        : "";
+      const fallbackSessionId =
+        !contextSessionId && sessions.length > 0
+          ? String(sessions[0].id)
+          : "";
+
+      if (contextSessionId || fallbackSessionId) {
+        setFilters((prev) => ({
+          ...prev,
+          current_session_id: contextSessionId || fallbackSessionId,
+        }));
+      }
+    }
+  }, [
+    isTeacher,
+    filters.current_session_id,
+    schoolContext.current_session_id,
+    sessions,
+  ]);
 
   useEffect(() => {
     if (!filters.school_class_id) {
@@ -272,6 +312,7 @@ export default function AllStudentsPage() {
                     current_session_id: event.target.value,
                   }));
                 }}
+                disabled={isTeacher}
               >
                 <option value="">All Sessions</option>
                 {sessions.map((session) => (
@@ -342,7 +383,7 @@ export default function AllStudentsPage() {
                     class_section_id: event.target.value,
                   }));
                 }}
-                disabled={!filters.class_arm_id || classSections.length === 0}
+                disabled={!filters.school_class_id || classSections.length === 0}
               >
                 <option value="">All Sections</option>
                 {classSections.map((section) => (

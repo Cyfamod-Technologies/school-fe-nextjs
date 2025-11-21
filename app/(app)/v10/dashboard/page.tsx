@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
+import { listStudents } from "@/lib/students";
 
 function normalizeRoleNames(user: ReturnType<typeof useAuth>["user"]): string[] {
   const roles: string[] = [];
@@ -35,7 +36,9 @@ function normalizeRoleNames(user: ReturnType<typeof useAuth>["user"]): string[] 
 }
 
 export default function DashboardPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, schoolContext } = useAuth();
+  const [sessionStudentCount, setSessionStudentCount] = useState<number | null>(null);
+  const [sessionCountLoading, setSessionCountLoading] = useState(false);
 
   const roleNames = useMemo(() => normalizeRoleNames(user), [user]);
   const isParent = roleNames.includes("parent");
@@ -66,6 +69,88 @@ export default function DashboardPage() {
   const studentCount = user?.student_count ?? 0;
   const parentCount = user?.parent_count ?? 0;
   const teacherCount = user?.teacher_count ?? 0;
+
+  useEffect(() => {
+    let cancelled = false;
+    const sessionId = schoolContext.current_session_id;
+
+    if (!sessionId) {
+      setSessionStudentCount(null);
+      setSessionCountLoading(false);
+      return;
+    }
+
+    setSessionCountLoading(true);
+    listStudents({
+      page: 1,
+      per_page: 1,
+      current_session_id: String(sessionId),
+    })
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        const total =
+          typeof response.total === "number"
+            ? response.total
+            : Array.isArray(response.data)
+              ? response.data.length
+              : 0;
+        setSessionStudentCount(total);
+      })
+      .catch((error) => {
+        console.error("Unable to load current session student count", error);
+        if (!cancelled) {
+          setSessionStudentCount(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSessionCountLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [schoolContext.current_session_id]);
+
+  const currentSessionName = schoolContext.current_session?.name?.trim();
+  const sessionCardValue = !schoolContext.current_session_id
+    ? "—"
+    : sessionCountLoading
+      ? "..."
+      : formatNumber(sessionStudentCount ?? 0);
+
+  const adminSummaryCards = [
+    {
+      key: "current-session-students",
+      icon: "flaticon-calendar",
+      title: currentSessionName ? `${currentSessionName} Students` : "Current Session Students",
+      value: sessionCardValue,
+      description: currentSessionName
+        ? undefined
+        : "Set a current session in School Settings to track this total.",
+    },
+    {
+      key: "total-students",
+      icon: "flaticon-classmates",
+      title: "Total-Students",
+      value: formatNumber(studentCount),
+    },
+    {
+      key: "total-teachers",
+      icon: "flaticon-multiple-users-silhouette",
+      title: "Teachers",
+      value: formatNumber(teacherCount),
+    },
+    {
+      key: "total-parents",
+      icon: "flaticon-couple",
+      title: "Parents",
+      value: formatNumber(parentCount),
+    },
+  ];
 
   const parentDashboard = (
     <div className="row gutters-20">
@@ -111,24 +196,8 @@ export default function DashboardPage() {
   const adminDashboard = (
     <>
       <div className="row gutters-20">
-        {[
-          {
-            icon: "flaticon-classmates",
-            title: "Students",
-            value: formatNumber(studentCount),
-          },
-          {
-            icon: "flaticon-multiple-users-silhouette",
-            title: "Teachers",
-            value: formatNumber(teacherCount),
-          },
-          {
-            icon: "flaticon-couple",
-            title: "Parents",
-            value: formatNumber(parentCount),
-          },
-        ].map((item) => (
-          <div key={item.title} className="col-xl-3 col-sm-6 col-12">
+        {adminSummaryCards.map((item) => (
+          <div key={item.key ?? item.title} className="col-xl-3 col-sm-6 col-12">
             <div className="dashboard-summery-one mg-b-20">
               <div className="row align-items-center">
                 <div className="col-6">
@@ -142,6 +211,11 @@ export default function DashboardPage() {
                     <div className="item-number">
                       <span>{item.value}</span>
                     </div>
+                    {item.description ? (
+                      <small className="d-block text-muted mt-1">
+                        {item.description}
+                      </small>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -161,7 +235,7 @@ export default function DashboardPage() {
               </div>
               <p className="text-muted mb-0">
                 These counts reflect the total number of students, teachers, and
-                parents registered for your school. Keep the data up to date by
+                parents registered in your school. Keep the data up to date by
                 managing enrolments and staff profiles.
               </p>
             </div>

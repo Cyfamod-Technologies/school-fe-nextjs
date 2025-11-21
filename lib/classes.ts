@@ -26,8 +26,36 @@ function normalizeClasses(payload: ClassesResponse): SchoolClass[] {
 }
 
 export async function listClasses(): Promise<SchoolClass[]> {
-  const payload = await apiFetch<ClassesResponse>(API_ROUTES.classes);
-  return normalizeClasses(payload);
+  try {
+    const payload = await apiFetch<ClassesResponse>(API_ROUTES.classes);
+    const items = normalizeClasses(payload);
+    // Sort by created_at (oldest first) if available, otherwise by numeric id, otherwise by name.
+    items.sort((a, b) => {
+      const aTime = a?.created_at ? Date.parse(String(a.created_at)) : NaN;
+      const bTime = b?.created_at ? Date.parse(String(b.created_at)) : NaN;
+      if (!Number.isNaN(aTime) && !Number.isNaN(bTime)) {
+        return aTime - bTime;
+      }
+      if (a.id != null && b.id != null) {
+        const aId = Number(a.id);
+        const bId = Number(b.id);
+        if (!Number.isNaN(aId) && !Number.isNaN(bId)) {
+          return aId - bId;
+        }
+      }
+      const aName = String(a.name ?? "");
+      const bName = String(b.name ?? "");
+      return aName.localeCompare(bName);
+    });
+    return items;
+  } catch (error) {
+    // If it's a 403 error, return empty array (permission denied - user shouldn't see classes)
+    if (error instanceof Error && ((error as Error & { status?: number }).status === 403 || error.message.includes("403") || error.message.includes("permission"))) {
+      return [];
+    }
+    // For other errors, re-throw
+    throw error;
+  }
 }
 
 export async function getClass(

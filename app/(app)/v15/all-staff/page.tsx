@@ -8,6 +8,7 @@ import {
   type Staff,
   type StaffListResponse,
 } from "@/lib/staff";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface FilterState {
   search: string;
@@ -22,6 +23,7 @@ const initialFilter: FilterState = {
 const availableRoles = ["Teacher", "Accountant", "Administrator", "Counselor", "Support"];
 
 export default function AllStaffPage() {
+  const { hasPermission } = useAuth();
   const [filters, setFilters] = useState<FilterState>(initialFilter);
   const [page, setPage] = useState(1);
   const [perPage] = useState(10);
@@ -108,6 +110,9 @@ export default function AllStaffPage() {
     return sortDirection === "asc" ? " ▲" : " ▼";
   };
 
+  const canCreateStaff = hasPermission("staff.create");
+  const canDeleteStaff = hasPermission("staff.delete");
+
   return (
     <>
       <div className="breadcrumbs-area">
@@ -133,10 +138,12 @@ export default function AllStaffPage() {
               <h3>All Staff</h3>
             </div>
             <div className="dropdown">
-              <Link href="/v15/add-staff" className="btn btn-outline-primary mr-3">
-                <i className="fas fa-user-plus mr-1" />
-                Add Staff
-              </Link>
+              {canCreateStaff ? (
+                <Link href="/v15/add-staff" className="btn btn-outline-primary mr-3">
+                  <i className="fas fa-user-plus mr-1" />
+                  Add Staff
+                </Link>
+              ) : null}
               <a
                 className="dropdown-toggle"
                 href="#"
@@ -210,24 +217,10 @@ export default function AllStaffPage() {
                 Search
               </button>
             </div>
-            <div className="col-lg-3 col-md-6 col-12 form-group text-right">
-              <button
-                id="staff-reset-btn"
-                type="button"
-                className="fw-btn-fill btn-outline-secondary mr-2"
-                onClick={() => {
-                  setFilters(initialFilter);
-                  setSortBy("full_name");
-                  setSortDirection("asc");
-                  setPage(1);
-                  fetchStaff().catch(() => undefined);
-                }}
-              >
-                Reset
-              </button>
+            <div className="col-lg-2 col-md-6 col-12 form-group">
               <Link
                 href="/v15/add-staff"
-                className="fw-btn-fill btn-gradient-yellow"
+                className="fw-btn-fill btn-gradient-yellow w-100"
               >
                 Add Staff
               </Link>
@@ -285,13 +278,15 @@ export default function AllStaffPage() {
                           >
                             Edit
                           </Link>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-danger"
-                            onClick={() => handleDelete(item)}
-                          >
-                            Delete
-                          </button>
+                          {canDeleteStaff ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => handleDelete(item)}
+                            >
+                              Delete
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>

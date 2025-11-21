@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   deleteStudent,
   getStudent,
@@ -48,6 +49,7 @@ export default function StudentDetailsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const studentId = searchParams.get("id");
+  const { schoolContext } = useAuth();
 
   const [student, setStudent] = useState<StudentDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -474,15 +476,19 @@ export default function StudentDetailsPage() {
     }
     params.set("student_id", studentId);
     const sessionCandidate =
-      selectedSession ||
-      (student?.current_session_id != null
-        ? String(student.current_session_id)
-        : "");
+      (schoolContext.current_session_id != null
+        ? String(schoolContext.current_session_id)
+        : selectedSession ||
+          (student?.current_session_id != null
+            ? String(student.current_session_id)
+            : ""));
     const termCandidate =
-      selectedTerm ||
-      (student?.current_term_id != null
-        ? String(student.current_term_id)
-        : "");
+      (schoolContext.current_term_id != null
+        ? String(schoolContext.current_term_id)
+        : selectedTerm ||
+          (student?.current_term_id != null
+            ? String(student.current_term_id)
+            : ""));
     if (sessionCandidate) {
       params.set("session_id", sessionCandidate);
     }
@@ -495,6 +501,8 @@ export default function StudentDetailsPage() {
     selectedTerm,
     student?.current_session_id,
     student?.current_term_id,
+    schoolContext.current_session_id,
+    schoolContext.current_term_id,
     studentId,
   ]);
 
@@ -526,19 +534,45 @@ export default function StudentDetailsPage() {
       });
 
       if (!response.ok) {
-        const message = await response
-          .text()
-          .catch(() => response.statusText || "Unable to load printable result.");
-        const normalized =
-          message && message.trim().length > 0
-            ? message.trim()
-            : `Unable to load printable result (${response.status}).`;
+        // Try to parse as JSON first (for API error responses)
+        let errorMessage = "Unable to load printable result.";
+        const contentType = response.headers.get("content-type") || "";
+        
+        if (contentType.includes("application/json")) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorData.error || errorMessage;
+          } catch {
+            // If JSON parsing fails, fall back to text
+            const text = await response.text().catch(() => "");
+            errorMessage = text.trim() || errorMessage;
+          }
+        } else {
+          // For HTML responses, extract a user-friendly message
+          if (response.status === 403) {
+            errorMessage = "You do not have permission to print student results.";
+          } else if (response.status === 401) {
+            errorMessage = "Your session has expired. Please log in again.";
+          } else {
+            const text = await response.text().catch(() => "");
+            const trimmed = text.trim();
+            if (trimmed.length > 0 && /^<\s*(!DOCTYPE|html)/i.test(trimmed)) {
+              errorMessage =
+                response.status === 422
+                  ? "Results have not been added for this student in the selected session/term."
+                  : "Unable to load printable result. Please try again.";
+            } else {
+              errorMessage = trimmed || `Unable to load printable result (${response.status}).`;
+            }
+          }
+        }
+        
         console.error("Printable result request failed", {
           endpoint,
           status: response.status,
-          message: normalized,
+          message: errorMessage,
         });
-        throw new Error(normalized);
+        throw new Error(errorMessage);
       }
 
       const html = await response.text();
@@ -646,25 +680,23 @@ export default function StudentDetailsPage() {
     if (!student) {
       return;
     }
-    setSelectedSession((prev) => {
-      if (prev) {
-        return prev;
-      }
-      if (student.current_session_id) {
-        return String(student.current_session_id);
-      }
-      return "";
-    });
-    setSelectedTerm((prev) => {
-      if (prev) {
-        return prev;
-      }
-      if (student.current_term_id) {
-        return String(student.current_term_id);
-      }
-      return "";
-    });
-  }, [student]);
+    if (schoolContext.current_session_id != null) {
+      setSelectedSession(String(schoolContext.current_session_id));
+    } else if (!selectedSession && student.current_session_id != null) {
+      setSelectedSession(String(student.current_session_id));
+    }
+    if (schoolContext.current_term_id != null) {
+      setSelectedTerm(String(schoolContext.current_term_id));
+    } else if (!selectedTerm && student.current_term_id != null) {
+      setSelectedTerm(String(student.current_term_id));
+    }
+  }, [
+    student,
+    selectedSession,
+    selectedTerm,
+    schoolContext.current_session_id,
+    schoolContext.current_term_id,
+  ]);
 
   useEffect(() => {
     listSessions()
@@ -1136,7 +1168,7 @@ export default function StudentDetailsPage() {
           <form className="mb-3" onSubmit={handleTermSummarySubmit}>
             <div className="row">
               <div className="col-md-6 col-12 form-group">
-                <label className="text-dark-medium">Class Teacher Comment</label>
+                <label className="text-dark-medium">Class Teacher&apos;s Comment</label>
                 <textarea
                   className="form-control"
                   style={{ backgroundColor: "#f8f8f8" }}
@@ -1153,7 +1185,7 @@ export default function StudentDetailsPage() {
                 />
               </div>
               <div className="col-md-6 col-12 form-group">
-                <label className="text-dark-medium">Principal Comment</label>
+                <label className="text-dark-medium">Principal&apos;s Comment</label>
                 <textarea
                   className="form-control"
                   style={{ backgroundColor: "#f8f8f8" }}

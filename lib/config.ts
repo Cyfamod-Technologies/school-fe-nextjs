@@ -4,6 +4,36 @@ export const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") ||
   DEFAULT_BACKEND_URL;
 
+const SCHOOL_REGISTRATION_FLAG = (
+  process.env.NEXT_PUBLIC_SCHOOL_REGISTRATION ?? "off"
+)
+  .toString()
+  .trim()
+  .toLowerCase();
+export const SCHOOL_REGISTRATION_ENABLED = ["on", "true", "1"].includes(
+  SCHOOL_REGISTRATION_FLAG,
+);
+
+const EMAIL_VERIFICATION_FLAG = (
+  process.env.NEXT_PUBLIC_EMAIL_VERIFICATION ?? "off"
+)
+  .toString()
+  .trim()
+  .toLowerCase();
+export const EMAIL_VERIFICATION_ENABLED = ["on", "true", "1"].includes(
+  EMAIL_VERIFICATION_FLAG,
+);
+
+const DEMO_MODE_FLAG = (
+  process.env.NEXT_PUBLIC_DEMO_MODE ?? "off"
+)
+  .toString()
+  .trim()
+  .toLowerCase();
+export const DEMO_MODE_ENABLED = ["on", "true", "1"].includes(
+  DEMO_MODE_FLAG,
+);
+
 export function resolveBackendUrl(path: string | null | undefined): string {
   if (!path) {
     return "";
@@ -32,6 +62,8 @@ export const API_ROUTES = {
   parentsSearch: "/api/v1/parents",
   parentsIndex: "/api/v1/all-parents",
   staff: "/api/v1/staff",
+  staffSelf: "/api/v1/staff/me",
+  staffDashboard: "/api/v1/staff/dashboard",
   subjects: "/api/v1/settings/subjects",
   subjectAssignments: "/api/v1/settings/subject-assignments",
   subjectTeacherAssignments: "/api/v1/settings/subject-teacher-assignments",
@@ -54,9 +86,12 @@ export const API_ROUTES = {
   skillTypes: "/api/v1/settings/skill-types",
   assessmentComponents: "/api/v1/settings/assessment-components",
   results: "/api/v1/results",
+  resultsBulkPrint: "/api/v1/results/bulk/print",
+  resultPinCardsPrint: "/api/v1/result-pins/cards/print",
   resultBatch: "/api/v1/results/batch",
   resultPins: "/api/v1/result-pins",
   permissions: "/api/v1/permissions",
+  permissionHierarchy: "/api/v1/permissions/hierarchy",
   roles: "/api/v1/roles",
   users: "/api/v1/users",
 } as const;

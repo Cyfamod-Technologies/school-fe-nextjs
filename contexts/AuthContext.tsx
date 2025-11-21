@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   getAuthenticatedUser,
+  getPermissionHierarchy,
   login as loginRequest,
   logout as logoutRequest,
   type LoginPayload,
@@ -26,6 +27,9 @@ interface AuthState {
   user: User | null;
   schoolContext: SchoolContext;
   loading: boolean;
+  permissions: Set<string>;
+  permissionHierarchy: any;
+  hasPermission: (permission?: string | string[] | null) => boolean;
   login: (payload: LoginPayload) => Promise<void>;
   logout: () => Promise<void>;
   refreshSchoolContext: () => Promise<void>;
@@ -40,11 +44,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     createEmptySchoolContext,
   );
   const [loading, setLoading] = useState(true);
+  const [permissions, setPermissions] = useState<Set<string>>(new Set());
+  const [permissionHierarchy, setPermissionHierarchy] = useState<any>(null);
 
   const hydrate = useCallback(async () => {
     const token = getCookie("token");
     if (!token) {
       setUser(null);
+      setPermissions(new Set());
       setSchoolContext(createEmptySchoolContext());
       setLoading(false);
       return;
@@ -52,15 +59,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setLoading(true);
     try {
-      const [userResponse, school] = await Promise.all([
+      const [userResponse, school, hierarchy] = await Promise.all([
         getAuthenticatedUser(),
         fetchSchoolContext(),
+        getPermissionHierarchy(),
       ]);
       setUser(userResponse);
+      setPermissions(
+        new Set(
+          Array.isArray(userResponse?.permissions)
+            ? (userResponse.permissions as string[])
+            : [],
+        ),
+      );
       setSchoolContext(school);
+      setPermissionHierarchy(hierarchy);
     } catch (error) {
       console.error("Failed to hydrate auth context", error);
       setUser(null);
+      setPermissions(new Set());
       setSchoolContext(createEmptySchoolContext());
       deleteCookie("token");
     } finally {
@@ -84,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await logoutRequest();
     deleteCookie("token");
     setUser(null);
+    setPermissions(new Set());
     setSchoolContext(createEmptySchoolContext());
   }, []);
 
@@ -96,11 +114,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await hydrate();
   }, [hydrate]);
 
+  const hasPermission = useCallback(
+    (required?: string | string[] | null) => {
+      if (!required) {
+        return true;
+      }
+      const requiredList = Array.isArray(required) ? required : [required];
+      if (requiredList.length === 0) {
+        return true;
+      }
+
+      const checkPermission = (permission: string): boolean => {
+        if (permissions.has(permission)) {
+          return true;
+        }
+
+        if (!permissionHierarchy) {
+          return false;
+        }
+
+        const findChildren = (p: string): string[] => {
+          const perm = permissionHierarchy.find((item: any) => item.name === p);
+          return perm && perm.children ? perm.children : [];
+        };
+
+        const children = findChildren(permission);
+        return children.some(checkPermission);
+      };
+
+      return requiredList.some(checkPermission);
+    },
+    [permissions, permissionHierarchy],
+  );
+
   const value = useMemo(
     () => ({
       user,
       schoolContext,
       loading,
+      permissions,
+      permissionHierarchy,
+      hasPermission,
       login,
       logout,
       refreshSchoolContext,
@@ -110,6 +164,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       schoolContext,
       loading,
+      permissions,
+      permissionHierarchy,
+      hasPermission,
       login,
       logout,
       refreshSchoolContext,

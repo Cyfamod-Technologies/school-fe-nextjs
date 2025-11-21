@@ -197,6 +197,16 @@ export default function PinsPage() {
       const data = await listClasses();
       setClasses(data);
     } catch (error) {
+      // Don't show errors for permission issues (403) - user just won't see classes
+      const isPermissionError = error instanceof Error && (
+        (error as Error & { status?: number }).status === 403 ||
+        error.message.includes("403") ||
+        error.message.includes("permission")
+      );
+      if (isPermissionError) {
+        setClasses([]);
+        return;
+      }
       console.error("Unable to load classes", error);
       showFeedback(
         error instanceof Error
@@ -305,7 +315,6 @@ export default function PinsPage() {
     try {
       const response = await listStudents({
         per_page: 200,
-        session_id: selectedSession,
         school_class_id: selectedClass,
         class_arm_id: selectedArm || undefined,
       });
@@ -519,6 +528,63 @@ export default function PinsPage() {
       setGeneratingBulk(false);
     }
   };
+
+  const handlePrintCards = useCallback(
+    (scope: "student" | "class") => {
+      if (!selectedSession || !selectedTerm) {
+        showFeedback(
+          "Select a session and term before printing scratch cards.",
+          "warning",
+        );
+        return;
+      }
+
+      const params = new URLSearchParams();
+      params.set("session_id", selectedSession);
+      params.set("term_id", selectedTerm);
+
+      if (selectedArm) {
+        params.set("class_arm_id", selectedArm);
+      }
+
+      if (scope === "student") {
+        if (!selectedStudent) {
+          showFeedback(
+            "Pick a student or use the class option to print scratch cards.",
+            "warning",
+          );
+          return;
+        }
+        params.set("student_id", selectedStudent);
+      } else {
+        if (!selectedClass) {
+          showFeedback(
+            "Select a class before printing scratch cards for everyone.",
+            "warning",
+          );
+          return;
+        }
+        params.set("school_class_id", selectedClass);
+      }
+
+      const url = `/v19/print-pin-cards?${params.toString()}`;
+      const win = window.open(url, "_blank", "noopener,noreferrer");
+      if (!win) {
+        showFeedback(
+          "Unable to open the preview window. Please enable pop-ups and try again.",
+          "warning",
+        );
+      }
+    },
+    [
+      selectedArm,
+      selectedClass,
+      selectedSession,
+      selectedStudent,
+      selectedTerm,
+      showFeedback,
+    ],
+  );
 
   const handleRegeneratePin = async (studentId: number | string) => {
     if (!selectedSession || !selectedTerm) {
@@ -875,6 +941,36 @@ export default function PinsPage() {
                       Select a class above and click once to create PINs for every student.
                     </small>
                   </div>
+                </div>
+                <div className="d-flex flex-column flex-md-row justify-content-md-end align-items-md-center mt-3">
+                  <button
+                    type="button"
+                    className="btn-fill-lg mb-2 mb-md-0 mr-md-3"
+                    style={{
+                      backgroundColor: "#1d4ed8",
+                      color: "#fff",
+                      borderColor: "#1d4ed8",
+                    }}
+                    onClick={() => {
+                      handlePrintCards("student");
+                    }}
+                  >
+                    Print Student Scratch Card
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-fill-lg"
+                    style={{
+                      backgroundColor: "#1d4ed8",
+                      color: "#fff",
+                      borderColor: "#1d4ed8",
+                    }}
+                    onClick={() => {
+                      handlePrintCards("class");
+                    }}
+                  >
+                    Print Class Scratch Cards
+                  </button>
                 </div>
               </div>
             </div>

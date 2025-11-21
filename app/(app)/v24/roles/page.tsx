@@ -31,6 +31,7 @@ interface PermissionGroupItem {
   id: string;
   permission: Permission;
   displayName: string;
+  subtitle?: string | null;
 }
 
 interface PermissionGroup {
@@ -53,69 +54,245 @@ const formatDateTime = (value: string | null | undefined): string => {
   });
 };
 
-const formatPermissionName = (permissionName: string): {
+const normalizeLabel = (value: string): string =>
+  value.replace(/[-_.]/g, " ").replace(/\s+/g, " ").trim();
+
+const toTitle = (value: string): string =>
+  normalizeLabel(value).replace(/\b\w/g, (char) => char.toUpperCase());
+
+const formatPermissionLabels = (permissionName: string): {
   groupKey: string;
   groupTitle: string;
-  displayName: string;
+  primaryLabel: string;
+  subtitle: string | null;
 } => {
-  const rawParts = permissionName.split(".");
-  const groupPart = rawParts.length > 1 ? rawParts[0] : "general";
-  const remaining = rawParts.length > 1 ? rawParts.slice(1) : rawParts;
-  const display = remaining.join(" ").replace(/[-_.]/g, " ").trim();
+  const rawParts = permissionName.split(".").filter((part) => part.trim().length > 0);
+  const groupPart = rawParts.length > 0 ? rawParts[0] : "general";
+  const contextParts = rawParts.length > 1 ? rawParts.slice(0, rawParts.length - 1) : [];
+  let actionPart =
+    rawParts.length > 1 ? rawParts[rawParts.length - 1] : rawParts[0] ?? "general";
+
+  // Map "update" to "Edit" for better UX
+  if (actionPart === "update") {
+    actionPart = "edit";
+  }
+  // Normalize "enter" action to "Entry" for UX consistency
+  if (actionPart === "enter") {
+    actionPart = "entry";
+  }
+
+  const subtitle =
+    contextParts.length > 0 ? toTitle(contextParts.join(" ")) : groupPart === "general" ? null : toTitle(groupPart);
+
   return {
     groupKey: groupPart || "general",
     groupTitle: (groupPart || "general").replace(/[-_]/g, " "),
-    displayName: display || permissionName.replace(/[-_.]/g, " "),
+    primaryLabel: toTitle(actionPart),
+    subtitle,
   };
+};
+
+interface PermissionGroupTemplate {
+  key: string;
+  title: string;
+  patterns: Array<string | RegExp>;
+  sections?: Array<{
+    label: string;
+    patterns: Array<string | RegExp>;
+  }>;
+}
+
+const SIDEBAR_PERMISSION_GROUPS: PermissionGroupTemplate[] = [
+  {
+    key: "management",
+    title: "Management",
+    patterns: [],
+    sections: [
+      { label: "Sessions", patterns: ["sessions."] },
+      { label: "Terms", patterns: ["terms."] },
+      { label: "Subjects", patterns: ["subjects."] },
+      { label: "Result Pin", patterns: ["result.pin."] },
+    ],
+  },
+  {
+    key: "parent",
+    title: "Parent",
+    patterns: ["parents."],
+  },
+  {
+    key: "staff",
+    title: "Staff",
+    patterns: ["staff."],
+  },
+  {
+    key: "classes",
+    title: "Classes",
+    patterns: ["classes.", "class-arms."],
+  },
+  {
+    key: "assign",
+    title: "Assign",
+    patterns: ["subject.assignments", "class-teachers."],
+  },
+  {
+    key: "student",
+    title: "Student",
+    patterns: ["students."],
+  },
+  {
+    key: "attendance",
+    title: "Attendance",
+    patterns: ["attendance."],
+  },
+  {
+    key: "settings",
+    title: "Settings",
+    patterns: ["assessment.", "skills.", "settings."],
+  },
+  {
+    key: "fees",
+    title: "Fee Management",
+    patterns: ["fees."],
+  },
+  {
+    key: "rbac",
+    title: "RBAC",
+    patterns: ["permissions.", "roles.", /^users\.assignRoles$/],
+  },
+  {
+    key: "analytics",
+    title: "Analytics",
+    patterns: ["analytics."],
+  },
+];
+
+const matchesPattern = (permissionName: string, pattern: string | RegExp): boolean => {
+  if (pattern instanceof RegExp) {
+    return pattern.test(permissionName);
+  }
+  if (pattern.endsWith(".")) {
+    return permissionName.startsWith(pattern);
+  }
+  return (
+    permissionName === pattern ||
+    permissionName.startsWith(`${pattern}.`)
+  );
+};
+
+const filterPermissionsByTerm = (
+  permissions: Permission[],
+  term: string,
+): Permission[] => {
+  const normalized = term.trim().toLowerCase();
+  if (!normalized) {
+    return permissions;
+  }
+  return permissions.filter((permission) => {
+    const name = String(permission?.name ?? "").toLowerCase();
+    const description = String(permission?.description ?? "").toLowerCase();
+    return name.includes(normalized) || description.includes(normalized);
+  });
 };
 
 const collectPermissionGroups = (
   permissions: Permission[],
   filterTerm: string,
 ): PermissionGroup[] => {
-  const term = filterTerm.trim().toLowerCase();
-  const grouped = new Map<string, PermissionGroup>();
+  let remaining = filterPermissionsByTerm(permissions, filterTerm);
+  const groups: PermissionGroup[] = [];
 
-  permissions.forEach((permission) => {
-    const name = String(permission?.name ?? "");
-    const description = String(permission?.description ?? "");
+  SIDEBAR_PERMISSION_GROUPS.forEach((template) => {
+    const sectionEntries: PermissionGroup[] = [];
+    let matchedIds = new Set<number | string>();
 
-    if (term) {
-      const matches =
-        name.toLowerCase().includes(term) ||
-        description.toLowerCase().includes(term);
-      if (!matches) {
+    const processSection = (sectionLabel: string | null, patterns: Array<string | RegExp>) => {
+      const sectionMatches = remaining.filter((permission) => {
+        const name = String(permission?.name ?? "");
+        return patterns.some((pattern) => matchesPattern(name, pattern));
+      });
+
+      if (!sectionMatches.length) {
         return;
       }
+
+      matchedIds = new Set([...matchedIds, ...sectionMatches.map((permission) => permission.id)]);
+
+      sectionEntries.push({
+        key: sectionLabel ? `${template.key}-${sectionLabel.toLowerCase().replace(/\s+/g, "-")}` : template.key,
+        title: sectionLabel ?? template.title,
+        items: sectionMatches
+          .map((permission) => {
+            const labelMeta = formatPermissionLabels(String(permission?.name ?? ""));
+            return {
+              id: String(permission.id),
+              permission,
+              displayName: labelMeta.primaryLabel,
+              subtitle: labelMeta.subtitle,
+            };
+          })
+          .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+      });
+    };
+
+    if (Array.isArray(template.sections) && template.sections.length) {
+      template.sections.forEach((section) => {
+        processSection(section.label, section.patterns);
+      });
     }
 
-    const { groupKey, groupTitle, displayName } = formatPermissionName(name);
-    const entry =
-      grouped.get(groupKey) ??
-      {
-        key: groupKey,
-        title: groupTitle,
-        items: [] as PermissionGroupItem[],
-      };
+    if (template.patterns.length) {
+      processSection(template.sections && template.sections.length ? "Other" : null, template.patterns);
+    }
 
-    entry.items.push({
-      id: String(permission.id),
-      permission,
-      displayName,
-    });
+    if (!sectionEntries.length) {
+      return;
+    }
 
-    grouped.set(groupKey, entry);
+    sectionEntries.forEach((entry) => groups.push(entry));
+
+    remaining = remaining.filter(
+      (permission) => !matchedIds.has(permission.id),
+    );
   });
 
-  return Array.from(grouped.values())
-    .map((group) => ({
-      ...group,
-      title: group.title,
+  if (remaining.length > 0) {
+    const fallbackMap = new Map<string, PermissionGroup>();
+
+    remaining.forEach((permission) => {
+      const name = String(permission?.name ?? "");
+      const { groupKey, groupTitle, primaryLabel, subtitle } = formatPermissionLabels(name);
+      const entry =
+        fallbackMap.get(groupKey) ??
+        {
+          key: groupKey,
+          title: groupTitle,
+          items: [] as PermissionGroupItem[],
+        };
+
+      entry.items.push({
+        id: String(permission.id),
+        permission,
+        displayName: primaryLabel,
+        subtitle,
+      });
+
+      fallbackMap.set(groupKey, entry);
+    });
+
+    const fallbackGroups = Array.from(fallbackMap.values()).map((group) => ({
+      key: `other-${group.key}`,
+      title: group.key === "general" ? "Other" : group.title,
       items: group.items.sort((a, b) =>
         a.displayName.localeCompare(b.displayName),
       ),
-    }))
-    .sort((a, b) => a.title.localeCompare(b.title));
+    }));
+
+    groups.push(
+      ...fallbackGroups.sort((a, b) => a.title.localeCompare(b.title)),
+    );
+  }
+
+  return groups;
 };
 
 const summarizeRolePermissions = (role: Role): ReactNode => {
@@ -176,6 +353,12 @@ export default function RolesPage() {
   const [deletingRoleId, setDeletingRoleId] = useState<number | string | null>(
     null,
   );
+
+  const isSystemRoleName = useCallback((name: string): boolean => {
+    const n = name.trim().toLowerCase();
+    // disallow admin and super_admin variants
+    return /\b(super[ _-]?admin|admin)\b/i.test(n);
+  }, []);
 
   const showFeedback = useCallback(
     (message: string, type: FeedbackType) => {
@@ -317,7 +500,24 @@ export default function RolesPage() {
     setFormError(null);
   };
 
-  const togglePermissionSelection = (permissionId: string, checked: boolean) => {
+  const isLockedPermission = useCallback((permission: Permission): boolean => {
+    if (modalMode !== "edit" || !editingRole) {
+      return false;
+    }
+    const roleName = editingRole.name?.toLowerCase() ?? "";
+    if (roleName !== "teacher") {
+      return false;
+    }
+    const lockedPermissionNames = ["profile.view", "profile.edit", "profile.password"];
+    const permissionName = permission?.name ?? "";
+    return lockedPermissionNames.includes(permissionName);
+  }, [modalMode, editingRole]);
+
+  const togglePermissionSelection = (permissionId: string, checked: boolean, permission?: Permission) => {
+    // Prevent unchecking locked permissions for teacher role
+    if (!checked && permission && isLockedPermission(permission)) {
+      return;
+    }
     setSelectedPermissionIds((previous) => {
       const next = new Set(previous);
       if (checked) {
@@ -336,6 +536,11 @@ export default function RolesPage() {
 
     if (trimmedName.length === 0) {
       setFormError("Role name is required.");
+      return;
+    }
+
+    if (isSystemRoleName(trimmedName)) {
+      setFormError("Role name cannot contain 'admin' or 'super_admin'.");
       return;
     }
 
@@ -514,25 +719,36 @@ export default function RolesPage() {
                       <td>{summarizeRolePermissions(role)}</td>
                       <td>{formatDateTime(role.updated_at)}</td>
                       <td className="text-right">
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-primary mr-1"
-                          onClick={() => {
-                            openEditModal(role);
-                          }}
-                        >
-                          <i className="fas fa-edit" />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-danger"
-                          onClick={() => {
-                            void handleDeleteRole(role);
-                          }}
-                          disabled={deletingRoleId === role.id}
-                        >
-                          <i className="fas fa-trash" />
-                        </button>
+                        {isSystemRoleName(role.name || "") ? (
+                          <span
+                            className="badge badge-light text-muted"
+                            title="System roles cannot be edited"
+                          >
+                            Locked
+                          </span>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-primary mr-1"
+                              onClick={() => {
+                                openEditModal(role);
+                              }}
+                            >
+                              <i className="fas fa-edit" />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-danger"
+                              onClick={() => {
+                                void handleDeleteRole(role);
+                              }}
+                              disabled={deletingRoleId === role.id}
+                            >
+                              <i className="fas fa-trash" />
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -557,7 +773,7 @@ export default function RolesPage() {
           display: modalOpen ? "block" : "none",
           backgroundColor: modalOpen ? "rgba(0, 0, 0, 0.5)" : undefined,
         }}
-        aria-hidden={!modalOpen}
+        {...(modalOpen ? {} : { "aria-hidden": true })}
       >
         <div className="modal-dialog modal-lg" role="document">
           <div className="modal-content">
@@ -653,31 +869,48 @@ export default function RolesPage() {
                                 const checked = selectedPermissionIds.has(
                                   item.id,
                                 );
+                                const isLocked = isLockedPermission(item.permission);
                                 return (
                                   <div
                                     className="col-sm-6 col-lg-4 mb-2"
                                     key={item.id}
                                   >
-                                    <div className="custom-control custom-checkbox">
-                                      <input
-                                        type="checkbox"
-                                        className="custom-control-input permission-checkbox"
-                                        id={checkboxId}
-                                        value={item.id}
-                                        checked={checked}
-                                        onChange={(event) => {
-                                          togglePermissionSelection(
-                                            item.id,
-                                            event.target.checked,
-                                          );
-                                        }}
-                                        disabled={saving}
-                                      />
+                                    <div className="custom-control custom-switch">
+              <input
+                type="checkbox"
+                className="custom-control-input permission-checkbox"
+                id={checkboxId}
+                value={item.id}
+                checked={checked}
+                onChange={(event) => {
+                  togglePermissionSelection(
+                    item.id,
+                    event.target.checked,
+                    item.permission,
+                  );
+                }}
+                disabled={saving || isLocked}
+                title={isLocked ? "This permission is locked for teacher role" : undefined}
+                aria-label={`Permission ${item.displayName}`}
+                role="switch"
+              />
                                       <label
                                         className="custom-control-label"
                                         htmlFor={checkboxId}
                                       >
-                                        {item.displayName}
+                                        <span className="d-block">
+                                          {item.displayName}
+                                          {isLocked ? (
+                                            <small className="text-muted ml-1" title="Locked permanently">
+                                              🔒
+                                            </small>
+                                          ) : null}
+                                        </span>
+                                        {item.subtitle ? (
+                                          <small className="text-muted d-block">
+                                            {item.subtitle}
+                                          </small>
+                                        ) : null}
                                       </label>
                                     </div>
                                   </div>

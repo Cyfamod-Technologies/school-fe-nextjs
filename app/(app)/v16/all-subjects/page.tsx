@@ -260,25 +260,10 @@ export default function AllSubjectsPage() {
                 Search
               </button>
             </div>
-            <div className="col-lg-4 col-md-6 col-12 form-group text-right">
-              <button
-                id="subject-reset-btn"
-                type="button"
-                className="fw-btn-fill btn-outline-secondary mr-2"
-                onClick={() => {
-                  setFilters(initialFilters);
-                  setSortBy("name");
-                  setSortDirection("asc");
-                  setPerPage(10);
-                  setPage(1);
-                  fetchSubjects().catch(() => undefined);
-                }}
-              >
-                Reset
-              </button>
+            <div className="col-lg-2 col-md-6 col-12 form-group">
               <Link
                 href="/v16/add-subject"
-                className="fw-btn-fill btn-gradient-yellow"
+                className="fw-btn-fill btn-gradient-yellow w-100"
               >
                 Add Subject
               </Link>

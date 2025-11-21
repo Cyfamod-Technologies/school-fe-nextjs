@@ -45,7 +45,6 @@ interface AssignmentFilters {
   class_arm_id: string;
   class_section_id: string;
   session_id: string;
-  term_id: string;
 }
 
 const initialFilters: AssignmentFilters = {
@@ -55,7 +54,6 @@ const initialFilters: AssignmentFilters = {
   class_arm_id: "",
   class_section_id: "",
   session_id: "",
-  term_id: "",
 };
 
 type ArmsCache = Record<string, ClassArm[]>;
@@ -190,10 +188,17 @@ export default function AssignClassTeachersPage() {
   }, [form.session_id, ensureTerms]);
 
   useEffect(() => {
-    if (filters.session_id) {
-      ensureTerms(filters.session_id).catch((err) => console.error(err));
+    if (!form.session_id || form.term_id) {
+      return;
     }
-  }, [filters.session_id, ensureTerms]);
+    const terms = termsCache[form.session_id];
+    if (terms && terms.length > 0) {
+      setForm((prev) => ({
+        ...prev,
+        term_id: `${terms[0].id}`,
+      }));
+    }
+  }, [form.session_id, form.term_id, termsCache]);
 
   const armsForForm = useMemo(() => {
     if (!form.school_class_id) {
@@ -232,13 +237,6 @@ export default function AssignClassTeachersPage() {
     return termsCache[form.session_id] ?? [];
   }, [termsCache, form.session_id]);
 
-  const termsForFilter = useMemo(() => {
-    if (!filters.session_id) {
-      return [];
-    }
-    return termsCache[filters.session_id] ?? [];
-  }, [termsCache, filters.session_id]);
-
   const fetchAssignments = useCallback(async () => {
     setLoadingList(true);
     try {
@@ -251,7 +249,6 @@ export default function AssignClassTeachersPage() {
         class_arm_id: filters.class_arm_id || undefined,
         class_section_id: filters.class_section_id || undefined,
         session_id: filters.session_id || undefined,
-        term_id: filters.term_id || undefined,
       });
       setData(response);
       setAssignments(response.data ?? []);
@@ -280,10 +277,17 @@ export default function AssignClassTeachersPage() {
       !form.staff_id ||
       !form.school_class_id ||
       !form.class_arm_id ||
-      !form.session_id ||
-      !form.term_id
+      !form.session_id
     ) {
       setFormError("Please complete all required fields.");
+      return;
+    }
+
+    const derivedTermId =
+      form.term_id || (termsForForm.length > 0 ? `${termsForForm[0].id}` : "");
+
+    if (!derivedTermId) {
+      setFormError("Unable to determine a term for the selected session.");
       return;
     }
 
@@ -295,7 +299,7 @@ export default function AssignClassTeachersPage() {
         class_arm_id: form.class_arm_id,
         class_section_id: form.class_section_id || null,
         session_id: form.session_id,
-        term_id: form.term_id,
+        term_id: derivedTermId,
       };
 
       if (editingId) {
@@ -526,29 +530,6 @@ export default function AssignClassTeachersPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="col-12 form-group">
-                    <label htmlFor="class-teacher-term">Term *</label>
-                    <select
-                      id="class-teacher-term"
-                      className="form-control"
-                      value={form.term_id}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          term_id: event.target.value,
-                        }))
-                      }
-                      disabled={!form.session_id}
-                      required
-                    >
-                      <option value="">Select term</option>
-                      {termsForForm.map((term) => (
-                        <option key={term.id} value={term.id}>
-                          {term.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
                   <div className="col-12 form-group d-flex justify-content-between">
                     <button
                       type="submit"
@@ -722,11 +703,7 @@ export default function AssignClassTeachersPage() {
                       setFilters((prev) => ({
                         ...prev,
                         session_id: value,
-                        term_id: "",
                       }));
-                      if (value) {
-                        ensureTerms(value).catch((err) => console.error(err));
-                      }
                       setPage(1);
                     }}
                   >
@@ -734,29 +711,6 @@ export default function AssignClassTeachersPage() {
                     {sessions.map((session) => (
                       <option key={session.id} value={session.id}>
                         {session.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-md-3 col-12 form-group">
-                  <label htmlFor="class-teacher-filter-term">Term</label>
-                  <select
-                    id="class-teacher-filter-term"
-                    className="form-control"
-                    value={filters.term_id}
-                    onChange={(event) => {
-                      setFilters((prev) => ({
-                        ...prev,
-                        term_id: event.target.value,
-                      }));
-                      setPage(1);
-                    }}
-                    disabled={!filters.session_id || termsForFilter.length === 0}
-                  >
-                    <option value="">All terms</option>
-                    {termsForFilter.map((term) => (
-                      <option key={term.id} value={term.id}>
-                        {term.name}
                       </option>
                     ))}
                   </select>
@@ -801,7 +755,6 @@ export default function AssignClassTeachersPage() {
                       <th>Arm</th>
                       {/* <th>Section</th> */}
                       <th>Session</th>
-                      <th>Term</th>
                       <th>Updated</th>
                       <th />
                     </tr>

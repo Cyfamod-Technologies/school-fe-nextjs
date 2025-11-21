@@ -138,3 +138,80 @@ export async function deleteStaff(staffId: number | string): Promise<void> {
     method: "DELETE",
   });
 }
+
+export interface StaffSelfPayload {
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  qualifications?: string;
+  gender?: string;
+  employment_start_date?: string;
+  password?: string;
+  password_confirmation?: string;
+  old_password?: string;
+}
+
+export async function getCurrentStaffProfile(): Promise<Staff | null> {
+  try {
+    const response = await apiFetch<{ data?: Staff }>(API_ROUTES.staffSelf);
+    if (response && typeof response === "object" && "data" in response) {
+      return response.data ?? null;
+    }
+    return (response as Staff) ?? null;
+  } catch (error) {
+    console.error("Unable to load staff profile", error);
+    return null;
+  }
+}
+
+export async function updateCurrentStaffProfile(
+  payload: StaffSelfPayload,
+): Promise<Staff> {
+  const response = await apiFetch<{ data?: Staff } | Staff>(API_ROUTES.staffSelf, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+
+  if (response && typeof response === "object" && "data" in response) {
+    return (response as { data?: Staff }).data ?? (response as Staff);
+  }
+
+  return response as Staff;
+}
+
+export interface TeacherAssignmentSubject {
+  id: string;
+  name?: string | null;
+  code?: string | null;
+}
+
+export interface AssignmentMetadata {
+  id: string;
+  name?: string | null;
+}
+
+export interface TeacherAssignmentSummary {
+  context_key: string;
+  class?: AssignmentMetadata | null;
+  class_arm?: AssignmentMetadata | null;
+  class_section?: AssignmentMetadata | null;
+  session?: AssignmentMetadata | null;
+  term?: AssignmentMetadata | null;
+  subjects: TeacherAssignmentSubject[];
+}
+
+export interface TeacherDashboardStats {
+  classes: number;
+  subjects: number;
+}
+
+export interface TeacherDashboardResponse {
+  teacher: Staff;
+  assignments: TeacherAssignmentSummary[];
+  stats: TeacherDashboardStats;
+}
+
+export async function fetchTeacherDashboard(): Promise<TeacherDashboardResponse> {
+  return apiFetch<TeacherDashboardResponse>(API_ROUTES.staffDashboard);
+}

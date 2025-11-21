@@ -1,10 +1,30 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
+import { FormEvent, MouseEvent, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { DEMO_MODE_ENABLED } from "@/lib/config";
+import { apiFetch } from "@/lib/apiClient";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function getDefaultDashboardPath(user?: { role?: string | null; roles?: Array<{ name?: string | null }> | null } | null): string {
+  if (!user) {
+    return "/v10/dashboard";
+  }
+  
+  const normalizedRole = String(user.role ?? "").toLowerCase();
+  const isTeacher =
+    normalizedRole.includes("teacher") ||
+    (Array.isArray(user.roles)
+      ? user.roles.some((role) =>
+          String(role?.name ?? "").toLowerCase().includes("teacher"),
+        )
+      : false);
+  
+  return isTeacher ? "/v25/staff-dashboard" : "/v10/dashboard";
+}
 
 export function LoginForm() {
   const router = useRouter();
@@ -16,6 +36,7 @@ export function LoginForm() {
   const [submitting, setSubmitting] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const demoModeEnabled = DEMO_MODE_ENABLED;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -41,7 +62,8 @@ export function LoginForm() {
       }
 
       const next = searchParams?.get("next");
-      router.push(next || "/v10/dashboard");
+      const defaultDashboard = getDefaultDashboardPath(user);
+      router.push(next || defaultDashboard);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Unable to sign in. Please try again.",
@@ -51,7 +73,7 @@ export function LoginForm() {
     }
   };
 
-  const nextPath = searchParams?.get("next") || "/v10/dashboard";
+  const nextPath = searchParams?.get("next") || getDefaultDashboardPath(user);
 
   useEffect(() => {
     if (loading || !user) {
@@ -59,6 +81,50 @@ export function LoginForm() {
     }
     router.replace(nextPath);
   }, [loading, user, router, nextPath]);
+
+  const handleForgotPassword = async (event: MouseEvent<HTMLSpanElement>) => {
+    event.preventDefault();
+    setError(null);
+    setEmailError(null);
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setEmailError("Enter your email address first, then click “Forgot Password?” again.");
+      return;
+    }
+    if (!emailPattern.test(trimmedEmail)) {
+      setEmailError("Please enter a valid email address before requesting a reset.");
+      return;
+    }
+
+    try {
+      await apiFetch("/api/v1/password/forgot", {
+        method: "POST",
+        body: JSON.stringify({ email: trimmedEmail }),
+        skipAuth: true,
+      });
+      alert(
+        "If an account exists for this email, a password reset link has been sent.",
+      );
+    } catch (err) {
+      console.error("Unable to request password reset", err);
+      alert(
+        "Unable to request password reset at this time. Please try again later.",
+      );
+    }
+  };
+
+  const applyDemoCredentials = (kind: "admin" | "staff") => {
+    if (kind === "admin") {
+      setEmail("demo@gmail.com");
+      setPassword("12345678");
+    } else {
+      setEmail("chika-nnaji@demointernational.edu.ng");
+      setPassword("password");
+    }
+    setError(null);
+    setEmailError(null);
+  };
 
   return (
     <form id="login-form" className="login-form" onSubmit={handleSubmit}>
@@ -136,7 +202,13 @@ export function LoginForm() {
             Remember Me
           </label>
         </div>
-        <span className="forgot-btn text-muted">Forgot Password?</span>
+        <span
+          className="forgot-btn text-muted"
+          style={{ cursor: "pointer" }}
+          onClick={handleForgotPassword}
+        >
+          Forgot Password?
+        </span>
       </div>
       <div className="form-group">
         <button
@@ -147,6 +219,36 @@ export function LoginForm() {
           {submitting ? "Signing in..." : "Login"}
         </button>
       </div>
+      {demoModeEnabled ? (
+        <div className="form-group mt-2">
+          <label className="text-muted small d-block mb-1">
+            Demo logins
+          </label>
+          <div className="d-flex flex-wrap" style={{ gap: "0.5rem" }}>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={() => applyDemoCredentials("admin")}
+            >
+              Admin: demo@gmail.com / 12345678
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={() => applyDemoCredentials("staff")}
+            >
+              Staff: chika-nnaji@demointernational.edu.ng / password
+            </button>
+          </div>
+        </div>
+      ) : null}
+      <p className="text-center text-muted small">
+        Are you a student?{" "}
+        <Link href="/student-login" className="font-weight-bold">
+          Use the student login
+        </Link>{" "}
+        with your admission number.
+      </p>
     </form>
   );
 }

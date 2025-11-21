@@ -41,6 +41,7 @@ type StudentAttendanceStatus =
 interface AttendanceState {
   status: StudentAttendanceStatus;
   recordId?: string;
+  comment?: string;
 }
 
 const STATUS_OPTIONS: Array<{ value: StudentAttendanceStatus; label: string }> = [
@@ -62,7 +63,18 @@ interface StudentFilters {
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export default function StudentAttendancePage() {
-  const { schoolContext } = useAuth();
+  const { user, schoolContext } = useAuth();
+
+  const normalizedRole = String(user?.role ?? "").toLowerCase();
+  const isTeacher =
+    normalizedRole.includes("teacher") ||
+    (Array.isArray(user?.roles)
+      ? user?.roles?.some((role) =>
+          String(role?.name ?? "").toLowerCase().includes("teacher"),
+        )
+      : false);
+
+  const lockSessionAndTerm = isTeacher;
 
   const [date, setDate] = useState<string>(todayIso);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -107,6 +119,18 @@ export default function StudentAttendancePage() {
       .then(setClasses)
       .catch((error) => console.error("Unable to load classes", error));
   }, []);
+
+  useEffect(() => {
+    if (!isTeacher) {
+      return;
+    }
+    if (!filters.sessionId && sessions.length > 0) {
+      setFilters((prev) => ({
+        ...prev,
+        sessionId: prev.sessionId || String(sessions[0].id),
+      }));
+    }
+  }, [isTeacher, filters.sessionId, sessions]);
 
   useEffect(() => {
     if (
@@ -326,9 +350,16 @@ export default function StudentAttendancePage() {
       studentList.forEach((student) => {
         const key = String(student.id);
         const existing = recordMap.get(key);
+        const existingMetadata =
+          (existing as StudentAttendanceRecord | undefined)?.metadata ?? null;
+        const existingComment =
+          existingMetadata && typeof (existingMetadata as any).comment === "string"
+            ? String((existingMetadata as any).comment)
+            : "";
         nextMap[key] = {
           status: (existing?.status as StudentAttendanceStatus) ?? "",
           recordId: existing?.id ? String(existing.id) : undefined,
+          comment: existingComment,
         };
       });
       setAttendanceMap(nextMap);
@@ -357,6 +388,19 @@ export default function StudentAttendancePage() {
       [String(studentId)]: {
         ...prev[String(studentId)],
         status,
+      },
+    }));
+  };
+
+  const handleCommentChange = (
+    studentId: number | string,
+    comment: string,
+  ) => {
+    setAttendanceMap((prev) => ({
+      ...prev,
+      [String(studentId)]: {
+        ...prev[String(studentId)],
+        comment,
       },
     }));
   };
@@ -396,6 +440,7 @@ export default function StudentAttendancePage() {
       ...prev,
       [key]: {
         status: "",
+        comment: "",
       },
     }));
     setCurrentRecords((prev) => {
@@ -429,10 +474,16 @@ export default function StudentAttendancePage() {
     }
     const entries = Object.entries(attendanceMap)
       .filter(([, value]) => Boolean(value.status))
-      .map(([studentId, value]) => ({
-        student_id: studentId,
-        status: value.status,
-      }));
+      .map(([studentId, value]) => {
+        const trimmedComment = (value.comment ?? "").trim();
+        const metadata =
+          trimmedComment.length > 0 ? { comment: trimmedComment } : undefined;
+        return {
+          student_id: studentId,
+          status: value.status,
+          ...(metadata ? { metadata } : {}),
+        };
+      });
 
     if (!entries.length) {
       setFeedback({
@@ -557,6 +608,7 @@ export default function StudentAttendancePage() {
                     termId: "",
                   }))
                 }
+                disabled={lockSessionAndTerm}
               >
                 <option value="">Select session</option>
                 {sessions.map((session) => (
@@ -578,6 +630,7 @@ export default function StudentAttendancePage() {
                     termId: event.target.value,
                   }))
                 }
+                disabled={lockSessionAndTerm}
               >
                 <option value="">Select term</option>
                 {terms.map((term) => (
@@ -624,31 +677,10 @@ export default function StudentAttendancePage() {
                   }))
                 }
               >
-                <option value="">Select arm</option>
+                <option value="">All arms</option>
                 {arms.map((arm) => (
                   <option key={arm.id} value={String(arm.id)}>
                     {arm.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="col-lg-3 col-md-6 col-12 form-group">
-              <label htmlFor="attendance-class-section">Section</label>
-              <select
-                id="attendance-class-section"
-                className="form-control"
-                value={filters.sectionId}
-                onChange={(event) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    sectionId: event.target.value,
-                  }))
-                }
-              >
-                <option value="">Select section</option>
-                {sections.map((section) => (
-                  <option key={section.id} value={String(section.id)}>
-                    {section.name}
                   </option>
                 ))}
               </select>
@@ -752,6 +784,7 @@ export default function StudentAttendancePage() {
                   <th>Student</th>
                   <th>Admission No</th>
                   <th>Status</th>
+                  <th>Comment</th>
                   <th>Last Updated</th>
                   <th>Action</th>
                 </tr>
@@ -786,6 +819,17 @@ export default function StudentAttendancePage() {
                               </option>
                             ))}
                           </select>
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className="form-control form-control-sm"
+                            value={state.comment ?? ""}
+                            onChange={(event) =>
+                              handleCommentChange(student.id, event.target.value)
+                            }
+                            placeholder="Add comment"
+                          />
                         </td>
                         <td>
                           {record?.updated_at
@@ -847,6 +891,7 @@ export default function StudentAttendancePage() {
                   <th>Student</th>
                   <th>Status</th>
                   <th>Class</th>
+                  <th>Comment</th>
                   <th>Recorded By</th>
                 </tr>
               </thead>
@@ -858,12 +903,19 @@ export default function StudentAttendancePage() {
                       <td>{record.student?.name ?? "Unknown"}</td>
                       <td>{record.status?.toUpperCase() ?? "—"}</td>
                       <td>{record.class?.name ?? "—"}</td>
+                      <td>
+                        {record.metadata &&
+                        typeof record.metadata === "object" &&
+                        (record.metadata as any).comment
+                          ? String((record.metadata as any).comment)
+                          : "—"}
+                      </td>
                       <td>{record.recorded_by?.name ?? "—"}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="text-center">
+                    <td colSpan={6} className="text-center">
                       No recent attendance records.
                     </td>
                   </tr>

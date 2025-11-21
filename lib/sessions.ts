@@ -37,20 +37,40 @@ export interface SessionPayload {
 }
 
 export async function createSession(payload: SessionPayload): Promise<Session> {
-  return apiFetch<Session>("/api/v1/sessions", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  const response = await apiFetch<Session | { data?: Session; message?: string }>(
+    "/api/v1/sessions",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+  
+  // Handle response format: either direct Session or {data: Session, message: ...}
+  if (response && typeof response === "object" && "data" in response) {
+    return (response as { data: Session }).data;
+  }
+  
+  return response as Session;
 }
 
 export async function updateSession(
   id: number,
   payload: SessionPayload,
 ): Promise<Session> {
-  return apiFetch<Session>(`/api/v1/sessions/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
+  const response = await apiFetch<Session | { data?: Session; message?: string }>(
+    `/api/v1/sessions/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    },
+  );
+  
+  // Handle response format: either direct Session or {data: Session, message: ...}
+  if (response && typeof response === "object" && "data" in response) {
+    return (response as { data: Session }).data;
+  }
+  
+  return response as Session;
 }
 
 export async function removeSession(id: number): Promise<void> {

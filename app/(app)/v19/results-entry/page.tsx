@@ -8,6 +8,11 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  fetchTeacherDashboard,
+  type TeacherDashboardResponse,
+} from "@/lib/staff";
 import { listSessions, type Session } from "@/lib/sessions";
 import { listTermsBySession, type Term } from "@/lib/terms";
 import { listClasses, type SchoolClass } from "@/lib/classes";
@@ -21,6 +26,8 @@ import {
   listAssessmentComponents,
   type AssessmentComponent,
 } from "@/lib/assessmentComponents";
+import { apiFetch } from "@/lib/apiClient";
+import { API_ROUTES } from "@/lib/config";
 import {
   listResults,
   saveResultsBatch,
@@ -116,6 +123,18 @@ const statusLabel = (status: ResultRowStatus): string => {
 };
 
 export default function ResultsEntryPage() {
+  const { user } = useAuth();
+  const [teacherDashboard, setTeacherDashboard] = useState<TeacherDashboardResponse | null>(null);
+
+  const normalizedRole = String(user?.role ?? "").toLowerCase();
+  const isTeacher =
+    normalizedRole.includes("teacher") ||
+    (Array.isArray(user?.roles)
+      ? user?.roles?.some((role) =>
+          String(role?.name ?? "").toLowerCase().includes("teacher"),
+        )
+      : false);
+
   const [filters, setFilters] = useState<FiltersState>(emptyFilters);
 
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -126,6 +145,7 @@ export default function ResultsEntryPage() {
     useState<Record<string, ClassArmSection[]>>({});
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [components, setComponents] = useState<AssessmentComponent[]>([]);
+  const [subjectAssignments, setSubjectAssignments] = useState<Array<{subject_id: string}>>([]);
 
   const [componentLoading, setComponentLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
@@ -147,6 +167,39 @@ export default function ResultsEntryPage() {
   const selectedSection = filters.sectionId;
   const selectedSubject = filters.subjectId;
   const selectedComponent = filters.componentId;
+
+  const lockSessionAndTerm = isTeacher;
+
+  const selectedComponentDetails = useMemo(() => {
+    if (!selectedComponent) {
+      return null;
+    }
+    return (
+      components.find(
+        (component) => String(component.id) === selectedComponent,
+      ) ?? null
+    );
+  }, [components, selectedComponent]);
+
+  const componentMaxScore = useMemo(() => {
+    if (!selectedComponentDetails) {
+      return 100;
+    }
+    const weightValue = Number(selectedComponentDetails.weight);
+    if (!Number.isFinite(weightValue) || weightValue <= 0) {
+      return 100;
+    }
+    return weightValue;
+  }, [selectedComponentDetails]);
+
+  const componentMaxScoreLabel = useMemo(() => {
+    if (!Number.isFinite(componentMaxScore)) {
+      return "100";
+    }
+    return Number.isInteger(componentMaxScore)
+      ? componentMaxScore.toString()
+      : componentMaxScore.toFixed(2).replace(/\.?0+$/, "");
+  }, [componentMaxScore]);
 
   const updateFilters = useCallback(
     (updater: (current: FiltersState) => FiltersState) => {
@@ -190,6 +243,41 @@ export default function ResultsEntryPage() {
     const key = `${selectedClass}:${selectedArm}`;
     return sectionsCache[key] ?? [];
   }, [selectedClass, selectedArm, sectionsCache]);
+
+  // Filter subjects based on the selected class
+  const filteredSubjects = useMemo(() => {
+    // If no class is selected, show all available subjects
+    if (!selectedClass) {
+      return subjects;
+    }
+
+    // For teachers: use dashboard data which includes processed assignments
+    if (isTeacher) {
+      // If dashboard hasn't loaded yet, show all subjects (will be filtered by backend anyway)
+      if (!teacherDashboard) {
+        return subjects;
+      }
+
+      const subjectIdsForClass = new Set<string>();
+
+      teacherDashboard.assignments.forEach((assignment) => {
+        if (assignment.class && String(assignment.class.id) === selectedClass) {
+          assignment.subjects.forEach((subject) => {
+            subjectIdsForClass.add(String(subject.id));
+          });
+        }
+      });
+
+      return subjects.filter((subject) => subjectIdsForClass.has(String(subject.id)));
+    }
+
+    // For non-teachers (admins): filter based on subject assignments for the selected class
+    // If class is selected, only show subjects that have been assigned to that class
+    const assignedSubjectIds = new Set(
+      subjectAssignments.map((assignment) => String(assignment.subject_id))
+    );
+    return subjects.filter((subject) => assignedSubjectIds.has(String(subject.id)));
+  }, [subjects, selectedClass, isTeacher, teacherDashboard, subjectAssignments]);
 
   const ensureTerms = useCallback(
     async (sessionId: string): Promise<Term[]> => {
@@ -290,12 +378,28 @@ export default function ResultsEntryPage() {
         setClasses(classList);
         setSubjects(subjectList);
 
-        const contextSessionId = context.current_session_id
+        const contextSessionIdRaw = context.current_session_id
           ? String(context.current_session_id)
           : "";
+        const fallbackSessionId =
+          !contextSessionIdRaw && sessionList.length > 0
+            ? String(sessionList[0].id)
+            : "";
+        const contextSessionId = contextSessionIdRaw || fallbackSessionId;
         const contextTermId = context.current_term_id
           ? String(context.current_term_id)
           : "";
+
+        // Fetch teacher dashboard if user is a teacher
+        // The dashboard includes processed assignments with all subjects for class teachers
+        if (isTeacher) {
+          try {
+            const dashboard = await fetchTeacherDashboard();
+            setTeacherDashboard(dashboard);
+          } catch (error) {
+            console.error("Failed to load teacher dashboard", error);
+          }
+        }
 
         if (contextSessionId) {
           await ensureTerms(contextSessionId);
@@ -334,7 +438,7 @@ export default function ResultsEntryPage() {
     return () => {
       active = false;
     };
-  }, [ensureTerms, updateFilters]);
+  }, [isTeacher, ensureTerms, updateFilters]);
 
   useEffect(() => {
     if (!selectedSession) {
@@ -486,6 +590,35 @@ export default function ResultsEntryPage() {
     };
   }, [selectedClass, selectedArm, selectedSection, ensureSections, updateFilters]);
 
+  // Fetch subject assignments when class changes (for admins)
+  useEffect(() => {
+    // Only fetch for non-teachers (admins)
+    if (isTeacher || !selectedClass) {
+      setSubjectAssignments([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    apiFetch<{ data: Array<{subject_id: string}> }>(
+      `${API_ROUTES.subjectAssignments}?school_class_id=${selectedClass}&per_page=500`
+    )
+      .then((response) => {
+        if (cancelled) return;
+        const assignments = Array.isArray(response.data) ? response.data : [];
+        setSubjectAssignments(assignments);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Error fetching subject assignments:', error);
+        setSubjectAssignments([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedClass, isTeacher]);
+
   useEffect(() => {
     if (!selectedSession || !selectedTerm || !selectedSubject) {
       setComponents([]);
@@ -570,6 +703,9 @@ export default function ResultsEntryPage() {
   ]);
 
   const handleSessionChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    if (lockSessionAndTerm) {
+      return;
+    }
     const value = event.target.value;
     updateFilters((prev) => ({
       ...prev,
@@ -580,6 +716,9 @@ export default function ResultsEntryPage() {
   };
 
   const handleTermChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    if (lockSessionAndTerm) {
+      return;
+    }
     const value = event.target.value;
     updateFilters((prev) => ({
       ...prev,
@@ -678,6 +817,11 @@ export default function ResultsEntryPage() {
     if (!selectedClass) missing.push("class");
     if (!selectedSubject) missing.push("subject");
 
+    // For teachers, assessment component is required
+    if (isTeacher && !selectedComponent) {
+      missing.push("assessment component");
+    }
+
     if (missing.length) {
       setFeedback({
         type: "warning",
@@ -766,6 +910,7 @@ export default function ResultsEntryPage() {
       setTableLoading(false);
     }
   }, [
+    isTeacher,
     resetMessages,
     selectedSession,
     selectedTerm,
@@ -834,10 +979,14 @@ export default function ResultsEntryPage() {
       }
 
       const scoreValue = Number(scoreInput);
-      if (Number.isNaN(scoreValue) || scoreValue < 0 || scoreValue > 100) {
+      if (
+        Number.isNaN(scoreValue) ||
+        scoreValue < 0 ||
+        scoreValue > componentMaxScore
+      ) {
         nextRows[index] = {
           ...row,
-          rowError: "Score must be a number between 0 and 100.",
+          rowError: `Score must be a number between 0 and ${componentMaxScoreLabel}.`,
           status: "pending",
         };
         hasErrors = true;
@@ -883,7 +1032,8 @@ export default function ResultsEntryPage() {
       const response = await saveResultsBatch({
         session_id: selectedSession,
         term_id: selectedTerm,
-        assessment_component_id: selectedComponent || null,
+        // Use same sentinel value as listResults when no component is selected
+        assessment_component_id: selectedComponent || "none",
         entries: entries.map((entry) => ({
           ...entry,
         })),
@@ -943,6 +1093,8 @@ export default function ResultsEntryPage() {
       setSaving(false);
     }
   }, [
+    componentMaxScore,
+    componentMaxScoreLabel,
     resetMessages,
     rows,
     selectedSession,
@@ -987,11 +1139,11 @@ export default function ResultsEntryPage() {
                   className="form-control"
                   value={selectedSession}
                   onChange={handleSessionChange}
-                  disabled={initializing}
+                  disabled={initializing || lockSessionAndTerm}
                 >
                   <option value="">Select session</option>
                   {sessions.map((session) => (
-                    <option key={session.id} value={session.id}>
+                    <option key={session.id} value={String(session.id)}>
                       {session.name}
                     </option>
                   ))}
@@ -1004,11 +1156,11 @@ export default function ResultsEntryPage() {
                   className="form-control"
                   value={selectedTerm}
                   onChange={handleTermChange}
-                  disabled={initializing || !selectedSession}
+                  disabled={initializing || !selectedSession || lockSessionAndTerm}
                 >
                   <option value="">Select term</option>
                   {terms.map((term) => (
-                    <option key={term.id} value={term.id}>
+                    <option key={term.id} value={String(term.id)}>
                       {term.name}
                     </option>
                   ))}
@@ -1048,6 +1200,8 @@ export default function ResultsEntryPage() {
                   ))}
                 </select>
               </div>
+
+              {/* Section selector commented out per request - UI hidden but logic preserved for future use
               <div className="col-xl-3 col-lg-6 col-12 form-group">
                 <label htmlFor="filter-section">Section</label>
                 <select
@@ -1055,7 +1209,7 @@ export default function ResultsEntryPage() {
                   className="form-control"
                   value={selectedSection}
                   onChange={handleSectionChange}
-                  disabled={!selectedClass || !selectedArm}
+                  disabled={!selectedClass}
                 >
                   <option value="">All sections</option>
                   {sections.map((section) => (
@@ -1065,6 +1219,8 @@ export default function ResultsEntryPage() {
                   ))}
                 </select>
               </div>
+              */}
+
               <div className="col-xl-3 col-lg-6 col-12 form-group">
                 <label htmlFor="filter-subject">Subject</label>
                 <select
@@ -1075,7 +1231,7 @@ export default function ResultsEntryPage() {
                   disabled={initializing}
                 >
                   <option value="">Select subject</option>
-                  {subjects.map((subject) => {
+                  {filteredSubjects.map((subject) => {
                     const label = subject.code
                       ? `${subject.name} (${subject.code})`
                       : subject.name;
@@ -1130,14 +1286,14 @@ export default function ResultsEntryPage() {
                 {tableLoading ? "Loading…" : "Load Students"}
               </button>
               <button
+                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
                 type="button"
-                className="btn-fill-lg btn-outline-secondary mb-2"
                 onClick={() => {
                   void handleSaveResults();
                 }}
-                disabled={saving || tableLoading || !rows.length}
+                disabled={saving || !rows.length}
               >
-                {saving ? "Saving…" : "Save Results"}
+                {saving ? "Saving…" : "Save Results Entry"}
               </button>
               <span className="ml-auto text-muted small">{statusMessage}</span>
             </div>
@@ -1157,8 +1313,12 @@ export default function ResultsEntryPage() {
                   <th>Student</th>
                   <th>Admission No</th>
                   <th>Class</th>
-                  <th style={{ width: "120px" }}>Score (0 - 100)</th>
+                  <th style={{ width: "120px" }}>
+                    Score (0 - {componentMaxScoreLabel})
+                  </th>
+                  {/* Remark column commented out per request - UI hidden but data preserved
                   <th style={{ width: "280px" }}>Remark</th>
+                  */}
                   <th>Status</th>
                 </tr>
               </thead>
@@ -1191,7 +1351,7 @@ export default function ResultsEntryPage() {
                             type="number"
                             className="form-control"
                             min={0}
-                            max={100}
+                            max={componentMaxScore}
                             step={0.01}
                             value={row.score}
                             onChange={(event) =>
@@ -1199,6 +1359,8 @@ export default function ResultsEntryPage() {
                             }
                           />
                         </td>
+
+                        {/* Remark input/comment UI commented out per request
                         <td>
                           <textarea
                             className="form-control"
@@ -1215,6 +1377,8 @@ export default function ResultsEntryPage() {
                             </p>
                           ) : null}
                         </td>
+                        */}
+
                         <td>
                           <span className={statusBadgeClass(row.status)}>
                             {statusLabel(row.status)}

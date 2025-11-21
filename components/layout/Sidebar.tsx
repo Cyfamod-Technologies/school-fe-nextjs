@@ -11,8 +11,12 @@ const DEFAULT_LOGO = "/assets/img/logo1.png";
 const passthroughLoader: ImageLoader = ({ src }) => src;
 
 export interface MenuLink {
+  id?: string;
   label: string;
   href: string;
+  requiredPermissions?: string | string[];
+  requiredRoles?: string | string[];
+  excludeRoles?: string | string[];
 }
 
 export interface MenuSection {
@@ -21,16 +25,34 @@ export interface MenuSection {
   links: MenuLink[];
 }
 
-export const sidebarQuickLinks = [
+export interface SidebarQuickLink extends MenuLink {
+  id: string;
+  icon: string;
+}
+
+export const sidebarQuickLinks: SidebarQuickLink[] = [
   {
+    id: "dashboard",
     label: "Dashboard",
     href: "/v10/dashboard",
     icon: "flaticon-dashboard",
+    requiredPermissions: "dashboard.view",
+    excludeRoles: ["teacher"],
   },
   {
-    label: "Account",
-    href: "/v10/profile",
+    id: "staff-dashboard",
+    label: "Dashboard",
+    href: "/v25/staff-dashboard",
+    icon: "flaticon-dashboard",
+    requiredRoles: ["teacher"],
+  },
+  {
+    id: "profile",
+    label: "My Profile",
+    href: "/v25/profile",
     icon: "flaticon-user",
+    requiredPermissions: "profile.view",
+    requiredRoles: ["teacher"],
   },
 ];
 
@@ -39,34 +61,34 @@ export const menuSections: MenuSection[] = [
     label: "Management",
     icon: "flaticon-technological",
     links: [
-      { label: "Session", href: "/v11/all-sessions" },
-      { label: "Term", href: "/v11/all-terms" },
-      { label: "Subject", href: "/v16/all-subjects" },
-      { label: "Result Pin", href: "/v19/pins" },
+      { label: "Session", href: "/v11/all-sessions", requiredPermissions: "sessions.manage" },
+      { label: "Term", href: "/v11/all-terms", requiredPermissions: "sessions.manage" },
+      { label: "Subject", href: "/v16/all-subjects", requiredPermissions: "subjects.manage" },
+      { label: "Result Pin", href: "/v19/pins", requiredPermissions: "result.pin.manage" },
     ],
   },
   {
     label: "Parent",
     icon: "flaticon-couple",
     links: [
-      { label: "View Parent", href: "/v13/all-parents" },
-      { label: "Add Parent", href: "/v13/add-parent" },
+      { label: "View Parent", href: "/v13/all-parents", requiredPermissions: "parents.view" },
+      { label: "Add Parent", href: "/v13/add-parent", requiredPermissions: "parents.manage" },
     ],
   },
   {
     label: "Staff",
     icon: "flaticon-multiple-users-silhouette",
     links: [
-      { label: "View Staff", href: "/v15/all-staff" },
-      { label: "Add Staff", href: "/v15/add-staff" },
+      { label: "View Staff", href: "/v15/all-staff", requiredPermissions: "staff.view" },
+      { label: "Add Staff", href: "/v15/add-staff", requiredPermissions: "staff.create" },
     ],
   },
   {
     label: "Classes",
     icon: "flaticon-maths-class-materials-cross-of-a-pencil-and-a-ruler",
     links: [
-      { label: "Class", href: "/v12/all-classes" },
-      { label: "Class Arm", href: "/v12/all-class-arms" },
+      { label: "Class", href: "/v12/all-classes", requiredPermissions: "classes.manage" },
+      { label: "Class Arm", href: "/v12/all-class-arms", requiredPermissions: "classes.manage" },
       // { label: "Class Section", href: "/v12/all-class-arm-sections" },
     ],
   },
@@ -74,67 +96,93 @@ export const menuSections: MenuSection[] = [
     label: "Assign",
     icon: "flaticon-settings-work-tool",
     links: [
-      { label: "Subject to Class", href: "/v17/assign-subjects" },
-      { label: "Teachers to Subject", href: "/v17/assign-teachers" },
-      { label: "Teachers to Class", href: "/v18/assign-class-teachers" },
+      { label: "Subject to Class", href: "/v17/assign-subjects", requiredPermissions: "subject.assignments" },
+      { label: "Teachers to Subject", href: "/v17/assign-teachers", requiredPermissions: "subject.assignments" },
+      { label: "Teachers to Class", href: "/v18/assign-class-teachers", requiredPermissions: "subject.assignments" },
     ],
   },
   {
     label: "Student",
     icon: "flaticon-classmates",
     links: [
-      { label: "View Student", href: "/v14/all-students" },
-      { label: "Add Student", href: "/v14/add-student" },
-      { label: "Result Entry", href: "/v19/results-entry" },
-      { label: "Bulk Upload", href: "/v22/bulk-student-upload" },
-      { label: "Student Promotion", href: "/v20/student-promotion" },
-      { label: "Promotion Reports", href: "/v20/promotion-reports" },
+      { label: "View Student", href: "/v14/all-students", requiredPermissions: "students.view" },
+      { label: "Add Student", href: "/v14/add-student", requiredPermissions: "students.create" },
+      { label: "Result Entry", href: "/v19/results-entry", requiredPermissions: "results.enter" },
+      {
+        label: "Class Skill Ratings",
+        href: "/v14/class-skill-ratings",
+        // Allow either skills.manage (admins) or results.enter (teachers) to see it
+        requiredPermissions: ["skills.manage", "results.enter"],
+      },
+      {
+        label: "Check Student Result",
+        href: "/v14/check-result",
+        requiredPermissions: "students.results.print",
+        excludeRoles: ["teacher"],
+      },
+      {
+        label: "Bulk Result Print",
+        href: "/v14/bulk-results",
+        requiredPermissions: "students.results.print",
+        excludeRoles: ["teacher"],
+      },
+
+      { label: "Bulk Upload", href: "/v22/bulk-student-upload", requiredPermissions: "students.import" },
+      { label: "Student Promotion", href: "/v20/student-promotion", requiredPermissions: "students.promote" },
+      { label: "Promotion Reports", href: "/v20/promotion-reports", requiredPermissions: "promotions.history" },
     ],
   },
   {
     label: "Attendance",
     icon: "flaticon-checklist",
     links: [
-      { label: "Student Attendance", href: "/v21/student-attendance" },
-      { label: "Staff Attendance", href: "/v21/staff-attendance" },
-      { label: "Attendance Reports", href: "/v21/attendance-dashboard" },
+      { label: "Student Attendance", href: "/v21/student-attendance", requiredPermissions: "attendance.students" },
+      { label: "Staff Attendance", href: "/v21/staff-attendance", requiredPermissions: "staff.attendance" },
+      { label: "Attendance Reports", href: "/v21/attendance-dashboard", requiredPermissions: "attendance.students" },
     ],
   },
   {
     label: "Settings",
     icon: "flaticon-settings",
     links: [
-      { label: "Grading-Scale", href: "/v19/grade-scales" },
-      { label: "Skills", href: "/v19/skills" },
+      { label: "Grading-Scale", href: "/v19/grade-scales", requiredPermissions: "assessment.manage" },
+      { label: "Skills", href: "/v19/skills", requiredPermissions: "skills.manage" },
       {
         label: "Assessment-component",
         href: "/v19/assessment-components",
+        requiredPermissions: "assessment.manage",
       },
-      { label: "Academic-Rollover", href: "/v20/academic-rollover" },
-      { label: "School-settings", href: "/v10/profile" },
+      { label: "Academic-Rollover", href: "/v20/academic-rollover", requiredPermissions: "sessions.manage" },
     ],
   },
   {
     label: "Fee Management",
     icon: "flaticon-planet-earth",
     links: [
-      { label: "Fee Structure", href: "/v23/fee-structure" },
-      { label: "Bank Details", href: "/v23/bank-details" },
+      { label: "Fee Structure", href: "/v23/fee-structure", requiredPermissions: "fees.structures" },
+      { label: "Bank Details", href: "/v23/bank-details", requiredPermissions: "fees.bank-details" },
     ],
   },
   {
     label: "RBAC",
     icon: "flaticon-technological",
     links: [
-      { label: "Roles", href: "/v24/roles" },
-      { label: "User Roles", href: "/v24/user-roles" },
+      { label: "Roles", href: "/v24/roles", requiredPermissions: "roles.view" },
+      { label: "User Roles", href: "/v24/user-roles", requiredPermissions: "users.assignRoles" },
+    ],
+  },
+  {
+    label: "School Settings",
+    icon: "flaticon-settings",
+    links: [
+      { label: "School Settings", href: "/v10/profile", requiredRoles: ["admin"] },
     ],
   },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { schoolContext } = useAuth();
+  const { schoolContext, user, hasPermission } = useAuth();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
   const logoSrc = useMemo(() => {
@@ -150,71 +198,162 @@ export function Sidebar() {
     return "SMS";
   })();
 
-  const isLinkActive = (href: string) =>
-    pathname === href || pathname.startsWith(`${href}/`);
+  const roleSet = useMemo(() => {
+    const roles = new Set<string>();
+    if (typeof user?.role === "string" && user.role.trim().length > 0) {
+      roles.add(user.role.toLowerCase());
+    }
+    if (Array.isArray(user?.roles)) {
+      user.roles.forEach((role) => {
+        if (role?.name) {
+          roles.add(role.name.toLowerCase());
+        }
+      });
+    }
+    return roles;
+  }, [user]);
+
+  const dashboardPath = useMemo(() => {
+    const normalizedRole = String(user?.role ?? "").toLowerCase();
+    const isTeacher =
+      normalizedRole.includes("teacher") ||
+      (Array.isArray(user?.roles)
+        ? user?.roles.some((role) =>
+            String(role?.name ?? "").toLowerCase().includes("teacher"),
+          )
+        : false);
+    return isTeacher ? "/v25/staff-dashboard" : "/v10/dashboard";
+  }, [user]);
+
+  const isLinkActive = useCallback(
+    (href: string) => pathname === href || pathname.startsWith(`${href}/`),
+    [pathname],
+  );
+
+  const linkVisible = useCallback(
+    (link: MenuLink) => {
+      // If a link requires permissions and the current user doesn't have them,
+      // allow users with admin-like roles to still see the link in the sidebar.
+      if (link.requiredPermissions && !hasPermission(link.requiredPermissions)) {
+        const isAdminRole =
+          roleSet.has("admin") || roleSet.has("superadmin") || roleSet.has("administrator");
+        if (!isAdminRole) {
+          return false;
+        }
+      }
+      if (link.excludeRoles) {
+        const excludedRoles = Array.isArray(link.excludeRoles)
+          ? link.excludeRoles
+          : [link.excludeRoles];
+        if (excludedRoles.some((roleName) =>
+          roleSet.has(String(roleName).toLowerCase()),
+        )) {
+          return false;
+        }
+      }
+      if (!link.requiredRoles) {
+        return true;
+      }
+      const requiredRoles = Array.isArray(link.requiredRoles)
+        ? link.requiredRoles
+        : [link.requiredRoles];
+      return requiredRoles.some((roleName) =>
+        roleSet.has(String(roleName).toLowerCase()),
+      );
+    },
+    [hasPermission, roleSet],
+  );
+
+  const filteredQuickLinks = useMemo(() => {
+    return sidebarQuickLinks.filter(linkVisible);
+  }, [linkVisible]);
+
+  const filteredSections = useMemo(() => {
+    return menuSections
+      .map((section) => ({
+        ...section,
+        links: section.links.filter(linkVisible),
+      }))
+      .filter((section) => section.links.length > 0);
+  }, [linkVisible]);
 
   const isSectionActive = (section: MenuSection) =>
     section.links.some((link) => isLinkActive(link.href));
 
   const toggleSection = useCallback((label: string) => {
     setOpenSections((prev) => {
-      const isCurrentlyOpen = prev[label] ?? false;
-      if (isCurrentlyOpen) {
-        const next = { ...prev };
-        delete next[label];
-        return next;
+      const section = filteredSections.find((s) => s.label === label);
+      const active = section ? isSectionActive(section) : false;
+      const hasExplicit = Object.prototype.hasOwnProperty.call(prev, label);
+      const isCurrentlyOpen = (hasExplicit ? prev[label] : undefined) ?? active;
+      const nextOpen = !isCurrentlyOpen;
+
+      if (!nextOpen) {
+        // Closing the currently open section: collapse all.
+        return {};
       }
+
+      // Opening a section: close all others so only this one stays open.
       return { [label]: true };
     });
-  }, []);
+  }, [filteredSections, isSectionActive]);
 
   return (
     <div
       className="sidebar-main sidebar-menu-one sidebar-expand-md sidebar-color"
       style={{ backgroundColor: "#042C54" }}
     >
-      <div className="mobile-sidebar-header d-md-none">
+      <div
+        className="mobile-sidebar-header d-md-none"
+        style={{ borderBottom: "none", paddingBottom: 8 }}
+      >
         <div className="header-logo d-flex align-items-center">
-          <Link href="/v10/dashboard" className="d-flex align-items-center">
+          <Link href={dashboardPath} className="d-flex align-items-center">
             <Image
               id="sidebar-school-logo"
               src={logoSrc}
               alt="Sidebar logo"
-              width={120}
-              height={36}
+              width={80}
+              height={24}
               unoptimized
               style={{
                 height: "auto",
+                maxWidth: 80,
                 width: "auto",
-                marginRight: 6,
+                marginRight: 10,
               }}
               loader={passthroughLoader}
             />
-            <span className="sidebar-brand-text font-weight-bold text-primary">
+            <span className="sidebar-brand-text font-weight-bold text-primary" style={{ marginLeft: 6 }}>
               {brandText}
             </span>
           </Link>
         </div>
       </div>
 
-      <div className="sidebar-menu-content">
-        <ul className="nav nav-sidebar-menu sidebar-toggle-view">
-          <li className={`nav-item ${isLinkActive("/v10/dashboard") ? "open" : ""}`}>
-            <Link href="/v10/dashboard" className="nav-link">
-              <i className="flaticon-dashboard" />
-              <span>Dashboard</span>
-            </Link>
-          </li>
+      <div className="sidebar-menu-content" style={{ paddingTop: 10 }}>
+        <ul className="nav nav-sidebar-menu sidebar-toggle-view" style={{ paddingTop: 6 }}>
+          {filteredQuickLinks.map((link) => (
+            <li
+              key={link.id}
+              className={`nav-item ${isLinkActive(link.href) ? "open active" : ""}`}
+            >
+              <Link href={link.href} className="nav-link">
+                <i className={link.icon} />
+                <span>{link.label}</span>
+              </Link>
+            </li>
+          ))}
 
-          {menuSections.map((section) => {
+          {filteredSections.map((section, idx) => {
             const active = isSectionActive(section);
             const open = openSections[section.label] ?? active;
+            const isFirstSection = idx === 0;
             return (
               <li
                 key={section.label}
-                className={`nav-item sidebar-nav-item ${
-                  open ? "open active" : ""
-                }`}
+                className={`nav-item sidebar-nav-item ${open ? "open active" : ""}`}
+                style={isFirstSection ? { borderTop: "none" } : undefined}
               >
                 <a
                   href="#"
@@ -245,13 +384,6 @@ export function Sidebar() {
               </li>
             );
           })}
-
-          <li className={`nav-item ${isLinkActive("/v10/profile") ? "open" : ""}`}>
-            <Link href="/v10/profile" className="nav-link">
-              <i className="flaticon-user" />
-              <span>Account</span>
-            </Link>
-          </li>
         </ul>
       </div>
     </div>
