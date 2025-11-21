@@ -1,8 +1,23 @@
-const DEFAULT_BACKEND_URL = "http://127.0.0.1:8000";
+function requireBackendUrl(): string {
+  const rawValue = process.env.NEXT_PUBLIC_BACKEND_URL;
 
-export const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") ||
-  DEFAULT_BACKEND_URL;
+  if (!rawValue || !rawValue.trim()) {
+    throw new Error(
+      "NEXT_PUBLIC_BACKEND_URL is required. Add it to your .env (or Docker env) so the frontend knows where to reach the backend.",
+    );
+  }
+
+  try {
+    const parsed = new URL(rawValue.trim());
+    return `${parsed.origin}${parsed.pathname.replace(/\/$/, "")}`;
+  } catch {
+    throw new Error(
+      `NEXT_PUBLIC_BACKEND_URL must be a valid http/https URL. Received "${rawValue}".`,
+    );
+  }
+}
+
+export const BACKEND_URL = requireBackendUrl();
 
 const SCHOOL_REGISTRATION_FLAG = (
   process.env.NEXT_PUBLIC_SCHOOL_REGISTRATION ?? "off"
