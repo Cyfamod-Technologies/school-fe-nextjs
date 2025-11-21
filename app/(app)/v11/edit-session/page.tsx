@@ -27,8 +27,7 @@ function toISO(value: string) {
 export default function EditSessionPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const idParam = searchParams.get("id");
-  const sessionId = idParam ? Number(idParam) : null;
+  const sessionId = searchParams.get("id");
 
   const [formState, setFormState] = useState({
     name: "",

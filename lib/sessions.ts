@@ -1,7 +1,7 @@
 import { apiFetch } from "@/lib/apiClient";
 
 export interface Session {
-  id: number;
+  id: string;
   name: string;
   start_date?: string | null;
   end_date?: string | null;
@@ -54,7 +54,7 @@ export async function createSession(payload: SessionPayload): Promise<Session> {
 }
 
 export async function updateSession(
-  id: number,
+  id: string,
   payload: SessionPayload,
 ): Promise<Session> {
   const response = await apiFetch<Session | { data?: Session; message?: string }>(
@@ -73,12 +73,12 @@ export async function updateSession(
   return response as Session;
 }
 
-export async function removeSession(id: number): Promise<void> {
+export async function removeSession(id: string): Promise<void> {
   await apiFetch<void>(`/api/v1/sessions/${id}`, {
     method: "DELETE",
   });
 }
 
-export async function getSession(id: number): Promise<Session> {
+export async function getSession(id: string): Promise<Session> {
   return apiFetch<Session>(`/api/v1/sessions/${id}`);
 }
