@@ -10,6 +10,8 @@ import {
   listClassArmSections,
   type ClassArmSection,
 } from "@/lib/classArmSections";
+import { resolveBackendUrl } from "@/lib/config";
+import { getCookie } from "@/lib/cookies";
 
 interface Filters {
   sessionId: string;
@@ -155,13 +157,24 @@ export default function BulkResultsPage() {
     }
     setStatus("");
     const query = buildQueryString(filters, autoPrint);
-    const url = `/v19/print-bulk-results?${query}`;
+    const endpoint = `${resolveBackendUrl(
+      "/api/v1/results/bulk/print",
+    )}?${query}`;
+    const token = getCookie("token");
+    if (!token) {
+      const message =
+        "Your session token is missing. Please log in again before printing.";
+      setStatus(message);
+      window.alert(message);
+      return;
+    }
     setProcessing(true);
     try {
-      const response = await fetch(url, {
+      const response = await fetch(endpoint, {
         headers: {
           Accept: "text/html",
           "X-Requested-With": "XMLHttpRequest",
+          Authorization: `Bearer ${token}`,
         },
         credentials: "include",
       });

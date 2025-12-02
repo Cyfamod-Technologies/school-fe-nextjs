@@ -8,6 +8,7 @@ import { listClasses, type SchoolClass } from "@/lib/classes";
 import { listClassArms, type ClassArm } from "@/lib/classArms";
 import { listStudents, type StudentSummary } from "@/lib/students";
 import { resolveBackendUrl } from "@/lib/config";
+import { getCookie } from "@/lib/cookies";
 
 export default function CheckResultPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -157,7 +158,7 @@ export default function CheckResultPage() {
       : fullName;
   }, [selectedStudent, students]);
 
-  const handleViewResult = () => {
+  const handleViewResult = useCallback(async () => {
     setFeedback(null);
 
     if (!selectedStudent || !selectedSession || !selectedTerm) {
@@ -168,22 +169,89 @@ export default function CheckResultPage() {
       return;
     }
 
+    const token = getCookie("token");
+    if (!token) {
+      setFeedback(
+        "Your session token is missing. Please log in again before printing the result.",
+      );
+      setFeedbackType("warning");
+      return;
+    }
+
     const params = new URLSearchParams();
-    params.set("student_id", selectedStudent);
     params.set("session_id", selectedSession);
     params.set("term_id", selectedTerm);
 
-    // Use the Next.js print proxy so auth and error handling
-    // are consistent with other result-print flows.
-    const url = `/v19/print-result?${params.toString()}`;
-    const win = window.open(url, "_blank", "noopener,noreferrer");
-    if (!win) {
+    const endpoint = `${resolveBackendUrl(
+      `/api/v1/students/${selectedStudent}/results/print`,
+    )}?${params.toString()}`;
+
+    try {
+      const response = await fetch(endpoint, {
+        headers: {
+          Accept: "text/html",
+          "X-Requested-With": "XMLHttpRequest",
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        let errorMessage = "Unable to load printable result.";
+        const contentType = response.headers.get("content-type") || "";
+
+        if (contentType.includes("application/json")) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorData.error || errorMessage;
+          } catch {
+            const text = await response.text().catch(() => "");
+            errorMessage = text.trim() || errorMessage;
+          }
+        } else if (response.status === 403) {
+          errorMessage = "You do not have permission to print student results.";
+        } else if (response.status === 401) {
+          errorMessage = "Your session has expired. Please log in again.";
+        } else {
+          const text = await response.text().catch(() => "");
+          const trimmed = text.trim();
+          if (trimmed.length > 0 && /^<\s*(!DOCTYPE|html)/i.test(trimmed)) {
+            errorMessage =
+              response.status === 422
+                ? "Results have not been added for this student in the selected session/term."
+                : "Unable to load printable result. Please try again.";
+          } else {
+            errorMessage = trimmed || `Unable to load printable result (${response.status}).`;
+          }
+        }
+
+        setFeedback(errorMessage);
+        setFeedbackType("danger");
+        return;
+      }
+
+      const html = await response.text();
+      const win = window.open("", "_blank", "noopener,noreferrer");
+      if (!win) {
+        setFeedback(
+          "Unable to open result window. Please allow pop-ups for this site.",
+        );
+        setFeedbackType("warning");
+        return;
+      }
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+    } catch (error) {
+      console.error("Unable to load printable result", error);
       setFeedback(
-        "Unable to open result window. Please allow pop-ups for this site.",
+        error instanceof Error
+          ? error.message
+          : "Unable to load printable result.",
       );
-      setFeedbackType("warning");
+      setFeedbackType("danger");
     }
-  };
+  }, [selectedStudent, selectedSession, selectedTerm]);
 
   return (
     <>
