@@ -168,7 +168,7 @@ export default function ResultsEntryPage() {
   const selectedSubject = filters.subjectId;
   const selectedComponent = filters.componentId;
 
-  const lockSessionAndTerm = isTeacher;
+  const lockSessionAndTerm = true;
 
   const selectedComponentDetails = useMemo(() => {
     if (!selectedComponent) {
@@ -817,8 +817,8 @@ export default function ResultsEntryPage() {
     if (!selectedClass) missing.push("class");
     if (!selectedSubject) missing.push("subject");
 
-    // For teachers, assessment component is required
-    if (isTeacher && !selectedComponent) {
+    // Assessment component is required
+    if (!selectedComponent) {
       missing.push("assessment component");
     }
 
@@ -1245,8 +1245,7 @@ export default function ResultsEntryPage() {
               </div>
               <div className="col-xl-3 col-lg-6 col-12 form-group">
                 <label htmlFor="filter-component">
-                  Assessment Component{" "}
-                  <span className="text-muted small">(optional)</span>
+                  Assessment Component
                 </label>
                 <select
                   id="filter-component"
@@ -1260,7 +1259,7 @@ export default function ResultsEntryPage() {
                     !selectedSubject
                   }
                 >
-                  <option value="">Overall (no component)</option>
+                  <option value="">Select component</option>
                   {components.map((component) => {
                     const label = component.label
                       ? `${component.name} (${component.label})`
