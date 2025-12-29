@@ -231,7 +231,7 @@ export default function CheckResultPage() {
       }
 
       const html = await response.text();
-      const win = window.open("", "_blank", "noopener,noreferrer");
+      const win = window.open("", "_blank");
       if (!win) {
         setFeedback(
           "Unable to open result window. Please allow pop-ups for this site.",
