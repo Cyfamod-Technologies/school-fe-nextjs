@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
 
     const cookieStore = await cookies();
     const rawToken = cookieStore.get("token")?.value ?? null;
-    const token = decryptCookieValue(rawToken);
+    const token = decryptCookieValue(rawToken) ?? rawToken;
 
     const proxyHeaders = new Headers({
       Accept: "text/html",
