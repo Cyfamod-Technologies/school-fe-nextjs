@@ -568,7 +568,7 @@ export default function PinsPage() {
       }
 
       const url = `/v19/print-pin-cards?${params.toString()}`;
-      const win = window.open(url, "_blank", "noopener,noreferrer");
+      const win = window.open(url, "_blank");
       if (!win) {
         showFeedback(
           "Unable to open the preview window. Please enable pop-ups and try again.",
