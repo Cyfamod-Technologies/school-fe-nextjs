@@ -6,6 +6,8 @@ import { listSessions, type Session } from "@/lib/sessions";
 import { listTermsBySession, type Term } from "@/lib/terms";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import { listClassArms, type ClassArm } from "@/lib/classArms";
+import { resolveBackendUrl } from "@/lib/config";
+import { getCookie } from "@/lib/cookies";
 import {
   bulkGenerateResultPins,
   generateResultPinForStudent,
@@ -530,7 +532,7 @@ export default function PinsPage() {
   };
 
   const handlePrintCards = useCallback(
-    (scope: "student" | "class") => {
+    async (scope: "student" | "class") => {
       if (!selectedSession || !selectedTerm) {
         showFeedback(
           "Select a session and term before printing scratch cards.",
@@ -567,13 +569,82 @@ export default function PinsPage() {
         params.set("school_class_id", selectedClass);
       }
 
-      const url = `/v19/print-pin-cards?${params.toString()}`;
-      const win = window.open(url, "_blank");
-      if (!win) {
+      const token = getCookie("token");
+      if (!token) {
+        showFeedback(
+          "Your session token is missing. Please log in again before printing.",
+          "warning",
+        );
+        return;
+      }
+
+      const endpoint = `${resolveBackendUrl(
+        "/api/v1/result-pins/cards/print",
+      )}?${params.toString()}`;
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) {
         showFeedback(
           "Unable to open the preview window. Please enable pop-ups and try again.",
           "warning",
         );
+        return;
+      }
+
+      try {
+        const response = await fetch(endpoint, {
+          headers: {
+            Accept: "text/html",
+            "X-Requested-With": "XMLHttpRequest",
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          let message = "Unable to load scratch cards.";
+          const contentType = response.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            try {
+              const payload = await response.json();
+              if (
+                payload &&
+                typeof payload === "object" &&
+                "message" in payload &&
+                typeof payload.message === "string"
+              ) {
+                message = payload.message;
+              }
+            } catch (error) {
+              console.error("Unable to parse scratch card error", error);
+            }
+          } else if (response.status === 403) {
+            message = "You do not have permission to print scratch cards.";
+          } else if (response.status === 401) {
+            message = "Your session has expired. Please log in again.";
+          } else {
+            const text = await response.text().catch(() => "");
+            if (text.trim()) {
+              message = text.trim();
+            }
+          }
+          throw new Error(message);
+        }
+
+        const html = await response.text();
+        printWindow.document.open();
+        printWindow.document.write(html);
+        printWindow.document.close();
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unable to load scratch cards.";
+        showFeedback(message, "danger");
+        try {
+          printWindow.close();
+        } catch (closeError) {
+          console.error("Unable to close preview window", closeError);
+        }
       }
     },
     [
