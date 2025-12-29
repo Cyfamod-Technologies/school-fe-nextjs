@@ -144,22 +144,22 @@ export const menuSections: MenuSection[] = [
       { label: "Academic-Rollover", href: "/v20/academic-rollover", requiredPermissions: "sessions.manage" },
     ],
   },
-  {
-    label: "Fee Management",
-    icon: "flaticon-planet-earth",
-    links: [
-      { label: "Fee Structure", href: "/v23/fee-structure", requiredPermissions: "fees.structures" },
-      { label: "Bank Details", href: "/v23/bank-details", requiredPermissions: "fees.bank-details" },
-    ],
-  },
-  {
-    label: "RBAC",
-    icon: "flaticon-technological",
-    links: [
-      { label: "Roles", href: "/v24/roles", requiredPermissions: "roles.view" },
-      { label: "User Roles", href: "/v24/user-roles", requiredPermissions: "users.assignRoles" },
-    ],
-  },
+  // {
+  //   label: "Fee Management",
+  //   icon: "flaticon-planet-earth",
+  //   links: [
+  //     { label: "Fee Structure", href: "/v23/fee-structure", requiredPermissions: "fees.structures" },
+  //     { label: "Bank Details", href: "/v23/bank-details", requiredPermissions: "fees.bank-details" },
+  //   ],
+  // },
+  // {
+  //   label: "RBAC",
+  //   icon: "flaticon-technological",
+  //   links: [
+  //     { label: "Roles", href: "/v24/roles", requiredPermissions: "roles.view" },
+  //     { label: "User Roles", href: "/v24/user-roles", requiredPermissions: "users.assignRoles" },
+  //   ],
+  // },
   {
     label: "School Settings",
     icon: "flaticon-settings",
