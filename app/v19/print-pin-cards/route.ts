@@ -4,6 +4,8 @@ import { BACKEND_URL } from "@/lib/config";
 import { decryptCookieValue } from "@/lib/cookieCipher";
 
 const REQUIRED_PARAMS = ["session_id", "term_id"] as const;
+const DEFAULT_COOKIE_SECRET = "lynx-cookie-secret";
+const SANCTUM_TOKEN_PATTERN = /^\d+\|/;
 
 type RequiredParam = (typeof REQUIRED_PARAMS)[number];
 
@@ -65,6 +67,71 @@ const buildErrorResponse = (message: string, status: number) =>
     },
   });
 
+const looksLikeSanctumToken = (value: string | null | undefined): value is string =>
+  Boolean(value && SANCTUM_TOKEN_PATTERN.test(value));
+
+const xorCipher = (value: string, secret: string): string => {
+  if (!secret) {
+    return value;
+  }
+  let output = "";
+  for (let index = 0; index < value.length; index += 1) {
+    const valueCode = value.charCodeAt(index);
+    const secretCode = secret.charCodeAt(index % secret.length);
+    output += String.fromCharCode(valueCode ^ secretCode);
+  }
+  return output;
+};
+
+const decryptCookieValueWithSecret = (
+  value: string | null | undefined,
+  secret: string,
+): string | null => {
+  if (!value) {
+    return null;
+  }
+  try {
+    const decoded = Buffer.from(value, "base64").toString("utf-8");
+    return xorCipher(decoded, secret);
+  } catch (error) {
+    console.error("Unable to decrypt cookie value with fallback secret", error);
+    return null;
+  }
+};
+
+const normalizeCookieValue = (value: string | null | undefined): string | null => {
+  if (!value) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const resolveAuthToken = (rawValue: string | null | undefined): string | null => {
+  if (!rawValue) {
+    return null;
+  }
+
+  const decrypted = decryptCookieValue(rawValue);
+  if (looksLikeSanctumToken(decrypted)) {
+    return decrypted;
+  }
+
+  const fallback = decryptCookieValueWithSecret(rawValue, DEFAULT_COOKIE_SECRET);
+  if (looksLikeSanctumToken(fallback)) {
+    return fallback;
+  }
+
+  if (looksLikeSanctumToken(rawValue)) {
+    return rawValue;
+  }
+
+  return null;
+};
+
 function validateParams(searchParams: URLSearchParams): { valid: boolean; missing: RequiredParam[] } {
   const missing: RequiredParam[] = [];
   REQUIRED_PARAMS.forEach((param) => {
@@ -106,8 +173,8 @@ export async function GET(request: NextRequest) {
     );
 
     const cookieStore = await cookies();
-    const rawToken = cookieStore.get("token")?.value ?? null;
-    const token = decryptCookieValue(rawToken) ?? rawToken;
+    const rawToken = normalizeCookieValue(cookieStore.get("token")?.value ?? null);
+    const token = resolveAuthToken(rawToken);
 
     const proxyHeaders = new Headers({
       Accept: "text/html",
