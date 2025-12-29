@@ -35,6 +35,7 @@ interface StudentFormState {
   gender: string;
   date_of_birth: string;
   admission_date: string;
+  admission_no: string;
   house: string;
   club: string;
   current_session_id: string;
@@ -56,6 +57,7 @@ const initialForm: StudentFormState = {
   gender: "",
   date_of_birth: "",
   admission_date: "",
+  admission_no: "",
   house: "",
   club: "",
   current_session_id: "",
@@ -216,6 +218,7 @@ export default function EditStudentPage() {
           gender: normalizeGenderValue(detail.gender),
           date_of_birth: dateToInputValue(detail.date_of_birth),
           admission_date: dateToInputValue(detail.admission_date),
+          admission_no: detail.admission_no ?? "",
           house: `${detail.house ?? ""}`,
           club: `${detail.club ?? ""}`,
           current_session_id: `${detail.current_session_id ?? detail.session?.id ?? ""}`,
@@ -519,6 +522,9 @@ export default function EditStudentPage() {
     payload.append("gender", form.gender);
     payload.append("date_of_birth", toIsoDate(form.date_of_birth));
     payload.append("admission_date", toIsoDate(form.admission_date));
+    if (form.admission_no) {
+      payload.append("admission_no", form.admission_no.trim());
+    }
     payload.append("house", form.house.trim());
     payload.append("club", form.club.trim());
     payload.append("current_session_id", form.current_session_id);
@@ -623,8 +629,10 @@ export default function EditStudentPage() {
                 <input
                   type="text"
                   className="form-control"
-                  value={student?.admission_no ?? ""}
-                  disabled
+                  value={form.admission_no}
+                  onChange={(event) =>
+                    setField("admission_no", event.target.value)
+                  }
                 />
               </div>
               <div className="col-xl-3 col-lg-6 col-12 form-group">
