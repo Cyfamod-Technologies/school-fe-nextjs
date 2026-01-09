@@ -19,6 +19,26 @@ function requireBackendUrl(): string {
 
 export const BACKEND_URL = requireBackendUrl();
 
+function requireStorageUrl(): string {
+  const rawValue = process.env.NEXT_PUBLIC_STORAGE_URL;
+
+  // If not provided, fall back to BACKEND_URL
+  if (!rawValue || !rawValue.trim()) {
+    return BACKEND_URL;
+  }
+
+  try {
+    const parsed = new URL(rawValue.trim());
+    return `${parsed.origin}${parsed.pathname.replace(/\/$/, "")}`;
+  } catch {
+    throw new Error(
+      `NEXT_PUBLIC_STORAGE_URL must be a valid http/https URL. Received "${rawValue}".`,
+    );
+  }
+}
+
+export const STORAGE_URL = requireStorageUrl();
+
 const SCHOOL_REGISTRATION_FLAG = (
   process.env.NEXT_PUBLIC_SCHOOL_REGISTRATION ?? "off"
 )
@@ -60,6 +80,15 @@ export function resolveBackendUrl(path: string | null | undefined): string {
     return normalized;
   }
 
+  // If path is a storage path, use STORAGE_URL instead of BACKEND_URL
+  if (normalized.startsWith("/storage/")) {
+    if (normalized.startsWith("/")) {
+      return `${STORAGE_URL}${normalized}`;
+    }
+    return `${STORAGE_URL}/${normalized}`;
+  }
+
+  // For regular API/backend paths, use BACKEND_URL
   if (normalized.startsWith("/")) {
     return `${BACKEND_URL}${normalized}`;
   }
