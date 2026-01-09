@@ -107,8 +107,8 @@ export const menuSections: MenuSection[] = [
     links: [
       { label: "View Student", href: "/v14/all-students", requiredPermissions: "students.view" },
       { label: "Add Student", href: "/v14/add-student", requiredPermissions: "students.create" },
-      { label: "Bulk Result Print", href: "/v14/bulk-results", requiredPermissions: "students.results.print" },
-      { label: "Check Student Result", href: "/v14/check-result", requiredPermissions: "results.view" },
+      { label: "Bulk Result Print", href: "/v14/bulk-results", requiredPermissions: "students.results.print", excludeRoles: "teacher" },
+      { label: "Check Student Result", href: "/v14/check-result", requiredPermissions: "results.view", excludeRoles: "teacher" },
       { label: "Result Entry", href: "/v19/results-entry", requiredPermissions: "results.enter" },
       {
         label: "Class Skill Ratings",
