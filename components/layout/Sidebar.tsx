@@ -131,10 +131,11 @@ export const menuSections: MenuSection[] = [
     ],
   },
   {
-    label: "Assessment",
+    label: "CBT",
     icon: "flaticon-checklist",
     links: [
-      { label: "Computer-Based Test", href: "/v27/cbt", requiredPermissions: "cbt.view" },
+      { label: "Admin Panel", href: "/v27/cbt/admin", requiredPermissions: "cbt.create" },
+      { label: "Quiz", href: "/v27/cbt", requiredPermissions: "cbt.view" },
     ],
   },
   {

@@ -86,8 +86,8 @@ export default function CBTHome() {
     <div className="max-w-7xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">Computer-Based Tests</h1>
-        <p className="text-gray-600">Manage and take your quizzes online</p>
+        <h1 className="text-4xl font-bold text-gray-900 mb-2">Quizzes</h1>
+        <p className="text-gray-600">Take your quizzes and view results</p>
       </div>
 
       {/* Filter Tabs */}
