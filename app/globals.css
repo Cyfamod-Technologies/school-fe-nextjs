@@ -101,3 +101,48 @@ body {
     transform: translateX(20px);
   }
 }
+
+@keyframes quiz-fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes quiz-float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-18px);
+  }
+}
+
+.quiz-fade-up {
+  animation: quiz-fade-up 0.6s ease-out both;
+}
+
+.quiz-fade-up-delay-1 {
+  animation-delay: 120ms;
+}
+
+.quiz-fade-up-delay-2 {
+  animation-delay: 240ms;
+}
+
+.quiz-fade-up-delay-3 {
+  animation-delay: 360ms;
+}
+
+.quiz-fade-up-delay-4 {
+  animation-delay: 480ms;
+}
+
+.quiz-float-slow {
+  animation: quiz-float-slow 18s ease-in-out infinite;
+}

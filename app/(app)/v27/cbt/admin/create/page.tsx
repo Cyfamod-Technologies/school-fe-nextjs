@@ -53,7 +53,6 @@ export default function CreateQuizPage() {
     allow_review: true,
   });
 
-  // Load subjects and classes on mount
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -79,7 +78,9 @@ export default function CreateQuizPage() {
     }
   }, [user]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+  ) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
 
@@ -116,17 +117,16 @@ export default function CreateQuizPage() {
       setLoading(true);
       setError(null);
 
-      const response = await apiFetch<{ data: { id: string } }>('/api/v1/cbt/quizzes', {
+      await apiFetch<{ data: { id: string } }>('/api/v1/cbt/quizzes', {
         method: 'POST',
         body: JSON.stringify({
           ...formData,
-          status: 'draft', // Create as draft by default
+          status: 'draft',
         }),
       });
 
       setSuccess(true);
 
-      // Redirect to the quiz details page or back to list after 2 seconds
       setTimeout(() => {
         router.push('/v27/cbt/admin');
       }, 2000);
@@ -138,254 +138,324 @@ export default function CreateQuizPage() {
     }
   };
 
+  const selectedSubject = subjects.find((subject) => subject.id === formData.subject_id)?.name || 'Not selected';
+  const selectedClass = formData.class_id
+    ? classes.find((cls) => cls.id === formData.class_id)?.name || 'Selected class'
+    : 'All classes';
+
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <p className="text-gray-500">Please log in to create a quiz</p>
-        </div>
+      <div className="d-flex align-items-center justify-content-center min-vh-100 bg-ash">
+        <div className="alert alert-info">Please log in to create a quiz.</div>
       </div>
     );
   }
 
   if (loadingData) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="d-flex align-items-center justify-content-center min-vh-100 bg-ash">
+        <div className="spinner-border text-dodger-blue" role="status">
+          <span className="sr-only">Loading...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <button
-          onClick={() => router.back()}
-          className="text-indigo-600 hover:text-indigo-700 font-medium mb-4 flex items-center gap-2"
-        >
-          ← Back
-        </button>
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">Create New Quiz</h1>
-        <p className="text-gray-600">Set up a new Computer-Based Test for your students</p>
+    <div className="bg-ash min-vh-100">
+      <div className="breadcrumbs-area quiz-fade-up">
+        <h3>Create New Quiz</h3>
+        <ul>
+          <li>
+            <a href="/v27/cbt/admin">Quiz Management</a>
+          </li>
+          <li>Create New Quiz</li>
+        </ul>
       </div>
 
-      {/* Success Message */}
       {success && (
-        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
-          ✓ Quiz created successfully! Redirecting...
+        <div className="alert alert-success mg-b-20" role="alert">
+          Quiz created successfully. Redirecting to management...
         </div>
       )}
 
-      {/* Error Message */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="alert alert-danger mg-b-20" role="alert">
           {error}
         </div>
       )}
 
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-8">
-        {/* Basic Information */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 pb-4 border-b-2 border-indigo-100">
-            Basic Information
-          </h2>
+      <div className="row gutters-20">
+        <div className="col-xl-8 col-12">
+          <div className="card height-auto quiz-fade-up quiz-fade-up-delay-1">
+            <div className="card-body">
+              <div className="heading-layout1">
+                <div className="item-title">
+                  <h3>Quiz Setup</h3>
+                </div>
+                <span className="badge badge-pill badge-warning">Draft</span>
+              </div>
 
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Quiz Title *</label>
-            <input
-              type="text"
-              name="title"
-              value={formData.title}
-              onChange={handleInputChange}
-              placeholder="e.g., Mathematics Final Exam"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
-              required
-            />
-          </div>
+              <form onSubmit={handleSubmit}>
+                <div className="row gutters-20">
+                  <div className="col-12 form-group">
+                    <label>Quiz Title *</label>
+                    <input
+                      type="text"
+                      name="title"
+                      value={formData.title}
+                      onChange={handleInputChange}
+                      placeholder="e.g., Mathematics Final Exam"
+                      className="form-control"
+                      required
+                    />
+                  </div>
 
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleInputChange}
-              placeholder="Provide details about this quiz..."
-              rows={4}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
-            />
-          </div>
+                  <div className="col-12 form-group">
+                    <label>Description</label>
+                    <textarea
+                      name="description"
+                      value={formData.description}
+                      onChange={handleInputChange}
+                      placeholder="Provide details about this quiz..."
+                      rows={4}
+                      className="form-control"
+                    />
+                  </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Subject *</label>
-              <select
-                name="subject_id"
-                value={formData.subject_id}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
-              >
-                <option value="">Select a subject</option>
-                {subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+                  <div className="col-md-6 col-12 form-group">
+                    <label>Subject *</label>
+                    <select
+                      name="subject_id"
+                      value={formData.subject_id}
+                      onChange={handleInputChange}
+                      className="form-control"
+                      required
+                    >
+                      <option value="">Select a subject</option>
+                      {subjects.map((subject) => (
+                        <option key={subject.id} value={subject.id}>
+                          {subject.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Class (Optional)</label>
-              <select
-                name="class_id"
-                value={formData.class_id}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
-              >
-                <option value="">All Classes</option>
-                {classes.map((cls) => (
-                  <option key={cls.id} value={cls.id}>
-                    {cls.name}
-                  </option>
-                ))}
-              </select>
+                  <div className="col-md-6 col-12 form-group">
+                    <label>Class (optional)</label>
+                    <select
+                      name="class_id"
+                      value={formData.class_id}
+                      onChange={handleInputChange}
+                      className="form-control"
+                    >
+                      <option value="">All classes</option>
+                      {classes.map((cls) => (
+                        <option key={cls.id} value={cls.id}>
+                          {cls.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="heading-layout1 mg-t-20">
+                  <div className="item-title">
+                    <h3>Quiz Settings</h3>
+                  </div>
+                </div>
+
+                <div className="row gutters-20">
+                  <div className="col-md-4 col-12 form-group">
+                    <label>Duration (minutes) *</label>
+                    <input
+                      type="number"
+                      name="duration_minutes"
+                      value={formData.duration_minutes}
+                      onChange={handleInputChange}
+                      min="1"
+                      max="480"
+                      className="form-control"
+                      required
+                    />
+                  </div>
+
+                  <div className="col-md-4 col-12 form-group">
+                    <label>Total Questions *</label>
+                    <input
+                      type="number"
+                      name="total_questions"
+                      value={formData.total_questions}
+                      onChange={handleInputChange}
+                      min="1"
+                      max="1000"
+                      className="form-control"
+                      required
+                    />
+                  </div>
+
+                  <div className="col-md-4 col-12 form-group">
+                    <label>Passing Score (%) *</label>
+                    <input
+                      type="number"
+                      name="passing_score"
+                      value={formData.passing_score}
+                      onChange={handleInputChange}
+                      min="0"
+                      max="100"
+                      className="form-control"
+                      required
+                    />
+                    <small className="form-text text-muted">Set the minimum score required to pass.</small>
+                  </div>
+                </div>
+
+                <div className="heading-layout1 mg-t-20">
+                  <div className="item-title">
+                    <h3>Display Options</h3>
+                  </div>
+                </div>
+
+                <div className="row gutters-20">
+                  <div className="col-md-6 col-12 form-group">
+                    <div className="form-check">
+                      <input
+                        id="show_answers"
+                        type="checkbox"
+                        name="show_answers"
+                        checked={formData.show_answers}
+                        onChange={handleInputChange}
+                        className="form-check-input"
+                      />
+                      <label className="form-check-label" htmlFor="show_answers">
+                        Show correct answers after submission
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="col-md-6 col-12 form-group">
+                    <div className="form-check">
+                      <input
+                        id="shuffle_questions"
+                        type="checkbox"
+                        name="shuffle_questions"
+                        checked={formData.shuffle_questions}
+                        onChange={handleInputChange}
+                        className="form-check-input"
+                      />
+                      <label className="form-check-label" htmlFor="shuffle_questions">
+                        Randomize question order for each student
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="col-md-6 col-12 form-group">
+                    <div className="form-check">
+                      <input
+                        id="shuffle_options"
+                        type="checkbox"
+                        name="shuffle_options"
+                        checked={formData.shuffle_options}
+                        onChange={handleInputChange}
+                        className="form-check-input"
+                      />
+                      <label className="form-check-label" htmlFor="shuffle_options">
+                        Randomize answer options for each student
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="col-md-6 col-12 form-group">
+                    <div className="form-check">
+                      <input
+                        id="allow_review"
+                        type="checkbox"
+                        name="allow_review"
+                        checked={formData.allow_review}
+                        onChange={handleInputChange}
+                        className="form-check-input"
+                      />
+                      <label className="form-check-label" htmlFor="allow_review">
+                        Allow students to review their answers
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="row gutters-20 mg-t-10">
+                  <div className="col-md-6 col-12 form-group">
+                    <button
+                      type="button"
+                      onClick={() => router.back()}
+                      className="btn-fill-lmd radius-4 text-dodger-blue border-dodger-blue bg-light"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <div className="col-md-6 col-12 form-group">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="fw-btn-fill btn-gradient-yellow"
+                    >
+                      {loading ? 'Creating...' : 'Create Quiz'}
+                    </button>
+                  </div>
+                </div>
+              </form>
             </div>
           </div>
         </div>
 
-        {/* Quiz Settings */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 pb-4 border-b-2 border-indigo-100">
-            Quiz Settings
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Duration (minutes) *</label>
-              <input
-                type="number"
-                name="duration_minutes"
-                value={formData.duration_minutes}
-                onChange={handleInputChange}
-                min="1"
-                max="480"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
-                required
-              />
+        <div className="col-xl-4 col-12">
+          <div className="card height-auto quiz-fade-up quiz-fade-up-delay-2">
+            <div className="card-body">
+              <div className="heading-layout1">
+                <div className="item-title">
+                  <h3>Quiz Summary</h3>
+                </div>
+              </div>
+              <ul className="list-unstyled">
+                <li className="d-flex justify-content-between align-items-center mg-b-10">
+                  <span>Subject</span>
+                  <span className="text-dark font-weight-bold">{selectedSubject}</span>
+                </li>
+                <li className="d-flex justify-content-between align-items-center mg-b-10">
+                  <span>Class</span>
+                  <span className="text-dark font-weight-bold">{selectedClass}</span>
+                </li>
+                <li className="d-flex justify-content-between align-items-center mg-b-10">
+                  <span>Duration</span>
+                  <span className="text-dark font-weight-bold">{formData.duration_minutes} min</span>
+                </li>
+                <li className="d-flex justify-content-between align-items-center mg-b-10">
+                  <span>Questions</span>
+                  <span className="text-dark font-weight-bold">{formData.total_questions}</span>
+                </li>
+                <li className="d-flex justify-content-between align-items-center">
+                  <span>Passing Score</span>
+                  <span className="text-dark font-weight-bold">{formData.passing_score}%</span>
+                </li>
+              </ul>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Total Questions *</label>
-              <input
-                type="number"
-                name="total_questions"
-                value={formData.total_questions}
-                onChange={handleInputChange}
-                min="1"
-                max="1000"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Passing Score (%) *</label>
-              <input
-                type="number"
-                name="passing_score"
-                value={formData.passing_score}
-                onChange={handleInputChange}
-                min="0"
-                max="100"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
-                required
-              />
+          <div className="card height-auto quiz-fade-up quiz-fade-up-delay-3">
+            <div className="card-body bg-light-blue">
+              <div className="heading-layout1">
+                <div className="item-title">
+                  <h3>Next Steps</h3>
+                </div>
+              </div>
+              <ul className="list-unstyled">
+                <li className="mg-b-10">Add questions and assign correct answers.</li>
+                <li className="mg-b-10">Review the pass score before publishing.</li>
+                <li className="mg-b-10">Use draft status to edit without student access.</li>
+                <li>Publish when the quiz is ready for students.</li>
+              </ul>
             </div>
           </div>
         </div>
-
-        {/* Display Options */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 pb-4 border-b-2 border-indigo-100">
-            Display Options
-          </h2>
-
-          <div className="space-y-4">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                name="show_answers"
-                checked={formData.show_answers}
-                onChange={handleInputChange}
-                className="w-4 h-4 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-500"
-              />
-              <span className="text-gray-700">Show correct answers after submission</span>
-            </label>
-
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                name="shuffle_questions"
-                checked={formData.shuffle_questions}
-                onChange={handleInputChange}
-                className="w-4 h-4 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-500"
-              />
-              <span className="text-gray-700">Randomize question order for each student</span>
-            </label>
-
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                name="shuffle_options"
-                checked={formData.shuffle_options}
-                onChange={handleInputChange}
-                className="w-4 h-4 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-500"
-              />
-              <span className="text-gray-700">Randomize answer options for each student</span>
-            </label>
-
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                name="allow_review"
-                checked={formData.allow_review}
-                onChange={handleInputChange}
-                className="w-4 h-4 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-500"
-              />
-              <span className="text-gray-700">Allow students to review their answers</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-4 pt-6 border-t border-gray-200">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex-1 px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Creating...' : 'Create Quiz'}
-          </button>
-        </div>
-      </form>
-
-      {/* Info Box */}
-      <div className="mt-8 p-6 bg-blue-50 border border-blue-200 rounded-lg">
-        <h3 className="font-semibold text-blue-900 mb-2">📝 Next Steps</h3>
-        <ul className="text-sm text-blue-800 space-y-1">
-          <li>• After creating the quiz, you'll be able to add questions</li>
-          <li>• Make sure to set passing score before publishing</li>
-          <li>• You can save as draft and edit later</li>
-          <li>• Publish the quiz when ready for students to see it</li>
-        </ul>
       </div>
     </div>
   );
