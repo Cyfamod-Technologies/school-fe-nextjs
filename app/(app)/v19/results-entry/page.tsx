@@ -26,6 +26,7 @@ import {
   listAssessmentComponents,
   type AssessmentComponent,
 } from "@/lib/assessmentComponents";
+import { AssessmentComponentStructureService } from "@/lib/assessmentComponentStructure";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ROUTES } from "@/lib/config";
 import {
@@ -154,6 +155,9 @@ export default function ResultsEntryPage() {
 
   const [rows, setRows] = useState<ResultEntryRow[]>([]);
 
+  const [dynamicMaxScore, setDynamicMaxScore] = useState<number | null>(null);
+  const [maxScoreLoading, setMaxScoreLoading] = useState(false);
+
   const [feedback, setFeedback] = useState<{
     type: "success" | "info" | "warning" | "danger";
     message: string;
@@ -181,7 +185,41 @@ export default function ResultsEntryPage() {
     );
   }, [components, selectedComponent]);
 
+  // Fetch dynamic max score from assessment component structures
+  const fetchDynamicMaxScore = useCallback(async () => {
+    if (!selectedComponent || !selectedClass) {
+      setDynamicMaxScore(null);
+      return;
+    }
+
+    setMaxScoreLoading(true);
+    try {
+      const response = await AssessmentComponentStructureService.getMaxScore({
+        assessment_component_id: selectedComponent,
+        class_id: selectedClass,
+        term_id: selectedTerm || null,
+      }) as { max_score: number; assessment_component_id: string; class_id?: string | null; term_id?: string | null };
+      setDynamicMaxScore(response.max_score);
+    } catch (error) {
+      console.error('Failed to fetch dynamic max score:', error);
+      setDynamicMaxScore(null);
+    } finally {
+      setMaxScoreLoading(false);
+    }
+  }, [selectedComponent, selectedClass, selectedTerm]);
+
+  // Update dynamic max score when relevant filters change
+  useEffect(() => {
+    fetchDynamicMaxScore();
+  }, [fetchDynamicMaxScore]);
+
   const componentMaxScore = useMemo(() => {
+    // Use dynamic max score from structures if available
+    if (dynamicMaxScore !== null) {
+      return dynamicMaxScore;
+    }
+
+    // Fall back to component weight
     if (!selectedComponentDetails) {
       return 100;
     }
@@ -190,7 +228,7 @@ export default function ResultsEntryPage() {
       return 100;
     }
     return weightValue;
-  }, [selectedComponentDetails]);
+  }, [selectedComponentDetails, dynamicMaxScore]);
 
   const componentMaxScoreLabel = useMemo(() => {
     if (!Number.isFinite(componentMaxScore)) {
