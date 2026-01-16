@@ -89,6 +89,17 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleUnpublish = async (quizId: string) => {
+    try {
+      await apiFetch(`/api/v1/cbt/quizzes/${quizId}/unpublish`, {
+        method: 'POST',
+      });
+      loadQuizzes();
+    } catch (err: any) {
+      console.error('Error unpublishing quiz:', err);
+    }
+  };
+
   const handleDelete = async (quizId: string) => {
     if (!confirm('Are you sure you want to delete this quiz?')) return;
 
@@ -303,6 +314,15 @@ export default function AdminDashboard() {
                               className="btn-fill-sm radius-4 text-light bg-dark-pastel-green mg-r-8 mg-b-8"
                             >
                               Publish
+                            </button>
+                          )}
+                          {quiz.status === 'published' && (
+                            <button
+                              type="button"
+                              onClick={() => handleUnpublish(quiz.id)}
+                              className="btn-fill-sm radius-4 text-light bg-orange-peel mg-r-8 mg-b-8"
+                            >
+                              Unpublish
                             </button>
                           )}
                           <button

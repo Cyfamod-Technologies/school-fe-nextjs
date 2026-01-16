@@ -149,15 +149,24 @@ export default function TakeQuizPage() {
     try {
       // Submit all answers
       const answersArray = Array.from(answers.values());
+      const questionLookup = new Map(questions.map((question) => [question.id, question]));
       for (const answer of answersArray) {
+        const question = questionLookup.get(answer.questionId);
+        const payload: Record<string, unknown> = {
+          attempt_id: attemptId,
+          question_id: answer.questionId,
+        };
+
+        if (question?.question_type === 'multiple_select') {
+          payload.answer_text = JSON.stringify(answer.selectedOptions || []);
+        } else {
+          payload.selected_option_id = answer.selectedOption;
+          payload.answer_text = answer.answerText;
+        }
+
         await apiFetch('/api/v1/cbt/quiz-answers', {
           method: 'POST',
-          body: JSON.stringify({
-            attempt_id: attemptId,
-            question_id: answer.questionId,
-            selected_option_id: answer.selectedOption,
-            answer_text: answer.answerText,
-          }),
+          body: JSON.stringify(payload),
         });
       }
 
@@ -259,10 +268,7 @@ export default function TakeQuizPage() {
 
                 {currentQuestion.question_type === 'true_false' && (
                   <div className="space-y-3">
-                    {[
-                      { id: 'true', text: 'True' },
-                      { id: 'false', text: 'False' },
-                    ].map((option) => (
+                    {currentQuestion.options.map((option) => (
                       <label key={option.id} className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-indigo-50 transition-colors">
                         <input
                           type="radio"
@@ -277,7 +283,7 @@ export default function TakeQuizPage() {
                           }
                           className="w-4 h-4 text-indigo-600"
                         />
-                        <span className="ml-4 text-gray-700">{option.text}</span>
+                        <span className="ml-4 text-gray-700">{option.option_text}</span>
                       </label>
                     ))}
                   </div>
