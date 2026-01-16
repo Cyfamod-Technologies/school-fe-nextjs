@@ -71,7 +71,7 @@ export default function AssessmentComponentStructures() {
   const activeStructures = structures.filter((structure) => structure.is_active).length;
 
   const [formData, setFormData] = useState({
-    class_id: '',
+    class_id: new Set<string>(),
     term_id: '',
     max_score: '',
     description: '',
@@ -112,23 +112,43 @@ export default function AssessmentComponentStructures() {
     setSuccess('');
 
     try {
-      const payload = {
-        assessment_component_id: componentId,
-        class_id: formData.class_id || null,
-        term_id: formData.term_id || null,
-        max_score: parseFloat(formData.max_score),
-        description: formData.description || null,
-        is_active: formData.is_active,
-      };
+      const selectedClasses = Array.from(formData.class_id);
+      if (selectedClasses.length === 0) {
+        // Create one structure for all classes
+        const payload = {
+          assessment_component_id: componentId,
+          class_id: null,
+          term_id: null,
+          max_score: parseFloat(formData.max_score),
+          description: formData.description || null,
+          is_active: formData.is_active,
+        };
 
-      await apiFetch('/api/v1/settings/assessment-component-structures', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
+        await apiFetch('/api/v1/settings/assessment-component-structures', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      } else {
+        // Create separate structures for each selected class
+        const promises = selectedClasses.map((classId) =>
+          apiFetch('/api/v1/settings/assessment-component-structures', {
+            method: 'POST',
+            body: JSON.stringify({
+              assessment_component_id: componentId,
+              class_id: classId,
+              term_id: null,
+              max_score: parseFloat(formData.max_score),
+              description: formData.description || null,
+              is_active: formData.is_active,
+            }),
+          })
+        );
+        await Promise.all(promises);
+      }
 
-      setSuccess('Structure saved successfully');
+      setSuccess('Structure(s) saved successfully');
       setFormData({
-        class_id: '',
+        class_id: new Set<string>(),
         term_id: '',
         max_score: '',
         description: '',
@@ -163,6 +183,38 @@ export default function AssessmentComponentStructures() {
       console.error('Error deleting structure:', err);
       setError(err.message || 'Failed to delete structure');
     }
+  };
+
+  const handleClassToggle = (classId: string, checked: boolean) => {
+    setFormData((prev) => {
+      const nextIds = new Set(prev.class_id);
+      if (checked) {
+        nextIds.add(classId);
+      } else {
+        nextIds.delete(classId);
+      }
+      return {
+        ...prev,
+        class_id: nextIds,
+      };
+    });
+  };
+
+  const handleSelectAllClasses = (checked: boolean) => {
+    setFormData((prev) => {
+      if (checked) {
+        const allClassIds = new Set(classes.map((c) => c.id));
+        return {
+          ...prev,
+          class_id: allClassIds,
+        };
+      } else {
+        return {
+          ...prev,
+          class_id: new Set<string>(),
+        };
+      }
+    });
   };
 
   if (loading) {
@@ -314,47 +366,70 @@ export default function AssessmentComponentStructures() {
             <form onSubmit={handleSubmit}>
               <div className="row gutters-20">
                 <div className="col-md-4 col-12 form-group">
-                  <label>Class</label>
-                  <select
-                    value={formData.class_id}
-                    onChange={(e) =>
-                      setFormData({ ...formData, class_id: e.target.value })
-                    }
-                    className="form-control"
-                  >
-                    <option value="">Any Class (applies to all)</option>
-                    {classes.map((cls) => (
-                      <option key={cls.id} value={cls.id}>
-                        {cls.name}
-                      </option>
-                    ))}
-                  </select>
+                  <label>Classes *</label>
+                  <div className="border rounded p-2 class-checkbox-list">
+                    {classes.length ? (
+                      <>
+                        <div className="form-check mb-2 pb-2 border-bottom">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id="select-all-classes"
+                            checked={
+                              classes.length > 0 &&
+                              formData.class_id.size === classes.length
+                            }
+                            onChange={(event) =>
+                              handleSelectAllClasses(event.target.checked)
+                            }
+                          />
+                          <label
+                            className="form-check-label fw-bold"
+                            htmlFor="select-all-classes"
+                          >
+                            Select All
+                          </label>
+                        </div>
+                        {classes.map((cls) => (
+                          <div className="form-check" key={cls.id}>
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              id={`class-${cls.id}`}
+                              checked={formData.class_id.has(cls.id)}
+                              onChange={(event) =>
+                                handleClassToggle(cls.id, event.target.checked)
+                              }
+                            />
+                            <label
+                              className="form-check-label"
+                              htmlFor={`class-${cls.id}`}
+                            >
+                              {cls.name}
+                            </label>
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <p className="text-muted mb-0">No classes available</p>
+                    )}
+                  </div>
                   <small className="form-text text-muted">
-                    Leave empty to apply globally to all classes.
+                    Select multiple classes or leave empty for all classes.
                   </small>
                 </div>
 
                 <div className="col-md-4 col-12 form-group">
                   <label>Term</label>
                   <select
-                    value={formData.term_id}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        term_id: e.target.value,
-                      })
-                    }
+                    disabled
+                    value=""
                     className="form-control"
                   >
                     <option value="">Any Term (applies to all)</option>
-                    {terms.map((term) => (
-                      <option key={term.id} value={term.id}>
-                        {term.name}
-                      </option>
-                    ))}
                   </select>
                   <small className="form-text text-muted">
-                    Leave empty to apply globally to all terms.
+                    Applied to all terms.
                   </small>
                 </div>
 
@@ -424,7 +499,7 @@ export default function AssessmentComponentStructures() {
                     onClick={() => {
                       setShowForm(false);
                       setFormData({
-                        class_id: '',
+                        class_id: new Set<string>(),
                         term_id: '',
                         max_score: '',
                         description: '',
