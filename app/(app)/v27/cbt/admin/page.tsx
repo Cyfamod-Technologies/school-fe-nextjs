@@ -300,6 +300,7 @@ export default function AdminDashboard() {
                       </td>
                       <td>
                         <div className="d-flex flex-wrap">
+                
                           <button
                             type="button"
                             onClick={() => router.push(`/v27/cbt/admin/${quiz.id}/edit`)}
