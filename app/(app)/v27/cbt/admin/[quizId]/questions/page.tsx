@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/apiClient';
 
 type QuestionType = 'mcq' | 'multiple_select' | 'true_false' | 'short_answer';
+type ShortAnswerMatch = 'exact' | 'contains' | 'keywords';
 
 interface Quiz {
   id: string;
@@ -34,6 +35,9 @@ interface QuizQuestion {
   image_url?: string | null;
   explanation?: string | null;
   options: QuizOption[];
+  short_answer_answers?: string[];
+  short_answer_keywords?: string[];
+  short_answer_match?: ShortAnswerMatch;
 }
 
 interface QuestionForm {
@@ -45,6 +49,9 @@ interface QuestionForm {
   image_url: string;
   explanation: string;
   options: QuizOption[];
+  short_answer_answers: string[];
+  short_answer_keywords: string[];
+  short_answer_match: ShortAnswerMatch;
 }
 
 const questionTypeLabels: Record<QuestionType, string> = {
@@ -52,6 +59,12 @@ const questionTypeLabels: Record<QuestionType, string> = {
   multiple_select: 'Multiple Select',
   true_false: 'True / False',
   short_answer: 'Short Answer',
+};
+
+const shortAnswerMatchLabels: Record<ShortAnswerMatch, string> = {
+  exact: 'Exact match',
+  contains: 'Answer contains phrase',
+  keywords: 'Keyword match',
 };
 
 const makeTrueFalseOptions = (existing?: QuizOption[]): QuizOption[] => {
@@ -106,6 +119,9 @@ const emptyQuestionForm = (order: number): QuestionForm => ({
   image_url: '',
   explanation: '',
   options: normalizeOptions('mcq', []),
+  short_answer_answers: [],
+  short_answer_keywords: [],
+  short_answer_match: 'exact',
 });
 
 const statusBadgeClass = (status: Quiz['status']) => {
@@ -117,6 +133,13 @@ const statusBadgeClass = (status: Quiz['status']) => {
     default:
       return 'badge badge-pill badge-danger';
   }
+};
+
+const parseShortAnswerList = (value: string): string[] => {
+  return value
+    .split(/[\n,]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 };
 
 export default function QuizQuestionsPage() {
@@ -197,6 +220,9 @@ export default function QuizQuestionsPage() {
       image_url: question.image_url ?? '',
       explanation: question.explanation ?? '',
       options: normalizeOptions(question.question_type, question.options || []),
+      short_answer_answers: question.short_answer_answers ?? [],
+      short_answer_keywords: question.short_answer_keywords ?? [],
+      short_answer_match: question.short_answer_match ?? 'exact',
     });
   };
 
@@ -205,6 +231,7 @@ export default function QuizQuestionsPage() {
       ...prev,
       question_type: nextType,
       options: normalizeOptions(nextType, prev.options),
+      short_answer_match: nextType === 'short_answer' ? prev.short_answer_match || 'exact' : prev.short_answer_match,
     }));
   };
 
@@ -259,6 +286,14 @@ export default function QuizQuestionsPage() {
       return 'Marks must be at least 1.';
     }
 
+    if (questionForm.question_type === 'short_answer') {
+      const hasAnswers = questionForm.short_answer_answers.length > 0;
+      const hasKeywords = questionForm.short_answer_keywords.length > 0;
+      if (!hasAnswers && !hasKeywords) {
+        return 'Provide accepted answers or keywords for short answer questions.';
+      }
+    }
+
     if (questionForm.question_type !== 'short_answer') {
       const filledOptions = questionForm.options.filter((option) => option.option_text.trim());
       if (filledOptions.length < 2) {
@@ -301,6 +336,12 @@ export default function QuizQuestionsPage() {
         image_url: questionForm.image_url.trim() || null,
         explanation: questionForm.explanation.trim() || null,
       };
+
+      if (questionForm.question_type === 'short_answer') {
+        questionPayload.short_answer_match = questionForm.short_answer_match;
+        questionPayload.short_answer_answers = questionForm.short_answer_answers;
+        questionPayload.short_answer_keywords = questionForm.short_answer_keywords;
+      }
 
       let questionId = questionForm.id;
       const normalizedOptions = questionForm.options
@@ -597,7 +638,68 @@ export default function QuizQuestionsPage() {
                     </div>
 
                     {questionForm.question_type === 'short_answer' ? (
-                      <p className="text-muted">Short answer questions do not need options.</p>
+                      <div className="form-group">
+                        <label>Short Answer Settings</label>
+                        <div className="row gutters-20">
+                          <div className="col-md-6 col-12 form-group">
+                            <label>Matching mode</label>
+                            <select
+                              value={questionForm.short_answer_match}
+                              onChange={(e) =>
+                                setQuestionForm({
+                                  ...questionForm,
+                                  short_answer_match: e.target.value as ShortAnswerMatch,
+                                })
+                              }
+                              className="form-control"
+                            >
+                              {Object.entries(shortAnswerMatchLabels).map(([value, label]) => (
+                                <option key={value} value={value}>
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
+                            <small className="text-muted">
+                              Matching is case-insensitive and ignores punctuation.
+                            </small>
+                          </div>
+                        </div>
+
+                        <div className="form-group">
+                          <label>Accepted answers (one per line)</label>
+                          <textarea
+                            value={questionForm.short_answer_answers.join('\n')}
+                            onChange={(e) =>
+                              setQuestionForm({
+                                ...questionForm,
+                                short_answer_answers: parseShortAnswerList(e.target.value),
+                              })
+                            }
+                            className="form-control"
+                            rows={4}
+                            placeholder="Enter each acceptable answer on a new line."
+                          />
+                        </div>
+
+                        <div className="form-group mb-0">
+                          <label>Keywords (optional, one per line)</label>
+                          <textarea
+                            value={questionForm.short_answer_keywords.join('\n')}
+                            onChange={(e) =>
+                              setQuestionForm({
+                                ...questionForm,
+                                short_answer_keywords: parseShortAnswerList(e.target.value),
+                              })
+                            }
+                            className="form-control"
+                            rows={3}
+                            placeholder="Enter keywords to look for in the student's answer."
+                          />
+                          <small className="text-muted">
+                            Use keywords when students can phrase the answer in different ways.
+                          </small>
+                        </div>
+                      </div>
                     ) : (
                       <div className="form-group">
                         <label>Options *</label>
