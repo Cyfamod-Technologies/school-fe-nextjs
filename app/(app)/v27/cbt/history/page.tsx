@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/apiClient';
 
 interface AttemptHistory {
   id: string;
+  result_id?: string | null;
   quiz_id: string;
   quiz_title: string;
   start_time: string;
@@ -125,7 +126,9 @@ export default function HistoryPage() {
                   <td className="px-6 py-4 text-sm">
                     {attempt.status === 'graded' && (
                       <button
-                        onClick={() => router.push(`/cbt/results/${attempt.id}`)}
+                        onClick={() =>
+                          router.push(`/cbt/results/${attempt.result_id || attempt.id}`)
+                        }
                         className="text-indigo-600 hover:text-indigo-800 font-medium"
                       >
                         View Results

@@ -20,6 +20,7 @@ interface Quiz {
   shuffle_questions: boolean;
   shuffle_options: boolean;
   allow_review: boolean;
+  allow_multiple_attempts: boolean;
 }
 
 interface Subject {
@@ -212,6 +213,7 @@ export default function EditQuizPage() {
         shuffle_questions: quizForm.shuffle_questions,
         shuffle_options: quizForm.shuffle_options,
         allow_review: quizForm.allow_review,
+        allow_multiple_attempts: quizForm.allow_multiple_attempts,
       };
 
       const response = await apiFetch<{ data: Quiz }>(`/api/v1/cbt/quizzes/${quizId}`, {
@@ -540,6 +542,26 @@ export default function EditQuizPage() {
                       </label>
                     </div>
                   </div>
+
+                  <div className="col-md-6 col-12 form-group">
+                    <div className="form-check">
+                      <input
+                        id="take_once"
+                        type="checkbox"
+                        checked={!quizForm.allow_multiple_attempts}
+                        onChange={(e) =>
+                          setQuizForm({
+                            ...quizForm,
+                            allow_multiple_attempts: !e.target.checked,
+                          })
+                        }
+                        className="form-check-input"
+                      />
+                      <label className="form-check-label" htmlFor="take_once">
+                        Take once only (students can attempt once)
+                      </label>
+                    </div>
+                  </div>
                 </div>
 
                 {questionMismatch && (
@@ -604,6 +626,12 @@ export default function EditQuizPage() {
                   <span>Passing Score</span>
                   <span className="text-dark font-weight-bold">{quizForm.passing_score}%</span>
                 </li>
+                <li className="d-flex justify-content-between align-items-center mg-b-10">
+                  <span>Attempts</span>
+                  <span className="text-dark font-weight-bold">
+                    {quizForm.allow_multiple_attempts ? 'Multiple' : 'Once'}
+                  </span>
+                </li>
                 <li className="d-flex justify-content-between align-items-center">
                   <span>Duration</span>
                   <span className="text-dark font-weight-bold">{quizForm.duration_minutes} min</span>
@@ -662,15 +690,16 @@ export default function EditQuizPage() {
               <p className="text-muted">
                 Publish when the quiz is ready for students. Draft quizzes remain hidden.
               </p>
-              <button
-                type="button"
-                className="btn-fill-lmd radius-4 text-light bg-dark-pastel-green"
-                onClick={publishQuiz}
-                disabled={publishing || questionCount === 0 || quiz?.status === 'published'}
-              >
-                {publishing ? 'Publishing...' : 'Publish Quiz'}
-              </button>
-              {quiz?.status === 'published' && (
+              {quiz?.status !== 'published' ? (
+                <button
+                  type="button"
+                  className="btn-fill-lmd radius-4 text-light bg-dark-pastel-green"
+                  onClick={publishQuiz}
+                  disabled={publishing || questionCount === 0}
+                >
+                  {publishing ? 'Publishing...' : 'Publish Quiz'}
+                </button>
+              ) : (
                 <button
                   type="button"
                   className="btn-fill-lmd radius-4 text-light bg-orange-peel mt-3"

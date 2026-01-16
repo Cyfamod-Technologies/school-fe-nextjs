@@ -15,6 +15,8 @@ interface Quiz {
   total_questions: number;
   passing_score: number;
   status: 'draft' | 'published' | 'closed';
+  allow_multiple_attempts?: boolean;
+  attempted?: boolean;
 }
 
 const subjectKey = (quiz: Quiz) => quiz.subject_id ?? 'general';
@@ -395,6 +397,13 @@ function StudentQuizPortal() {
           box-shadow: 0 10px 22px rgba(18, 24, 38, 0.2);
         }
 
+        .cbt-btn:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+          box-shadow: none;
+          transform: none;
+        }
+
         .cbt-secondary-btn {
           background: #fff;
           border: 1px solid var(--cbt-border);
@@ -537,7 +546,9 @@ function StudentQuizPortal() {
           <div className="cbt-alert">No quizzes found for this selection.</div>
         ) : (
           <div className="cbt-quiz-grid">
-            {filteredQuizzes.map((quiz, index) => (
+            {filteredQuizzes.map((quiz, index) => {
+              const isLocked = quiz.attempted && quiz.allow_multiple_attempts === false;
+              return (
               <div
                 key={quiz.id}
                 className="cbt-quiz-card"
@@ -569,6 +580,9 @@ function StudentQuizPortal() {
                   <button
                     type="button"
                     onClick={() => {
+                      if (isLocked) {
+                        return;
+                      }
                       if (student) {
                         router.push(`/cbt/${quiz.id}/take`);
                       } else {
@@ -578,12 +592,14 @@ function StudentQuizPortal() {
                       }
                     }}
                     className="cbt-btn"
+                    disabled={isLocked}
                   >
-                    Start quiz
+                    {isLocked ? 'Attempted' : 'Start quiz'}
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

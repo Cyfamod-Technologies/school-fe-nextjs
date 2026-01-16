@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { StudentAuthProvider, useStudentAuth } from '@/contexts/StudentAuthContext';
 import { apiFetch } from '@/lib/apiClient';
@@ -25,22 +25,83 @@ interface Quiz {
   title: string;
 }
 
+interface QuizAttempt {
+  id: string;
+  quiz_id: string;
+  student_id: string;
+  start_time: string;
+  end_time: string | null;
+  status: 'in_progress' | 'submitted' | 'graded';
+}
+
+const formatDuration = (seconds: number | null): string => {
+  if (seconds === null || Number.isNaN(seconds)) {
+    return '—';
+  }
+  const safeSeconds = Math.max(0, seconds);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const secs = safeSeconds % 60;
+  const parts = [];
+  if (hours > 0) {
+    parts.push(`${hours}h`);
+  }
+  if (minutes > 0 || hours > 0) {
+    parts.push(`${minutes}m`);
+  }
+  parts.push(`${secs}s`);
+  return parts.join(' ');
+};
+
 function ResultsPageInner() {
   const params = useParams();
   const router = useRouter();
-  const { student, loading: authLoading } = useStudentAuth();
-  const attemptId = params.attemptId as string;
+  const { student, loading: authLoading, logout } = useStudentAuth();
+  const resultId = params.attemptId as string;
 
   const [result, setResult] = useState<QuizResult | null>(null);
   const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [attempt, setAttempt] = useState<QuizAttempt | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const studentName = useMemo(() => {
+    if (!student) {
+      return 'Student';
+    }
+    return [student.first_name, student.middle_name, student.last_name]
+      .filter((value) => value && value.trim().length > 0)
+      .join(' ');
+  }, [student]);
+
+  const timeUsedSeconds = useMemo(() => {
+    if (!attempt?.start_time) {
+      return null;
+    }
+    const endTimestamp = attempt.end_time || result?.submitted_at;
+    if (!endTimestamp) {
+      return null;
+    }
+    const start = new Date(attempt.start_time).getTime();
+    const end = new Date(endTimestamp).getTime();
+    if (Number.isNaN(start) || Number.isNaN(end)) {
+      return null;
+    }
+    return Math.max(0, Math.round((end - start) / 1000));
+  }, [attempt, result]);
+
+  const accuracy = useMemo(() => {
+    if (!result || result.attempted_questions === 0) {
+      return 0;
+    }
+    return (result.correct_answers / result.attempted_questions) * 100;
+  }, [result]);
 
   useEffect(() => {
     const loadResults = async () => {
       try {
         setLoading(true);
-        const response = await apiFetch<{ data: QuizResult }>(`/api/v1/cbt/quiz-results/${attemptId}`, {
+        const response = await apiFetch<{ data: QuizResult }>(`/api/v1/cbt/quiz-results/${resultId}`, {
           authScope: 'student',
         });
         setResult(response.data);
@@ -54,6 +115,14 @@ function ResultsPageInner() {
           setQuiz(quizResponse.data);
         }
 
+        if (response.data.attempt_id) {
+          const attemptResponse = await apiFetch<{ data: QuizAttempt }>(
+            `/api/v1/cbt/quiz-attempts/${response.data.attempt_id}`,
+            { authScope: 'student' },
+          );
+          setAttempt(attemptResponse.data);
+        }
+
         setError(null);
       } catch (err: any) {
         setError(err.message || 'Failed to load results');
@@ -63,10 +132,10 @@ function ResultsPageInner() {
       }
     };
 
-    if (attemptId && student) {
+    if (resultId && student) {
       loadResults();
     }
-  }, [attemptId, student]);
+  }, [resultId, student]);
 
   if (authLoading || loading) {
     return (
@@ -108,161 +177,258 @@ function ResultsPageInner() {
     );
   }
 
-  const getGradeColor = (grade: string) => {
-    switch (grade) {
-      case 'A':
-        return 'from-green-500 to-green-600';
-      case 'B':
-        return 'from-blue-500 to-blue-600';
-      case 'C':
-        return 'from-yellow-500 to-yellow-600';
-      case 'D':
-        return 'from-orange-500 to-orange-600';
-      default:
-        return 'from-red-500 to-red-600';
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Quiz Completed! 🎉</h1>
-          <p className="text-gray-600">
-            {quiz?.title}
-          </p>
-        </div>
+    <div className="cbt-result">
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap');
 
-        {/* Grade Card */}
-        <div className={`bg-gradient-to-r ${getGradeColor(result.grade)} rounded-2xl shadow-xl p-12 text-white mb-8 text-center`}>
-          <div className="mb-6">
-            <div className="text-7xl font-bold mb-2">{result.grade}</div>
-            <div className="text-2xl font-semibold mb-4">
-              {result.status === 'pass' ? '✓ Passed' : '✗ Failed'}
-            </div>
-            <div className="text-5xl font-bold mb-2">{result.percentage.toFixed(1)}%</div>
-            <div className="text-lg opacity-90">
-              {result.marks_obtained} / {result.total_marks} marks
+        .cbt-result {
+          --cbt-ink: #1a1a1a;
+          --cbt-muted: #525760;
+          --cbt-accent: #e4572e;
+          --cbt-accent-2: #2a9d8f;
+          --cbt-card: #ffffff;
+          --cbt-border: #e7e1d9;
+          --cbt-shadow: 0 18px 40px rgba(18, 24, 38, 0.12);
+          min-height: 100vh;
+          background: radial-gradient(circle at top right, #fff1da 0%, #f2f6ff 45%, #f7efe4 100%);
+          color: var(--cbt-ink);
+          font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+          padding: 28px 20px 60px;
+        }
+
+        .cbt-result__shell {
+          max-width: 1100px;
+          margin: 0 auto;
+          display: grid;
+          gap: 22px;
+        }
+
+        .cbt-result__hero {
+          border-radius: 26px;
+          background: linear-gradient(135deg, #fef3dd 0%, #f8e4bb 45%, #e3f0ff 100%);
+          padding: 28px;
+          display: grid;
+          grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+          gap: 20px;
+          box-shadow: var(--cbt-shadow);
+        }
+
+        .cbt-result__hero h1 {
+          font-family: 'Fraunces', 'Times New Roman', serif;
+          font-size: clamp(28px, 3.2vw, 40px);
+          margin-bottom: 10px;
+        }
+
+        .cbt-result__kicker {
+          text-transform: uppercase;
+          letter-spacing: 0.16em;
+          font-size: 11px;
+          font-weight: 600;
+          color: var(--cbt-muted);
+          margin-bottom: 6px;
+        }
+
+        .cbt-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 12px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.75);
+          border: 1px solid rgba(255, 255, 255, 0.9);
+          font-size: 12px;
+          font-weight: 600;
+          text-transform: uppercase;
+        }
+
+        .cbt-pill--accent {
+          background: rgba(228, 87, 46, 0.14);
+          color: #8f3a20;
+        }
+
+        .cbt-pill--success {
+          background: rgba(42, 157, 143, 0.15);
+          color: #1f756d;
+        }
+
+        .cbt-card {
+          background: var(--cbt-card);
+          border-radius: 20px;
+          padding: 18px 20px;
+          border: 1px solid var(--cbt-border);
+          box-shadow: 0 14px 30px rgba(18, 24, 38, 0.08);
+        }
+
+        .cbt-metrics {
+          display: grid;
+          gap: 14px;
+          align-content: start;
+        }
+
+        .cbt-metric {
+          display: flex;
+          justify-content: space-between;
+          font-weight: 600;
+          color: var(--cbt-ink);
+        }
+
+        .cbt-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 16px;
+        }
+
+        .cbt-stat {
+          background: #fffdfb;
+          border-radius: 16px;
+          border: 1px solid var(--cbt-border);
+          padding: 16px;
+        }
+
+        .cbt-stat span {
+          display: block;
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          color: var(--cbt-muted);
+        }
+
+        .cbt-stat strong {
+          font-size: 22px;
+        }
+
+        .cbt-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          justify-content: center;
+        }
+
+        .cbt-btn {
+          border-radius: 999px;
+          padding: 10px 20px;
+          font-weight: 600;
+          border: 1px solid transparent;
+          transition: transform 150ms ease, box-shadow 150ms ease;
+        }
+
+        .cbt-btn--primary {
+          background: var(--cbt-ink);
+          color: #fff;
+        }
+
+        .cbt-btn--ghost {
+          background: #fff;
+          border-color: #d9d1c7;
+          color: var(--cbt-ink);
+        }
+
+        .cbt-btn:not(:disabled):hover {
+          transform: translateY(-1px);
+          box-shadow: 0 10px 22px rgba(18, 24, 38, 0.18);
+        }
+
+        @media (max-width: 900px) {
+          .cbt-result__hero {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+
+      <div className="cbt-result__shell">
+        <section className="cbt-result__hero">
+          <div>
+            <div className="cbt-result__kicker">Quiz submitted</div>
+            <h1>Well done, {studentName || 'Student'}.</h1>
+            <p style={{ color: '#525760', marginBottom: '16px' }}>
+              You have successfully completed <strong>{quiz?.title || 'your quiz'}</strong>.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              <span className={`cbt-pill cbt-pill--${result.status === 'pass' ? 'success' : 'accent'}`}>
+                {result.status === 'pass' ? 'Passed' : 'Completed'}
+              </span>
+              <span className="cbt-pill cbt-pill--accent">{formatPercent(result.percentage)}%</span>
+              <span className="cbt-pill">Grade {result.grade}</span>
             </div>
           </div>
-        </div>
-
-        {/* Statistics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white rounded-lg shadow-md p-6 text-center">
-            <div className="text-gray-600 text-sm uppercase tracking-wide mb-2">Total Questions</div>
-            <div className="text-3xl font-bold text-gray-900">{result.total_questions}</div>
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-6 text-center">
-            <div className="text-gray-600 text-sm uppercase tracking-wide mb-2">Attempted</div>
-            <div className="text-3xl font-bold text-blue-600">{result.attempted_questions}</div>
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-6 text-center">
-            <div className="text-gray-600 text-sm uppercase tracking-wide mb-2">Correct</div>
-            <div className="text-3xl font-bold text-green-600">{result.correct_answers}</div>
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-6 text-center">
-            <div className="text-gray-600 text-sm uppercase tracking-wide mb-2">Accuracy</div>
-            <div className="text-3xl font-bold text-indigo-600">
-              {result.attempted_questions > 0
-                ? ((result.correct_answers / result.attempted_questions) * 100).toFixed(1)
-                : 0}
-              %
+          <div className="cbt-card cbt-metrics">
+            <div className="cbt-metric">
+              <span>Time used</span>
+              <span>{formatDuration(timeUsedSeconds)}</span>
+            </div>
+            <div className="cbt-metric">
+              <span>Score</span>
+              <span>
+                {result.marks_obtained} / {result.total_marks}
+              </span>
+            </div>
+            <div className="cbt-metric">
+              <span>Submitted</span>
+              <span>{new Date(result.submitted_at).toLocaleString()}</span>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Performance Breakdown */}
-        <div className="bg-white rounded-lg shadow-md p-8 mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Performance Breakdown</h2>
-
-          <div className="space-y-6">
-            {/* Attempted Questions */}
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="text-gray-700 font-medium">Attempted Questions</span>
-                <span className="text-gray-900 font-bold">{result.attempted_questions}/{result.total_questions}</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-3">
-                <div
-                  className="bg-blue-600 h-3 rounded-full transition-all duration-500"
-                  style={{
-                    width: `${(result.attempted_questions / result.total_questions) * 100}%`,
-                  }}
-                ></div>
-              </div>
+        <section className="cbt-card">
+          <div className="cbt-grid">
+            <div className="cbt-stat">
+              <span>Total questions</span>
+              <strong>{result.total_questions}</strong>
             </div>
-
-            {/* Correct Answers */}
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="text-gray-700 font-medium">Correct Answers</span>
-                <span className="text-gray-900 font-bold">{result.correct_answers}/{result.attempted_questions}</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-3">
-                <div
-                  className="bg-green-600 h-3 rounded-full transition-all duration-500"
-                  style={{
-                    width: result.attempted_questions > 0
-                      ? `${(result.correct_answers / result.attempted_questions) * 100}%`
-                      : 0,
-                  }}
-                ></div>
-              </div>
+            <div className="cbt-stat">
+              <span>Attempted</span>
+              <strong>{result.attempted_questions}</strong>
             </div>
-
-            {/* Marks */}
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="text-gray-700 font-medium">Marks Obtained</span>
-                <span className="text-gray-900 font-bold">{result.marks_obtained}/{result.total_marks}</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-3">
-                <div
-                  className="bg-indigo-600 h-3 rounded-full transition-all duration-500"
-                  style={{
-                    width: `${(result.marks_obtained / result.total_marks) * 100}%`,
-                  }}
-                ></div>
-              </div>
+            <div className="cbt-stat">
+              <span>Correct answers</span>
+              <strong>{result.correct_answers}</strong>
+            </div>
+            <div className="cbt-stat">
+              <span>Accuracy</span>
+              <strong>{accuracy.toFixed(1)}%</strong>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Additional Info */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Submitted At</p>
-              <p className="text-gray-900 font-semibold">
-                {new Date(result.submitted_at).toLocaleString()}
-              </p>
+        <section className="cbt-card">
+          <div className="cbt-grid">
+            <div className="cbt-stat">
+              <span>Admission no</span>
+              <strong>{student?.admission_no || '—'}</strong>
+            </div>
+            <div className="cbt-stat">
+              <span>Class</span>
+              <strong>{student?.school_class?.name || '—'}</strong>
+            </div>
+            <div className="cbt-stat">
+              <span>Arm</span>
+              <strong>{student?.class_arm?.name || '—'}</strong>
             </div>
             {result.graded_at && (
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Graded At</p>
-                <p className="text-gray-900 font-semibold">
-                  {new Date(result.graded_at).toLocaleString()}
-                </p>
+              <div className="cbt-stat">
+                <span>Graded at</span>
+                <strong>{new Date(result.graded_at).toLocaleString()}</strong>
               </div>
             )}
           </div>
-        </div>
+        </section>
 
-        {/* Action Buttons */}
-        <div className="flex gap-4 justify-center">
+        <div className="cbt-actions">
           <button
-            onClick={() => router.push('/cbt')}
-            className="px-8 py-3 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors shadow-lg"
+            onClick={async () => {
+              await logout();
+              router.push('/cbt/login?next=/cbt');
+            }}
+            className="cbt-btn cbt-btn--primary"
           >
-            Back to Quizzes
+            Logout
           </button>
           <button
-            onClick={() => router.push('/cbt/history')}
-            className="px-8 py-3 rounded-lg bg-gray-600 text-white font-medium hover:bg-gray-700 transition-colors shadow-lg"
+            onClick={() => router.push('/cbt')}
+            className="cbt-btn cbt-btn--ghost"
           >
-            View History
+            Back to quizzes
           </button>
         </div>
       </div>
@@ -277,3 +443,10 @@ export default function ResultsPage() {
     </StudentAuthProvider>
   );
 }
+const formatPercent = (value: number | string | null | undefined): string => {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (Number.isNaN(numeric)) {
+    return '0.0';
+  }
+  return numeric.toFixed(1);
+};

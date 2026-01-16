@@ -186,13 +186,21 @@ function TakeQuizPageInner() {
       }
 
       // Submit the attempt
-      await apiFetch(`/api/v1/cbt/quiz-attempts/${attemptId}/submit`, {
-        method: 'POST',
-        authScope: 'student',
-      });
+      const submitResponse = await apiFetch<{ data?: { result_id?: string } }>(
+        `/api/v1/cbt/quiz-attempts/${attemptId}/submit`,
+        {
+          method: 'POST',
+          authScope: 'student',
+        },
+      );
+
+      const resultId = submitResponse?.data?.result_id;
+      if (!resultId) {
+        throw new Error('Quiz submitted, but result could not be loaded.');
+      }
 
       // Redirect to results
-      router.push(`/cbt/results/${attemptId}`);
+      router.push(`/cbt/results/${resultId}`);
     } catch (err: any) {
       setError(err.message || 'Failed to submit quiz');
       console.error('Error submitting quiz:', err);
@@ -211,11 +219,15 @@ function TakeQuizPageInner() {
     return null;
   }
 
-  if (error || !quiz || questions.length === 0) {
+  const missingQuestions = !error && quiz && questions.length === 0;
+
+  if (error || !quiz || missingQuestions) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <p className="text-red-600 text-lg mb-4">{error || 'Failed to load quiz'}</p>
+          <p className="text-red-600 text-lg mb-4">
+            {error || (missingQuestions ? 'No questions have been added yet.' : 'Failed to load quiz')}
+          </p>
           <button
             onClick={() => router.push('/cbt')}
             className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700"

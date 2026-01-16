@@ -17,6 +17,7 @@ interface QuizFormData {
   shuffle_questions: boolean;
   shuffle_options: boolean;
   allow_review: boolean;
+  allow_multiple_attempts: boolean;
 }
 
 interface Subject {
@@ -59,6 +60,7 @@ export default function CreateQuizPage() {
     shuffle_questions: false,
     shuffle_options: false,
     allow_review: true,
+    allow_multiple_attempts: true,
   });
 
   useEffect(() => {
@@ -473,6 +475,26 @@ export default function CreateQuizPage() {
                       </label>
                     </div>
                   </div>
+
+                  <div className="col-md-6 col-12 form-group">
+                    <div className="form-check">
+                      <input
+                        id="take_once"
+                        type="checkbox"
+                        checked={!formData.allow_multiple_attempts}
+                        onChange={(event) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            allow_multiple_attempts: !event.target.checked,
+                          }))
+                        }
+                        className="form-check-input"
+                      />
+                      <label className="form-check-label" htmlFor="take_once">
+                        Take once only (students can attempt once)
+                      </label>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="row gutters-20 mg-t-10">
@@ -516,6 +538,12 @@ export default function CreateQuizPage() {
                 <li className="d-flex justify-content-between align-items-center mg-b-10">
                   <span>Class</span>
                   <span className="text-dark font-weight-bold">{selectedClass}</span>
+                </li>
+                <li className="d-flex justify-content-between align-items-center mg-b-10">
+                  <span>Attempts</span>
+                  <span className="text-dark font-weight-bold">
+                    {formData.allow_multiple_attempts ? 'Multiple' : 'Once'}
+                  </span>
                 </li>
                 <li className="d-flex justify-content-between align-items-center mg-b-10">
                   <span>Duration</span>
