@@ -6,6 +6,11 @@ export interface StudentLoginPayload {
   password: string;
 }
 
+export interface StudentNameLoginPayload {
+  admission_no: string;
+  first_name: string;
+}
+
 export interface StudentProfile {
   id: string;
   admission_no: string;
@@ -63,6 +68,25 @@ export interface StudentLoginResponse {
 
 export async function studentLogin(
   payload: StudentLoginPayload,
+): Promise<StudentLoginResponse> {
+  const response = await apiFetch<StudentLoginResponse>(
+    "/api/v1/student/login",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      skipAuth: true,
+    },
+  );
+
+  if (response.token) {
+    setCookie("student_token", response.token);
+  }
+
+  return response;
+}
+
+export async function studentLoginWithName(
+  payload: StudentNameLoginPayload,
 ): Promise<StudentLoginResponse> {
   const response = await apiFetch<StudentLoginResponse>(
     "/api/v1/student/login",

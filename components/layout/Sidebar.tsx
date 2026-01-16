@@ -131,17 +131,31 @@ export const menuSections: MenuSection[] = [
     ],
   },
   {
+    label: "CBT",
+    icon: "flaticon-checklist",
+    links: [
+      { label: "Quiz Panel", href: "/v27/cbt/admin", requiredPermissions: "cbt.create" },
+    ],
+  },
+  {
     label: "Settings",
     icon: "flaticon-settings",
     links: [
-      { label: "Grading-Scale", href: "/v19/grade-scales", requiredPermissions: "assessment.manage" },
-      { label: "Skills", href: "/v19/skills", requiredPermissions: "skills.manage" },
+      { id: "grading-scale", label: "Grading-Scale", href: "/v19/grade-scales", requiredPermissions: "assessment.manage" },
+      { id: "skills", label: "Skills", href: "/v19/skills", requiredPermissions: "skills.manage" },
       {
-        label: "Assessment-component",
+        id: "assessment-components",
+        label: "Assessment Components",
         href: "/v19/assessment-components",
         requiredPermissions: "assessment.manage",
       },
-      { label: "Academic-Rollover", href: "/v20/academic-rollover", requiredPermissions: "sessions.manage" },
+      {
+        id: "assessment-structure",
+        label: "Assessment Structure",
+        href: "/v19/assessment-structures",
+        requiredPermissions: "assessment.manage",
+      },
+      { id: "academic-rollover", label: "Academic-Rollover", href: "/v20/academic-rollover", requiredPermissions: "sessions.manage" },
     ],
   },
   // {
@@ -361,7 +375,7 @@ export function Sidebar() {
                 >
                   {section.links.map((link) => (
                     <li
-                      key={link.href}
+                      key={link.id || link.href}
                       className={`nav-item ${isLinkActive(link.href) ? "active" : ""}`}
                     >
                       <Link href={link.href} className="nav-link">
