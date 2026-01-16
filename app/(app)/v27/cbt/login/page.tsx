@@ -172,9 +172,9 @@ function CBTStudentLoginPageInner() {
             </button>
           </form>
         </div>
-        <p className="student-footer text-center mt-4 small">
+        {/* <p className="student-footer text-center mt-4 small">
           Need to choose a different quiz? <Link href="/cbt">Back to quiz list</Link>
-        </p>
+        </p> */}
       </div>
       <style jsx>{styles}</style>
     </div>

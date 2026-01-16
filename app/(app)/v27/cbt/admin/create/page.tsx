@@ -151,7 +151,16 @@ export default function CreateQuizPage() {
 
     setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : type === 'number' ? parseInt(value) : value,
+      [name]:
+        type === 'checkbox'
+          ? checked
+          : type === 'number'
+            ? value === ''
+              ? prev[name as keyof QuizFormData]
+              : Number.isFinite(Number(value))
+                ? Number(value)
+                : prev[name as keyof QuizFormData]
+            : value,
     }));
   };
 

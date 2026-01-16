@@ -19,11 +19,14 @@ interface QuizResult {
   status: 'pass' | 'fail';
   submitted_at: string;
   graded_at: string;
+  quiz?: Quiz;
 }
 
 interface Quiz {
   title: string;
   show_score?: boolean;
+  show_answers?: boolean;
+  allow_review?: boolean;
 }
 
 interface QuizAttempt {
@@ -99,6 +102,7 @@ function ResultsPageInner() {
   }, [result]);
 
   const showScore = quiz?.show_score ?? true;
+  const allowReview = quiz?.allow_review ?? false;
 
   useEffect(() => {
     const loadResults = async () => {
@@ -109,8 +113,11 @@ function ResultsPageInner() {
         });
         setResult(response.data);
 
-        // Load quiz details
-        if (response.data.quiz_id) {
+        const quizData = response.data.quiz;
+        if (quizData) {
+          setQuiz(quizData);
+        } else if (response.data.quiz_id) {
+          // Fallback for older responses
           const quizResponse = await apiFetch<{ data: Quiz }>(
             `/api/v1/cbt/quizzes/${response.data.quiz_id}`,
             { authScope: 'student' },
@@ -437,6 +444,14 @@ function ResultsPageInner() {
           >
             Logout
           </button>
+          {allowReview && (
+            <button
+              onClick={() => router.push(`/cbt/results/${resultId}/review`)}
+              className="cbt-btn cbt-btn--ghost"
+            >
+              Review answers
+            </button>
+          )}
           <button
             onClick={() => router.push('/cbt')}
             className="cbt-btn cbt-btn--ghost"
