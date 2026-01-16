@@ -432,6 +432,24 @@ export default function EditQuizPage() {
           </div>
 
           <div className="card height-auto quiz-fade-up quiz-fade-up-delay-4">
+            <div className="card-body">
+              <div className="heading-layout1">
+                <div className="item-title">
+                  <h3>Results</h3>
+                </div>
+              </div>
+              <p className="text-muted mb-2">See student attempts and answers.</p>
+              <button
+                type="button"
+                className="btn-fill-lmd radius-4 text-light bg-dark-pastel-green"
+                onClick={() => router.push(`/v27/cbt/admin/${quizId}/results`)}
+              >
+                View Results
+              </button>
+            </div>
+          </div>
+
+          <div className="card height-auto quiz-fade-up quiz-fade-up-delay-5">
             <div className="card-body bg-light-blue">
               <div className="heading-layout1">
                 <div className="item-title">

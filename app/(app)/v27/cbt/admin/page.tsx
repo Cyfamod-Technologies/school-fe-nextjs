@@ -300,7 +300,20 @@ export default function AdminDashboard() {
                       </td>
                       <td>
                         <div className="d-flex flex-wrap">
-                
+                          {/* <button
+                            type="button"
+                            onClick={() => router.push(`/v27/cbt/admin/${quiz.id}/questions`)}
+                            className="btn-fill-sm radius-4 text-light bg-light-blue mg-r-8 mg-b-8"
+                          >
+                            Questions
+                          </button> */}
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/v27/cbt/admin/${quiz.id}/results`)}
+                            className="btn-fill-sm radius-4 text-light bg-dark-pastel-green mg-r-8 mg-b-8"
+                          >
+                            Results
+                          </button>
                           <button
                             type="button"
                             onClick={() => router.push(`/v27/cbt/admin/${quiz.id}/edit`)}
