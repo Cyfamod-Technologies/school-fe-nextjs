@@ -22,6 +22,7 @@ interface Quiz {
   shuffle_options: boolean;
   allow_review: boolean;
   allow_multiple_attempts: boolean;
+  max_attempts: number;
 }
 
 interface Subject {
@@ -102,6 +103,7 @@ export default function EditQuizPage() {
         const loadedQuiz = {
           ...quizRes.value.data,
           show_score: quizRes.value.data.show_score ?? true,
+          max_attempts: quizRes.value.data.max_attempts ?? 1,
         };
         setQuiz(loadedQuiz);
         setQuizForm(loadedQuiz);
@@ -201,6 +203,11 @@ export default function EditQuizPage() {
       return;
     }
 
+    if (quizForm.allow_multiple_attempts && quizForm.max_attempts < 1) {
+      setError('Max attempts must be at least 1.');
+      return;
+    }
+
     try {
       setSavingQuiz(true);
       setError(null);
@@ -220,6 +227,7 @@ export default function EditQuizPage() {
         shuffle_options: quizForm.shuffle_options,
         allow_review: quizForm.allow_review,
         allow_multiple_attempts: quizForm.allow_multiple_attempts,
+        max_attempts: quizForm.allow_multiple_attempts ? quizForm.max_attempts : 1,
       };
 
       const response = await apiFetch<{ data: Quiz }>(`/api/v1/cbt/quizzes/${quizId}`, {
@@ -573,6 +581,7 @@ export default function EditQuizPage() {
                           setQuizForm({
                             ...quizForm,
                             allow_multiple_attempts: !e.target.checked,
+                            max_attempts: e.target.checked ? 1 : quizForm.max_attempts,
                           })
                         }
                         className="form-check-input"
@@ -582,6 +591,24 @@ export default function EditQuizPage() {
                       </label>
                     </div>
                   </div>
+                  {quizForm.allow_multiple_attempts && (
+                    <div className="col-md-6 col-12 form-group">
+                      <label>Max Attempts</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={quizForm.max_attempts}
+                        onChange={(e) =>
+                          setQuizForm({ ...quizForm, max_attempts: Number(e.target.value) })
+                        }
+                        className="form-control"
+                        required
+                      />
+                      <small className="form-text text-muted">
+                        Set how many times a student can attempt this quiz.
+                      </small>
+                    </div>
+                  )}
                 </div>
 
                 {questionMismatch && (

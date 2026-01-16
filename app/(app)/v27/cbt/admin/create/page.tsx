@@ -19,6 +19,7 @@ interface QuizFormData {
   shuffle_options: boolean;
   allow_review: boolean;
   allow_multiple_attempts: boolean;
+  max_attempts: number;
 }
 
 interface Subject {
@@ -63,6 +64,7 @@ export default function CreateQuizPage() {
     shuffle_options: false,
     allow_review: true,
     allow_multiple_attempts: true,
+    max_attempts: 1,
   });
 
   useEffect(() => {
@@ -192,6 +194,11 @@ export default function CreateQuizPage() {
       return;
     }
 
+    if (formData.allow_multiple_attempts && formData.max_attempts < 1) {
+      setError('Max attempts must be at least 1');
+      return;
+    }
+
     if (formData.passing_score < 0 || formData.passing_score > 100) {
       setError('Passing score must be between 0 and 100');
       return;
@@ -206,6 +213,7 @@ export default function CreateQuizPage() {
         body: JSON.stringify({
           ...formData,
           status: 'draft',
+          max_attempts: formData.allow_multiple_attempts ? formData.max_attempts : 1,
         }),
       });
 
@@ -513,6 +521,7 @@ export default function CreateQuizPage() {
                           setFormData((prev) => ({
                             ...prev,
                             allow_multiple_attempts: !event.target.checked,
+                            max_attempts: event.target.checked ? 1 : prev.max_attempts,
                           }))
                         }
                         className="form-check-input"
@@ -522,6 +531,23 @@ export default function CreateQuizPage() {
                       </label>
                     </div>
                   </div>
+                  {formData.allow_multiple_attempts && (
+                    <div className="col-md-6 col-12 form-group">
+                      <label>Max Attempts</label>
+                      <input
+                        type="number"
+                        name="max_attempts"
+                        value={formData.max_attempts}
+                        onChange={handleInputChange}
+                        min="1"
+                        className="form-control"
+                        required
+                      />
+                      <small className="form-text text-muted">
+                        Set how many times a student can attempt this quiz.
+                      </small>
+                    </div>
+                  )}
                 </div>
 
                 <div className="row gutters-20 mg-t-10">

@@ -16,7 +16,9 @@ interface Quiz {
   passing_score: number;
   status: 'draft' | 'published' | 'closed';
   allow_multiple_attempts?: boolean;
+  max_attempts?: number | null;
   attempted?: boolean;
+  attempt_count?: number;
 }
 
 const subjectKey = (quiz: Quiz) => quiz.subject_id ?? 'general';
@@ -547,7 +549,12 @@ function StudentQuizPortal() {
         ) : (
           <div className="cbt-quiz-grid">
             {filteredQuizzes.map((quiz, index) => {
-              const isLocked = quiz.attempted && quiz.allow_multiple_attempts === false;
+              const attemptCount = quiz.attempt_count ?? (quiz.attempted ? 1 : 0);
+              const hasLimit = quiz.allow_multiple_attempts && quiz.max_attempts;
+              const isLocked =
+                quiz.allow_multiple_attempts === false
+                  ? quiz.attempted
+                  : Boolean(hasLimit && attemptCount >= (quiz.max_attempts || 0));
               return (
               <div
                 key={quiz.id}
