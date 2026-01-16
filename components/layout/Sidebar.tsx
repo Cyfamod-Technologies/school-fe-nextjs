@@ -135,7 +135,6 @@ export const menuSections: MenuSection[] = [
     icon: "flaticon-checklist",
     links: [
       { label: "Admin Panel", href: "/v27/cbt/admin", requiredPermissions: "cbt.create" },
-      { label: "Quiz", href: "/v27/cbt", requiredPermissions: "cbt.view" },
     ],
   },
   {

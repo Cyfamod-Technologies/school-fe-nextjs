@@ -125,7 +125,7 @@ export default function HistoryPage() {
                   <td className="px-6 py-4 text-sm">
                     {attempt.status === 'graded' && (
                       <button
-                        onClick={() => router.push(`/v27/cbt/results/${attempt.id}`)}
+                        onClick={() => router.push(`/cbt/results/${attempt.id}`)}
                         className="text-indigo-600 hover:text-indigo-800 font-medium"
                       >
                         View Results
@@ -142,7 +142,7 @@ export default function HistoryPage() {
       {/* Back Button */}
       <div className="mt-8">
         <button
-          onClick={() => router.push('/v27/cbt')}
+          onClick={() => router.push('/cbt')}
           className="text-indigo-600 hover:text-indigo-800 font-medium"
         >
           ← Back to Quizzes

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
+import { StudentAuthProvider, useStudentAuth } from '@/contexts/StudentAuthContext';
 import { apiFetch } from '@/lib/apiClient';
 
 interface QuizResult {
@@ -25,10 +25,10 @@ interface Quiz {
   title: string;
 }
 
-export default function ResultsPage() {
+function ResultsPageInner() {
   const params = useParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { student, loading: authLoading } = useStudentAuth();
   const attemptId = params.attemptId as string;
 
   const [result, setResult] = useState<QuizResult | null>(null);
@@ -40,12 +40,17 @@ export default function ResultsPage() {
     const loadResults = async () => {
       try {
         setLoading(true);
-        const response = await apiFetch<{ data: QuizResult }>(`/api/v1/cbt/quiz-results/${attemptId}`);
+        const response = await apiFetch<{ data: QuizResult }>(`/api/v1/cbt/quiz-results/${attemptId}`, {
+          authScope: 'student',
+        });
         setResult(response.data);
 
         // Load quiz details
         if (response.data.quiz_id) {
-          const quizResponse = await apiFetch<{ data: Quiz }>(`/api/v1/cbt/quizzes/${response.data.quiz_id}`);
+          const quizResponse = await apiFetch<{ data: Quiz }>(
+            `/api/v1/cbt/quizzes/${response.data.quiz_id}`,
+            { authScope: 'student' },
+          );
           setQuiz(quizResponse.data);
         }
 
@@ -58,15 +63,31 @@ export default function ResultsPage() {
       }
     };
 
-    if (attemptId && user) {
+    if (attemptId && student) {
       loadResults();
     }
-  }, [attemptId, user]);
+  }, [attemptId, student]);
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (!student) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-red-600 text-lg mb-4">Please log in to view results.</p>
+          <button
+            onClick={() => router.push('/cbt/login?next=/cbt')}
+            className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700"
+          >
+            Go to Login
+          </button>
+        </div>
       </div>
     );
   }
@@ -77,7 +98,7 @@ export default function ResultsPage() {
         <div className="text-center">
           <p className="text-red-600 text-lg mb-4">{error || 'Failed to load results'}</p>
           <button
-            onClick={() => router.push('/v27/cbt')}
+            onClick={() => router.push('/cbt')}
             className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700"
           >
             Back to Quizzes
@@ -232,13 +253,13 @@ export default function ResultsPage() {
         {/* Action Buttons */}
         <div className="flex gap-4 justify-center">
           <button
-            onClick={() => router.push('/v27/cbt')}
+            onClick={() => router.push('/cbt')}
             className="px-8 py-3 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors shadow-lg"
           >
             Back to Quizzes
           </button>
           <button
-            onClick={() => router.push('/v27/cbt/history')}
+            onClick={() => router.push('/cbt/history')}
             className="px-8 py-3 rounded-lg bg-gray-600 text-white font-medium hover:bg-gray-700 transition-colors shadow-lg"
           >
             View History
@@ -246,5 +267,13 @@ export default function ResultsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResultsPage() {
+  return (
+    <StudentAuthProvider>
+      <ResultsPageInner />
+    </StudentAuthProvider>
   );
 }

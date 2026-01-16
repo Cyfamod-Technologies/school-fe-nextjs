@@ -142,7 +142,7 @@ export default function AdminDashboard() {
         <h3>Quiz Management</h3>
         <ul>
           <li>
-            <a href="/v27/cbt">CBT</a>
+            <a href="/cbt">CBT</a>
           </li>
           <li>Quiz Management</li>
         </ul>

@@ -34,18 +34,25 @@ export default function AppLayout({
     return false;
   }, [user]);
 
+  const isCbtStudentRoute = useMemo(() => {
+    if (!pathname) {
+      return false;
+    }
+    return pathname.startsWith("/v27/cbt") && !pathname.startsWith("/v27/cbt/admin");
+  }, [pathname]);
+
   useEffect(() => {
     if (loading) {
       return;
     }
-    if (!user) {
+    if (!user && !isCbtStudentRoute) {
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
       return;
     }
-  }, [loading, user, router, pathname]);
+  }, [loading, user, router, pathname, isCbtStudentRoute]);
 
   useEffect(() => {
-    if (loading || !user) {
+    if (loading || !user || isCbtStudentRoute) {
       return;
     }
     const preloader = document.getElementById("preloader");
@@ -59,7 +66,7 @@ export default function AppLayout({
     return () => window.clearTimeout(timer);
   }, [loading, user]);
 
-  if (!user) {
+  if (!user && !isCbtStudentRoute) {
     return loading ? (
       <div className="d-flex align-items-center justify-content-center min-vh-100">
         <div className="spinner-border text-primary" role="status">
@@ -67,6 +74,10 @@ export default function AppLayout({
         </div>
       </div>
     ) : null;
+  }
+
+  if (isCbtStudentRoute) {
+    return <>{children}</>;
   }
 
   return (

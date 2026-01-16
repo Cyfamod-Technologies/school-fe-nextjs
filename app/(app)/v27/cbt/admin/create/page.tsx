@@ -29,6 +29,12 @@ interface Class {
   name: string;
 }
 
+interface SubjectAssignment {
+  id: string;
+  subject?: Subject | null;
+  school_class_id: string;
+}
+
 export default function CreateQuizPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -38,6 +44,8 @@ export default function CreateQuizPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
+  const [subjectsError, setSubjectsError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<QuizFormData>({
     title: '',
@@ -57,16 +65,11 @@ export default function CreateQuizPage() {
     const loadData = async () => {
       try {
         setLoadingData(true);
-        const [subjectsRes, classesRes] = await Promise.all([
-          apiFetch<{ data: Subject[] }>('/api/v1/settings/subjects'),
-          apiFetch<{ data: Class[] }>('/api/v1/classes'),
-        ]);
-
-        setSubjects(subjectsRes.data || []);
-        setClasses(classesRes.data || []);
+        const classesRes = await apiFetch<{ data: Class[] }>('/api/v1/classes');
+        setClasses(Array.isArray(classesRes) ? classesRes : classesRes.data || []);
         setError(null);
       } catch (err: any) {
-        setError('Failed to load subjects and classes');
+        setError('Failed to load classes');
         console.error('Error loading data:', err);
       } finally {
         setLoadingData(false);
@@ -77,6 +80,64 @@ export default function CreateQuizPage() {
       loadData();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (!formData.class_id) {
+      setSubjects([]);
+      setSubjectsError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSubjectsForClass = async () => {
+      try {
+        setSubjectsLoading(true);
+        setSubjectsError(null);
+
+        const response = await apiFetch<{ data: SubjectAssignment[] }>(
+          `/api/v1/settings/subject-assignments?school_class_id=${formData.class_id}&per_page=500`,
+        );
+        const assignments = Array.isArray(response) ? response : response.data || [];
+        const deduped = new Map<string, Subject>();
+
+        assignments.forEach((assignment) => {
+          if (assignment.subject?.id) {
+            deduped.set(assignment.subject.id, assignment.subject);
+          }
+        });
+
+        const nextSubjects = Array.from(deduped.values());
+        if (!cancelled) {
+          setSubjects(nextSubjects);
+          setFormData((prev) => {
+            if (!prev.subject_id) {
+              return prev;
+            }
+            if (!nextSubjects.some((subject) => subject.id === prev.subject_id)) {
+              return { ...prev, subject_id: '' };
+            }
+            return prev;
+          });
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setSubjects([]);
+          setSubjectsError(err.message || 'Failed to load subjects for the selected class.');
+        }
+      } finally {
+        if (!cancelled) {
+          setSubjectsLoading(false);
+        }
+      }
+    };
+
+    loadSubjectsForClass();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [formData.class_id]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
@@ -95,6 +156,16 @@ export default function CreateQuizPage() {
 
     if (!formData.title.trim()) {
       setError('Quiz title is required');
+      return;
+    }
+
+    if (!formData.class_id) {
+      setError('Class is required');
+      return;
+    }
+
+    if (!formData.subject_id) {
+      setError('Subject is required');
       return;
     }
 
@@ -138,10 +209,11 @@ export default function CreateQuizPage() {
     }
   };
 
-  const selectedSubject = subjects.find((subject) => subject.id === formData.subject_id)?.name || 'Not selected';
+  const selectedSubject =
+    subjects.find((subject) => subject.id === formData.subject_id)?.name || 'Not selected';
   const selectedClass = formData.class_id
     ? classes.find((cls) => cls.id === formData.class_id)?.name || 'Selected class'
-    : 'All classes';
+    : 'Not selected';
 
   if (!user) {
     return (
@@ -224,6 +296,30 @@ export default function CreateQuizPage() {
                   </div>
 
                   <div className="col-md-6 col-12 form-group">
+                    <label>Class *</label>
+                    <select
+                      name="class_id"
+                      value={formData.class_id}
+                      onChange={(event) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          class_id: event.target.value,
+                          subject_id: '',
+                        }))
+                      }
+                      className="form-control"
+                      required
+                    >
+                      <option value="">Select a class</option>
+                      {classes.map((cls) => (
+                        <option key={cls.id} value={cls.id}>
+                          {cls.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-md-6 col-12 form-group">
                     <label>Subject *</label>
                     <select
                       name="subject_id"
@@ -231,31 +327,28 @@ export default function CreateQuizPage() {
                       onChange={handleInputChange}
                       className="form-control"
                       required
+                      disabled={!formData.class_id || subjectsLoading}
                     >
-                      <option value="">Select a subject</option>
+                      <option value="">
+                        {formData.class_id ? 'Select a subject' : 'Select a class first'}
+                      </option>
                       {subjects.map((subject) => (
                         <option key={subject.id} value={subject.id}>
                           {subject.name}
                         </option>
                       ))}
                     </select>
-                  </div>
-
-                  <div className="col-md-6 col-12 form-group">
-                    <label>Class (optional)</label>
-                    <select
-                      name="class_id"
-                      value={formData.class_id}
-                      onChange={handleInputChange}
-                      className="form-control"
-                    >
-                      <option value="">All classes</option>
-                      {classes.map((cls) => (
-                        <option key={cls.id} value={cls.id}>
-                          {cls.name}
-                        </option>
-                      ))}
-                    </select>
+                    {subjectsLoading && (
+                      <small className="form-text text-muted">Loading subjects...</small>
+                    )}
+                    {subjectsError && (
+                      <small className="form-text text-danger">{subjectsError}</small>
+                    )}
+                    {!subjectsLoading && formData.class_id && subjects.length === 0 && !subjectsError && (
+                      <small className="form-text text-muted">
+                        No subjects assigned to this class yet.
+                      </small>
+                    )}
                   </div>
                 </div>
 

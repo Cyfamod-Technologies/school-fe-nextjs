@@ -9,6 +9,9 @@ interface Quiz {
   id: string;
   title: string;
   description: string | null;
+  subject_id: string | null;
+  subject_name?: string | null;
+  class_id: string | null;
   duration_minutes: number;
   total_questions: number;
   passing_score: number;
@@ -17,6 +20,22 @@ interface Quiz {
   shuffle_questions: boolean;
   shuffle_options: boolean;
   allow_review: boolean;
+}
+
+interface Subject {
+  id: string;
+  name: string;
+}
+
+interface Class {
+  id: string;
+  name: string;
+}
+
+interface SubjectAssignment {
+  id: string;
+  subject?: Subject | null;
+  school_class_id: string;
 }
 
 const statusBadgeClass = (status: Quiz['status']) => {
@@ -44,6 +63,10 @@ export default function EditQuizPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [questionCount, setQuestionCount] = useState(0);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
+  const [subjectsError, setSubjectsError] = useState<string | null>(null);
 
   const questionMismatch = useMemo(() => {
     if (!quizForm) return false;
@@ -62,18 +85,36 @@ export default function EditQuizPage() {
         setLoading(true);
         setError(null);
 
-        const [quizRes, questionsRes] = await Promise.all([
+        const [quizRes, questionsRes, classesRes] = await Promise.allSettled([
           apiFetch<{ data: Quiz }>(`/api/v1/cbt/quizzes/${quizId}`),
           apiFetch<{ data: { id: string }[] }>(
             `/api/v1/cbt/quizzes/${quizId}/questions?include_correct=1`,
           ),
+          apiFetch<{ data: Class[] }>('/api/v1/classes'),
         ]);
 
-        setQuiz(quizRes.data);
-        setQuizForm(quizRes.data);
-        setQuestionCount((questionsRes.data || []).length);
+        if (quizRes.status !== 'fulfilled') {
+          throw quizRes.reason;
+        }
+
+        setQuiz(quizRes.value.data);
+        setQuizForm(quizRes.value.data);
+        setQuestionCount(
+          questionsRes.status === 'fulfilled' ? (questionsRes.value.data || []).length : 0,
+        );
+        setClasses(
+          classesRes.status === 'fulfilled'
+            ? Array.isArray(classesRes.value)
+              ? classesRes.value
+              : classesRes.value.data || []
+            : [],
+        );
+
+        if (classesRes.status !== 'fulfilled') {
+          setError('Some quiz options could not be loaded. Check permissions for classes.');
+        }
       } catch (err: any) {
-        setError(err.message || 'Failed to load quiz');
+        setError(err.message || 'Failed to load quiz data');
       } finally {
         setLoading(false);
       }
@@ -82,10 +123,77 @@ export default function EditQuizPage() {
     loadData();
   }, [authLoading, user, quizId]);
 
+  useEffect(() => {
+    if (!quizForm?.class_id) {
+      setSubjects([]);
+      setSubjectsError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSubjectsForClass = async () => {
+      try {
+        setSubjectsLoading(true);
+        setSubjectsError(null);
+
+        const response = await apiFetch<{ data: SubjectAssignment[] }>(
+          `/api/v1/settings/subject-assignments?school_class_id=${quizForm.class_id}&per_page=500`,
+        );
+        const assignments = Array.isArray(response) ? response : response.data || [];
+        const deduped = new Map<string, Subject>();
+
+        assignments.forEach((assignment) => {
+          if (assignment.subject?.id) {
+            deduped.set(assignment.subject.id, assignment.subject);
+          }
+        });
+
+        const nextSubjects = Array.from(deduped.values());
+        if (!cancelled) {
+          setSubjects(nextSubjects);
+          setQuizForm((prev) => {
+            if (!prev) {
+              return prev;
+            }
+            if (prev.subject_id && !nextSubjects.some((subject) => subject.id === prev.subject_id)) {
+              return { ...prev, subject_id: null };
+            }
+            return prev;
+          });
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setSubjects([]);
+          setSubjectsError(err.message || 'Failed to load subjects for the selected class.');
+        }
+      } finally {
+        if (!cancelled) {
+          setSubjectsLoading(false);
+        }
+      }
+    };
+
+    loadSubjectsForClass();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [quizForm?.class_id]);
 
   const saveQuiz = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!quizForm) return;
+
+    if (!quizForm.class_id) {
+      setError('Class is required.');
+      return;
+    }
+
+    if (!quizForm.subject_id) {
+      setError('Subject is required.');
+      return;
+    }
 
     try {
       setSavingQuiz(true);
@@ -95,6 +203,8 @@ export default function EditQuizPage() {
       const payload = {
         title: quizForm.title,
         description: quizForm.description,
+        subject_id: quizForm.subject_id || null,
+        class_id: quizForm.class_id || null,
         duration_minutes: quizForm.duration_minutes,
         total_questions: quizForm.total_questions,
         passing_score: quizForm.passing_score,
@@ -178,6 +288,18 @@ export default function EditQuizPage() {
     );
   }
 
+  const selectedSubject =
+    subjects.find((subject) => subject.id === quizForm.subject_id)?.name ||
+    quizForm.subject_name ||
+    'Not selected';
+  const selectedClass = quizForm.class_id
+    ? classes.find((cls) => cls.id === quizForm.class_id)?.name || 'Selected class'
+    : 'All classes';
+  const missingSubjectOption =
+    quizForm.subject_id && !subjects.some((subject) => subject.id === quizForm.subject_id);
+  const missingClassOption =
+    quizForm.class_id && !classes.some((cls) => cls.id === quizForm.class_id);
+
   return (
     <div className="bg-ash min-vh-100">
       <div className="breadcrumbs-area quiz-fade-up">
@@ -234,6 +356,79 @@ export default function EditQuizPage() {
                       className="form-control"
                       rows={3}
                     />
+                  </div>
+
+                  <div className="col-md-6 col-12 form-group">
+                    <label>Class *</label>
+                    <select
+                      value={quizForm.class_id || ''}
+                      onChange={(e) => {
+                        const nextClassId = e.target.value || null;
+                        setQuizForm((prev) => {
+                          if (!prev) {
+                            return prev;
+                          }
+                          return {
+                            ...prev,
+                            class_id: nextClassId,
+                            subject_id: nextClassId === prev.class_id ? prev.subject_id : null,
+                          };
+                        });
+                      }}
+                      className="form-control"
+                      required
+                    >
+                      <option value="">Select a class</option>
+                      {missingClassOption ? (
+                        <option value={quizForm.class_id}>Current class (unavailable)</option>
+                      ) : null}
+                      {classes.map((cls) => (
+                        <option key={cls.id} value={cls.id}>
+                          {cls.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-md-6 col-12 form-group">
+                    <label>Subject *</label>
+                    <select
+                      value={quizForm.subject_id || ''}
+                      onChange={(e) =>
+                        setQuizForm({ ...quizForm, subject_id: e.target.value || null })
+                      }
+                      className="form-control"
+                      required
+                      disabled={!quizForm.class_id || subjectsLoading}
+                    >
+                      <option value="">
+                        {quizForm.class_id ? 'Select a subject' : 'Select a class first'}
+                      </option>
+                      {missingSubjectOption ? (
+                        <option value={quizForm.subject_id}>
+                          {quizForm.subject_name || 'Current subject'}
+                        </option>
+                      ) : null}
+                      {subjects.map((subject) => (
+                        <option key={subject.id} value={subject.id}>
+                          {subject.name}
+                        </option>
+                      ))}
+                    </select>
+                    {subjectsLoading && (
+                      <small className="form-text text-muted">Loading subjects...</small>
+                    )}
+                    {subjectsError && (
+                      <small className="form-text text-danger">{subjectsError}</small>
+                    )}
+                    {!subjectsLoading &&
+                      quizForm.class_id &&
+                      subjects.length === 0 &&
+                      !subjectsError && (
+                        <small className="form-text text-muted">
+                          No subjects assigned to this class yet.
+                        </small>
+                      )}
                   </div>
 
                   <div className="col-md-4 col-12 form-group">
@@ -389,6 +584,14 @@ export default function EditQuizPage() {
                 </div>
               </div>
               <ul className="list-unstyled">
+                <li className="d-flex justify-content-between align-items-center mg-b-10">
+                  <span>Subject</span>
+                  <span className="text-dark font-weight-bold">{selectedSubject}</span>
+                </li>
+                <li className="d-flex justify-content-between align-items-center mg-b-10">
+                  <span>Class</span>
+                  <span className="text-dark font-weight-bold">{selectedClass}</span>
+                </li>
                 <li className="d-flex justify-content-between align-items-center mg-b-10">
                   <span>Status</span>
                   <span className="text-dark font-weight-bold">{quiz?.status}</span>

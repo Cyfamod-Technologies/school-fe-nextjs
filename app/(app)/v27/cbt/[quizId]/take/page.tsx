@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
+import { StudentAuthProvider, useStudentAuth } from '@/contexts/StudentAuthContext';
 import { apiFetch } from '@/lib/apiClient';
 
 interface QuizQuestion {
@@ -28,6 +28,7 @@ interface QuizOption {
 interface Quiz {
   id: string;
   title: string;
+  subject_name?: string | null;
   duration_minutes: number;
   total_questions: number;
   show_answers: boolean;
@@ -41,10 +42,10 @@ interface QuizAnswer {
   selectedOptions?: string[];
 }
 
-export default function TakeQuizPage() {
+function TakeQuizPageInner() {
   const params = useParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { student, loading: authLoading } = useStudentAuth();
   const quizId = params.quizId as string;
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
@@ -59,15 +60,27 @@ export default function TakeQuizPage() {
 
   // Load quiz data and start attempt
   useEffect(() => {
+    if (authLoading) return;
+
+    if (!student) {
+      router.push(`/cbt/login?next=/cbt/${quizId}/take`);
+      return;
+    }
+
     const loadQuiz = async () => {
       try {
         setLoading(true);
         // Load quiz details
-        const quizResponse = await apiFetch<{ data: Quiz }>(`/api/v1/cbt/quizzes/${quizId}`);
+        const quizResponse = await apiFetch<{ data: Quiz }>(`/api/v1/cbt/quizzes/${quizId}`, {
+          authScope: 'student',
+        });
         setQuiz(quizResponse.data);
 
         // Load questions
-        const questionsResponse = await apiFetch<{ data: QuizQuestion[] }>(`/api/v1/cbt/quizzes/${quizId}/questions`);
+        const questionsResponse = await apiFetch<{ data: QuizQuestion[] }>(
+          `/api/v1/cbt/quizzes/${quizId}/questions`,
+          { authScope: 'student' },
+        );
         setQuestions(questionsResponse.data || []);
 
         // Start attempt
@@ -76,6 +89,7 @@ export default function TakeQuizPage() {
           body: JSON.stringify({
             quiz_id: quizId,
           }),
+          authScope: 'student',
         });
         setAttemptId(attemptResponse.data.id);
         setTimeRemaining(quizResponse.data.duration_minutes * 60);
@@ -89,10 +103,10 @@ export default function TakeQuizPage() {
       }
     };
 
-    if (quizId && user) {
+    if (quizId) {
       loadQuiz();
     }
-  }, [quizId, user]);
+  }, [authLoading, student, quizId, router]);
 
   // Timer effect
   useEffect(() => {
@@ -167,28 +181,34 @@ export default function TakeQuizPage() {
         await apiFetch('/api/v1/cbt/quiz-answers', {
           method: 'POST',
           body: JSON.stringify(payload),
+          authScope: 'student',
         });
       }
 
       // Submit the attempt
       await apiFetch(`/api/v1/cbt/quiz-attempts/${attemptId}/submit`, {
         method: 'POST',
+        authScope: 'student',
       });
 
       // Redirect to results
-      router.push(`/v27/cbt/results/${attemptId}`);
+      router.push(`/cbt/results/${attemptId}`);
     } catch (err: any) {
       setError(err.message || 'Failed to submit quiz');
       console.error('Error submitting quiz:', err);
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
       </div>
     );
+  }
+
+  if (!student) {
+    return null;
   }
 
   if (error || !quiz || questions.length === 0) {
@@ -197,7 +217,7 @@ export default function TakeQuizPage() {
         <div className="text-center">
           <p className="text-red-600 text-lg mb-4">{error || 'Failed to load quiz'}</p>
           <button
-            onClick={() => router.push('/v27/cbt')}
+            onClick={() => router.push('/cbt')}
             className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700"
           >
             Back to Quizzes
@@ -215,16 +235,44 @@ export default function TakeQuizPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-6 bg-white rounded-lg shadow-md p-6 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{quiz.title}</h1>
-            <p className="text-gray-600">
-              Question {currentQuestionIndex + 1} of {questions.length}
-            </p>
+        <div className="mb-4 bg-white rounded-lg shadow-md p-6">
+          <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{quiz.title}</h1>
+              <p className="text-gray-600 mb-2">{quiz.subject_name || 'General'} Quiz</p>
+              <p className="text-gray-600 mb-0">
+                Question {currentQuestionIndex + 1} of {questions.length}
+              </p>
+            </div>
+            <div className="text-lg-right mt-3 mt-lg-0">
+              <div className="text-3xl font-bold text-indigo-600">{formatTime(timeRemaining)}</div>
+              <p className="text-gray-600 text-sm mb-0">Time Remaining</p>
+            </div>
           </div>
-          <div className="text-right">
-            <div className="text-3xl font-bold text-indigo-600">{formatTime(timeRemaining)}</div>
-            <p className="text-gray-600 text-sm">Time Remaining</p>
+        </div>
+
+        <div className="mb-6 bg-white rounded-lg shadow-md p-4">
+          <div className="row">
+            <div className="col-md-3 col-6 mb-3 mb-md-0">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">Admission No</div>
+              <div className="text-lg font-semibold text-gray-900">{student.admission_no}</div>
+            </div>
+            <div className="col-md-3 col-6 mb-3 mb-md-0">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">Student</div>
+              <div className="text-lg font-semibold text-gray-900">{student.first_name}</div>
+            </div>
+            <div className="col-md-3 col-6">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">Class</div>
+              <div className="text-lg font-semibold text-gray-900">
+                {student.school_class?.name || '—'}
+              </div>
+            </div>
+            <div className="col-md-3 col-6">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">Arm</div>
+              <div className="text-lg font-semibold text-gray-900">
+                {student.class_arm?.name || '—'}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -435,5 +483,13 @@ export default function TakeQuizPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function TakeQuizPage() {
+  return (
+    <StudentAuthProvider>
+      <TakeQuizPageInner />
+    </StudentAuthProvider>
   );
 }
