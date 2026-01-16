@@ -14,6 +14,7 @@ interface QuizFormData {
   subject_id: string;
   class_id: string;
   show_answers: boolean;
+  show_score: boolean;
   shuffle_questions: boolean;
   shuffle_options: boolean;
   allow_review: boolean;
@@ -57,6 +58,7 @@ export default function CreateQuizPage() {
     subject_id: '',
     class_id: '',
     show_answers: true,
+    show_score: true,
     shuffle_questions: false,
     shuffle_options: false,
     allow_review: true,
@@ -424,6 +426,22 @@ export default function CreateQuizPage() {
                       />
                       <label className="form-check-label" htmlFor="show_answers">
                         Show correct answers after submission
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="col-md-6 col-12 form-group">
+                    <div className="form-check">
+                      <input
+                        id="show_score"
+                        type="checkbox"
+                        name="show_score"
+                        checked={formData.show_score}
+                        onChange={handleInputChange}
+                        className="form-check-input"
+                      />
+                      <label className="form-check-label" htmlFor="show_score">
+                        Show score to students after submission
                       </label>
                     </div>
                   </div>

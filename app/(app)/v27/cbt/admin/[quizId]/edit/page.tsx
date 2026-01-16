@@ -17,6 +17,7 @@ interface Quiz {
   passing_score: number;
   status: 'draft' | 'published' | 'closed';
   show_answers: boolean;
+  show_score: boolean;
   shuffle_questions: boolean;
   shuffle_options: boolean;
   allow_review: boolean;
@@ -98,8 +99,12 @@ export default function EditQuizPage() {
           throw quizRes.reason;
         }
 
-        setQuiz(quizRes.value.data);
-        setQuizForm(quizRes.value.data);
+        const loadedQuiz = {
+          ...quizRes.value.data,
+          show_score: quizRes.value.data.show_score ?? true,
+        };
+        setQuiz(loadedQuiz);
+        setQuizForm(loadedQuiz);
         setQuestionCount(
           questionsRes.status === 'fulfilled' ? (questionsRes.value.data || []).length : 0,
         );
@@ -210,6 +215,7 @@ export default function EditQuizPage() {
         total_questions: quizForm.total_questions,
         passing_score: quizForm.passing_score,
         show_answers: quizForm.show_answers,
+        show_score: quizForm.show_score,
         shuffle_questions: quizForm.shuffle_questions,
         shuffle_options: quizForm.shuffle_options,
         allow_review: quizForm.allow_review,
@@ -382,7 +388,7 @@ export default function EditQuizPage() {
                     >
                       <option value="">Select a class</option>
                       {missingClassOption ? (
-                        <option value={quizForm.class_id}>Current class (unavailable)</option>
+                        <option value={quizForm.class_id || ''}>Current class (unavailable)</option>
                       ) : null}
                       {classes.map((cls) => (
                         <option key={cls.id} value={cls.id}>
@@ -407,7 +413,7 @@ export default function EditQuizPage() {
                         {quizForm.class_id ? 'Select a subject' : 'Select a class first'}
                       </option>
                       {missingSubjectOption ? (
-                        <option value={quizForm.subject_id}>
+                        <option value={quizForm.subject_id || ''}>
                           {quizForm.subject_name || 'Current subject'}
                         </option>
                       ) : null}
@@ -493,6 +499,20 @@ export default function EditQuizPage() {
                       />
                       <label className="form-check-label" htmlFor="show_answers">
                         Show correct answers after submission
+                      </label>
+                    </div>
+                  </div>
+                  <div className="col-md-6 col-12 form-group">
+                    <div className="form-check">
+                      <input
+                        id="show_score"
+                        type="checkbox"
+                        checked={quizForm.show_score}
+                        onChange={(e) => setQuizForm({ ...quizForm, show_score: e.target.checked })}
+                        className="form-check-input"
+                      />
+                      <label className="form-check-label" htmlFor="show_score">
+                        Show score to students after submission
                       </label>
                     </div>
                   </div>

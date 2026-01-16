@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FormEvent, useState } from 'react';
+import { FormEvent, Suspense, useState } from 'react';
 import { studentLoginWithName } from '@/lib/studentAuth';
 
 const styles = `
@@ -70,7 +70,7 @@ const styles = `
 }
 `;
 
-export default function CBTStudentLoginPage() {
+function CBTStudentLoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get('next') || '/cbt';
@@ -178,5 +178,21 @@ export default function CBTStudentLoginPage() {
       </div>
       <style jsx>{styles}</style>
     </div>
+  );
+}
+
+export default function CBTStudentLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="d-flex align-items-center justify-content-center min-vh-100 bg-ash">
+          <div className="spinner-border text-dodger-blue" role="status">
+            <span className="sr-only">Loading...</span>
+          </div>
+        </div>
+      }
+    >
+      <CBTStudentLoginPageInner />
+    </Suspense>
   );
 }

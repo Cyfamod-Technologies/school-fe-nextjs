@@ -23,6 +23,7 @@ interface QuizResult {
 
 interface Quiz {
   title: string;
+  show_score?: boolean;
 }
 
 interface QuizAttempt {
@@ -96,6 +97,8 @@ function ResultsPageInner() {
     }
     return (result.correct_answers / result.attempted_questions) * 100;
   }, [result]);
+
+  const showScore = quiz?.show_score ?? true;
 
   useEffect(() => {
     const loadResults = async () => {
@@ -345,11 +348,15 @@ function ResultsPageInner() {
               You have successfully completed <strong>{quiz?.title || 'your quiz'}</strong>.
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              <span className={`cbt-pill cbt-pill--${result.status === 'pass' ? 'success' : 'accent'}`}>
-                {result.status === 'pass' ? 'Passed' : 'Completed'}
+              <span className={`cbt-pill cbt-pill--${showScore && result.status === 'pass' ? 'success' : 'accent'}`}>
+                {showScore ? (result.status === 'pass' ? 'Passed' : 'Completed') : 'Completed'}
               </span>
-              <span className="cbt-pill cbt-pill--accent">{formatPercent(result.percentage)}%</span>
-              <span className="cbt-pill">Grade {result.grade}</span>
+              {showScore && (
+                <>
+                  <span className="cbt-pill cbt-pill--accent">{formatPercent(result.percentage)}%</span>
+                  <span className="cbt-pill">Grade {result.grade}</span>
+                </>
+              )}
             </div>
           </div>
           <div className="cbt-card cbt-metrics">
@@ -357,12 +364,14 @@ function ResultsPageInner() {
               <span>Time used</span>
               <span>{formatDuration(timeUsedSeconds)}</span>
             </div>
-            <div className="cbt-metric">
-              <span>Score</span>
-              <span>
-                {result.marks_obtained} / {result.total_marks}
-              </span>
-            </div>
+            {showScore && (
+              <div className="cbt-metric">
+                <span>Score</span>
+                <span>
+                  {result.marks_obtained} / {result.total_marks}
+                </span>
+              </div>
+            )}
             <div className="cbt-metric">
               <span>Submitted</span>
               <span>{new Date(result.submitted_at).toLocaleString()}</span>
@@ -380,14 +389,18 @@ function ResultsPageInner() {
               <span>Attempted</span>
               <strong>{result.attempted_questions}</strong>
             </div>
-            <div className="cbt-stat">
-              <span>Correct answers</span>
-              <strong>{result.correct_answers}</strong>
-            </div>
-            <div className="cbt-stat">
-              <span>Accuracy</span>
-              <strong>{accuracy.toFixed(1)}%</strong>
-            </div>
+            {showScore && (
+              <>
+                <div className="cbt-stat">
+                  <span>Correct answers</span>
+                  <strong>{result.correct_answers}</strong>
+                </div>
+                <div className="cbt-stat">
+                  <span>Accuracy</span>
+                  <strong>{accuracy.toFixed(1)}%</strong>
+                </div>
+              </>
+            )}
           </div>
         </section>
 
