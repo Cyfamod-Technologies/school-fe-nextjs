@@ -196,9 +196,9 @@ export default function CbtAssessmentLinkPage() {
   }, [componentId]);
 
   const refreshLinks = async () => {
-    const payload = await apiFetch(
+    const payload = (await apiFetch(
       `/api/v1/settings/assessment-components/${componentId}/cbt-links`,
-    );
+    )) as { component?: AssessmentComponent | null; links?: CbtLink[] };
     setComponent(payload?.component ?? null);
     setLinks(Array.isArray(payload?.links) ? payload.links : []);
   };
@@ -280,10 +280,10 @@ export default function CbtAssessmentLinkPage() {
   const handleImport = async (linkId: string) => {
     setFeedback(null);
     try {
-      const payload = await apiFetch(
+      const payload = (await apiFetch(
         `/api/v1/settings/cbt-assessment-links/${linkId}/import`,
         { method: "POST" },
-      );
+      )) as { message?: string };
       setFeedback({
         type: "success",
         message: payload?.message ?? "Scores imported successfully.",
@@ -305,9 +305,9 @@ export default function CbtAssessmentLinkPage() {
     setSelectedLinkId(linkId);
     setSelectedImports(new Set());
     try {
-      const payload = await apiFetch(
+      const payload = (await apiFetch(
         `/api/v1/settings/cbt-assessment-links/${linkId}/pending-scores`,
-      );
+      )) as { imports?: ImportRow[] };
       setPendingImports(Array.isArray(payload?.imports) ? payload.imports : []);
     } catch (error) {
       console.error("Failed to load pending scores", error);
