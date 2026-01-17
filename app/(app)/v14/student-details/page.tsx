@@ -772,7 +772,7 @@ export default function StudentDetailsPage() {
     }
     if (
       !window.confirm(
-        "Are you sure you want to delete this student? This action cannot be undone.",
+        "Delete this student and all related records? This action cannot be undone.",
       )
     ) {
       return;

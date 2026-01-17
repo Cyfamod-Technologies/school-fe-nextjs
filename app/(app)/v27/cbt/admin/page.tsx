@@ -321,7 +321,7 @@ export default function AdminDashboard() {
                           >
                             Edit
                           </button>
-                          {quiz.status === 'draft' && (
+                          {quiz.status === 'draft' && quiz.total_questions > 0 && (
                             <button
                               type="button"
                               onClick={() => handlePublish(quiz.id)}
@@ -330,7 +330,7 @@ export default function AdminDashboard() {
                               Publish
                             </button>
                           )}
-                          {quiz.status === 'published' && (
+                          {quiz.status === 'published' && quiz.total_questions > 0 && (
                             <button
                               type="button"
                               onClick={() => handleUnpublish(quiz.id)}

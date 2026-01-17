@@ -100,16 +100,17 @@ export default function EditQuizPage() {
           throw quizRes.reason;
         }
 
+        const nextQuestionCount =
+          questionsRes.status === 'fulfilled' ? (questionsRes.value.data || []).length : 0;
         const loadedQuiz = {
           ...quizRes.value.data,
           show_score: quizRes.value.data.show_score ?? true,
           max_attempts: quizRes.value.data.max_attempts ?? 1,
+          total_questions: nextQuestionCount,
         };
         setQuiz(loadedQuiz);
         setQuizForm(loadedQuiz);
-        setQuestionCount(
-          questionsRes.status === 'fulfilled' ? (questionsRes.value.data || []).length : 0,
-        );
+        setQuestionCount(nextQuestionCount);
         setClasses(
           classesRes.status === 'fulfilled'
             ? Array.isArray(classesRes.value)
@@ -219,7 +220,6 @@ export default function EditQuizPage() {
         subject_id: quizForm.subject_id || null,
         class_id: quizForm.class_id || null,
         duration_minutes: quizForm.duration_minutes,
-        total_questions: quizForm.total_questions,
         passing_score: quizForm.passing_score,
         show_answers: quizForm.show_answers,
         show_score: quizForm.show_score,
@@ -246,6 +246,11 @@ export default function EditQuizPage() {
 
   const publishQuiz = async () => {
     try {
+      if (questionCount === 0) {
+        setError('Add at least one question before publishing.');
+        return;
+      }
+
       setPublishing(true);
       setError(null);
       const response = await apiFetch<{ data: Quiz }>(`/api/v1/cbt/quizzes/${quizId}/publish`, {
@@ -455,19 +460,6 @@ export default function EditQuizPage() {
                       value={quizForm.duration_minutes}
                       onChange={(e) =>
                         setQuizForm({ ...quizForm, duration_minutes: Number(e.target.value) })
-                      }
-                      className="form-control"
-                      required
-                    />
-                  </div>
-                  <div className="col-md-4 col-12 form-group">
-                    <label>Total Questions</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={quizForm.total_questions}
-                      onChange={(e) =>
-                        setQuizForm({ ...quizForm, total_questions: Number(e.target.value) })
                       }
                       className="form-control"
                       required
@@ -737,26 +729,27 @@ export default function EditQuizPage() {
               <p className="text-muted">
                 Publish when the quiz is ready for students. Draft quizzes remain hidden.
               </p>
-              {quiz?.status !== 'published' ? (
-                <button
-                  type="button"
-                  className="btn-fill-lmd radius-4 text-light bg-dark-pastel-green"
-                  onClick={publishQuiz}
-                  disabled={publishing || questionCount === 0}
-                >
-                  {publishing ? 'Publishing...' : 'Publish Quiz'}
-                </button>
+              {questionCount > 0 ? (
+                quiz?.status !== 'published' ? (
+                  <button
+                    type="button"
+                    className="btn-fill-lmd radius-4 text-light bg-dark-pastel-green"
+                    onClick={publishQuiz}
+                    disabled={publishing}
+                  >
+                    {publishing ? 'Publishing...' : 'Publish Quiz'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-fill-lmd radius-4 text-light bg-orange-peel mt-3"
+                    onClick={unpublishQuiz}
+                    disabled={publishing}
+                  >
+                    {publishing ? 'Updating...' : 'Unpublish Quiz'}
+                  </button>
+                )
               ) : (
-                <button
-                  type="button"
-                  className="btn-fill-lmd radius-4 text-light bg-orange-peel mt-3"
-                  onClick={unpublishQuiz}
-                  disabled={publishing}
-                >
-                  {publishing ? 'Updating...' : 'Unpublish Quiz'}
-                </button>
-              )}
-              {questionCount === 0 && (
                 <p className="text-danger mt-2 mb-0">Add at least one question before publishing.</p>
               )}
             </div>

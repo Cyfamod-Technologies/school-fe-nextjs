@@ -273,7 +273,7 @@ function TakeQuizPageInner() {
 
         .cbt-header {
           border-radius: 26px;
-          background: linear-gradient(135deg, #fef3dd 0%, #f8e4bb 45%, #e3f0ff 100%);
+          background: linear-gradient(135deg, #ff9d00ff 0%, #f2d39a 45%, #d7e8ff 100%);
           padding: 24px 28px;
           display: grid;
           grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.9fr);
@@ -281,13 +281,14 @@ function TakeQuizPageInner() {
           box-shadow: var(--cbt-shadow);
           position: relative;
           overflow: hidden;
+          border: 1px solid rgba(105, 69, 69, 0.08);
         }
 
         .cbt-header::before {
           content: '';
           position: absolute;
           inset: 0;
-          background: radial-gradient(circle at 15% 10%, rgba(255, 255, 255, 0.75), transparent 55%);
+          background: radial-gradient(circle at 15% 10%, rgba(255, 255, 255, 0.4), transparent 55%);
           pointer-events: none;
         }
 
@@ -295,6 +296,7 @@ function TakeQuizPageInner() {
           font-family: 'Fraunces', 'Times New Roman', serif;
           font-size: clamp(28px, 3.2vw, 42px);
           margin-bottom: 8px;
+          color: #151515;
         }
 
         .cbt-kicker {
@@ -302,7 +304,7 @@ function TakeQuizPageInner() {
           letter-spacing: 0.18em;
           font-size: 11px;
           font-weight: 600;
-          color: var(--cbt-muted);
+          color: #2f343a;
         }
 
         .cbt-subline {
@@ -310,7 +312,7 @@ function TakeQuizPageInner() {
           flex-wrap: wrap;
           gap: 10px;
           align-items: center;
-          color: var(--cbt-muted);
+          color: #2f343a;
           font-weight: 500;
         }
 

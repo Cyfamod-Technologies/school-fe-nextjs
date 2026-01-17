@@ -53,6 +53,7 @@ export default function AssessmentComponentStructures() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [editingStructure, setEditingStructure] = useState<Structure | null>(null);
 
   const componentSummary = component
     ? `Configuring structures for ${component.name}. Default score: ${
@@ -113,17 +114,48 @@ export default function AssessmentComponentStructures() {
 
     try {
       const selectedClasses = Array.from(formData.class_id);
+      const parsedScore = parseFloat(formData.max_score);
+      if (Number.isNaN(parsedScore)) {
+        setError('Enter a valid max score.');
+        return;
+      }
+
+      if (editingStructure && selectedClasses.length > 1) {
+        setError('Select only one class when editing a structure.');
+        return;
+      }
+
+      const payload = {
+        assessment_component_id: componentId,
+        class_id: selectedClasses.length > 0 ? selectedClasses[0] : null,
+        term_id: formData.term_id || null,
+        max_score: parsedScore,
+        description: formData.description || null,
+        is_active: formData.is_active,
+      };
+
+      if (editingStructure) {
+        await apiFetch(`/api/v1/settings/assessment-component-structures/${editingStructure.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+
+        setSuccess('Structure updated successfully');
+        setEditingStructure(null);
+        setFormData({
+          class_id: new Set<string>(),
+          term_id: '',
+          max_score: '',
+          description: '',
+          is_active: true,
+        });
+        setShowForm(false);
+        await loadData();
+        return;
+      }
+
       if (selectedClasses.length === 0) {
         // Create one structure for all classes
-        const payload = {
-          assessment_component_id: componentId,
-          class_id: null,
-          term_id: null,
-          max_score: parseFloat(formData.max_score),
-          description: formData.description || null,
-          is_active: formData.is_active,
-        };
-
         await apiFetch('/api/v1/settings/assessment-component-structures', {
           method: 'POST',
           body: JSON.stringify(payload),
@@ -134,12 +166,8 @@ export default function AssessmentComponentStructures() {
           apiFetch('/api/v1/settings/assessment-component-structures', {
             method: 'POST',
             body: JSON.stringify({
-              assessment_component_id: componentId,
+              ...payload,
               class_id: classId,
-              term_id: null,
-              max_score: parseFloat(formData.max_score),
-              description: formData.description || null,
-              is_active: formData.is_active,
             }),
           })
         );
@@ -187,6 +215,12 @@ export default function AssessmentComponentStructures() {
 
   const handleClassToggle = (classId: string, checked: boolean) => {
     setFormData((prev) => {
+      if (editingStructure) {
+        return {
+          ...prev,
+          class_id: checked ? new Set([classId]) : new Set<string>(),
+        };
+      }
       const nextIds = new Set(prev.class_id);
       if (checked) {
         nextIds.add(classId);
@@ -202,6 +236,9 @@ export default function AssessmentComponentStructures() {
 
   const handleSelectAllClasses = (checked: boolean) => {
     setFormData((prev) => {
+      if (editingStructure) {
+        return prev;
+      }
       if (checked) {
         const allClassIds = new Set(classes.map((c) => c.id));
         return {
@@ -254,7 +291,14 @@ export default function AssessmentComponentStructures() {
             <div className="col-lg-4 col-12 d-flex justify-content-lg-end">
               <button
                 type="button"
-                onClick={() => setShowForm((prev) => !prev)}
+                onClick={() => {
+                  setShowForm((prev) => {
+                    if (prev) {
+                      setEditingStructure(null);
+                    }
+                    return !prev;
+                  });
+                }}
                 className="btn-fill-lmd btn-gradient-yellow btn-hover-bluedark text-light"
               >
                 {showForm ? 'Close Form' : 'Add Structure'}
@@ -359,7 +403,7 @@ export default function AssessmentComponentStructures() {
           <div className="card-body">
             <div className="heading-layout1">
               <div className="item-title">
-                <h3>Create Structure</h3>
+                <h3>{editingStructure ? 'Edit Structure' : 'Create Structure'}</h3>
               </div>
             </div>
 
@@ -370,26 +414,28 @@ export default function AssessmentComponentStructures() {
                   <div className="border rounded p-2 class-checkbox-list">
                     {classes.length ? (
                       <>
-                        <div className="form-check mb-2 pb-2 border-bottom">
-                          <input
-                            className="form-check-input"
-                            type="checkbox"
-                            id="select-all-classes"
-                            checked={
-                              classes.length > 0 &&
-                              formData.class_id.size === classes.length
-                            }
-                            onChange={(event) =>
-                              handleSelectAllClasses(event.target.checked)
-                            }
-                          />
-                          <label
-                            className="form-check-label fw-bold"
-                            htmlFor="select-all-classes"
-                          >
-                            Select All
-                          </label>
-                        </div>
+                        {!editingStructure && (
+                          <div className="form-check mb-2 pb-2 border-bottom">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              id="select-all-classes"
+                              checked={
+                                classes.length > 0 &&
+                                formData.class_id.size === classes.length
+                              }
+                              onChange={(event) =>
+                                handleSelectAllClasses(event.target.checked)
+                              }
+                            />
+                            <label
+                              className="form-check-label fw-bold"
+                              htmlFor="select-all-classes"
+                            >
+                              Select All
+                            </label>
+                          </div>
+                        )}
                         {classes.map((cls) => (
                           <div className="form-check" key={cls.id}>
                             <input
@@ -415,7 +461,9 @@ export default function AssessmentComponentStructures() {
                     )}
                   </div>
                   <small className="form-text text-muted">
-                    Select multiple classes or leave empty for all classes.
+                    {editingStructure
+                      ? 'Select a single class or leave empty for all classes.'
+                      : 'Select multiple classes or leave empty for all classes.'}
                   </small>
                 </div>
 
@@ -491,13 +539,18 @@ export default function AssessmentComponentStructures() {
                     disabled={submitting}
                     className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark text-light"
                   >
-                    {submitting ? 'Saving...' : 'Save Structure'}
+                    {submitting
+                      ? 'Saving...'
+                      : editingStructure
+                        ? 'Save Changes'
+                        : 'Save Structure'}
                   </button>
                   <button
                     type="button"
                     className="btn-fill-lg bg-blue-dark btn-hover-yellow text-light"
                     onClick={() => {
                       setShowForm(false);
+                      setEditingStructure(null);
                       setFormData({
                         class_id: new Set<string>(),
                         term_id: '',
@@ -568,6 +621,23 @@ export default function AssessmentComponentStructures() {
                         </span>
                       </td>
                       <td>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingStructure(structure);
+                            setShowForm(true);
+                            setFormData({
+                              class_id: new Set(structure.class_id ? [structure.class_id] : []),
+                              term_id: structure.term_id ?? '',
+                              max_score: String(structure.max_score ?? ''),
+                              description: structure.description ?? '',
+                              is_active: structure.is_active,
+                            });
+                          }}
+                          className="btn btn-sm btn-outline-primary mr-2"
+                        >
+                          Edit
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleDelete(structure.id)}
