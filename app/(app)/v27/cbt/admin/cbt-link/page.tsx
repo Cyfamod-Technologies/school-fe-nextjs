@@ -122,7 +122,7 @@ export default function CbtLinksOverviewPage() {
               </Link>
               <Link
                 href="/v19/assessment-structures"
-                className="btn-fill-lmd btn-outline-secondary"
+                className="btn-fill-lmd btn-gradient-yellow btn-hover-bluedark text-light"
               >
                 Assessment Structures
               </Link>
