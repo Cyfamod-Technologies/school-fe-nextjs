@@ -22,7 +22,10 @@ interface Quiz {
 }
 
 const subjectKey = (quiz: Quiz) => quiz.subject_id ?? 'general';
-const subjectLabel = (quiz: Quiz) => quiz.subject_name ?? 'General';
+const subjectLabel = (quiz: Quiz) =>
+  quiz.subject_name && quiz.subject_name.trim().length > 0
+    ? quiz.subject_name
+    : 'General';
 
 function StudentQuizPortal() {
   const router = useRouter();
@@ -354,7 +357,7 @@ function StudentQuizPortal() {
 
         .cbt-quiz-meta {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
           gap: 8px;
           font-size: 13px;
           color: var(--cbt-muted);
@@ -569,6 +572,10 @@ function StudentQuizPortal() {
                   <span className={`cbt-status cbt-status--${quiz.status}`}>{quiz.status}</span>
                 </div>
                 <div className="cbt-quiz-meta">
+                  <div>
+                    Subject
+                    <strong>{subjectLabel(quiz)}</strong>
+                  </div>
                   <div>
                     Duration
                     <strong>{quiz.duration_minutes} min</strong>
