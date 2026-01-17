@@ -9,7 +9,6 @@ interface QuizFormData {
   title: string;
   description: string;
   duration_minutes: number;
-  total_questions: number;
   passing_score: number;
   subject_id: string;
   class_id: string;
@@ -54,7 +53,6 @@ export default function CreateQuizPage() {
     title: '',
     description: '',
     duration_minutes: 30,
-    total_questions: 10,
     passing_score: 50,
     subject_id: '',
     class_id: '',
@@ -186,11 +184,6 @@ export default function CreateQuizPage() {
 
     if (formData.duration_minutes < 1) {
       setError('Duration must be at least 1 minute');
-      return;
-    }
-
-    if (formData.total_questions < 1) {
-      setError('Total questions must be at least 1');
       return;
     }
 
@@ -395,20 +388,6 @@ export default function CreateQuizPage() {
                   </div>
 
                   <div className="col-md-4 col-12 form-group">
-                    <label>Total Questions *</label>
-                    <input
-                      type="number"
-                      name="total_questions"
-                      value={formData.total_questions}
-                      onChange={handleInputChange}
-                      min="1"
-                      max="1000"
-                      className="form-control"
-                      required
-                    />
-                  </div>
-
-                  <div className="col-md-4 col-12 form-group">
                     <label>Passing Score (%) *</label>
                     <input
                       type="number"
@@ -604,7 +583,7 @@ export default function CreateQuizPage() {
                 </li>
                 <li className="d-flex justify-content-between align-items-center mg-b-10">
                   <span>Questions</span>
-                  <span className="text-dark font-weight-bold">{formData.total_questions}</span>
+                  <span className="text-dark font-weight-bold">Auto</span>
                 </li>
                 <li className="d-flex justify-content-between align-items-center">
                   <span>Passing Score</span>

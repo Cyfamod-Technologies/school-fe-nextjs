@@ -178,10 +178,14 @@ export default function QuizQuestionsPage() {
         ),
       ]);
 
-      setQuiz(quizRes.data);
-      setQuestions(questionsRes.data || []);
+      const nextQuestions = questionsRes.data || [];
+      setQuiz({
+        ...quizRes.data,
+        total_questions: nextQuestions.length,
+      });
+      setQuestions(nextQuestions);
       setActiveQuestionId(null);
-      setQuestionForm(emptyQuestionForm((questionsRes.data || []).length + 1));
+      setQuestionForm(emptyQuestionForm(nextQuestions.length + 1));
     } catch (err: any) {
       setError(err.message || 'Failed to load quiz questions');
     } finally {
@@ -195,6 +199,7 @@ export default function QuizQuestionsPage() {
     );
     const nextQuestions = response.data || [];
     setQuestions(nextQuestions);
+    setQuiz((prev) => (prev ? { ...prev, total_questions: nextQuestions.length } : prev));
     return nextQuestions;
   };
 
