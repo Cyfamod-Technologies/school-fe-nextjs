@@ -11,6 +11,8 @@ interface Quiz {
   description: string | null;
   subject_id: string | null;
   subject_name?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
   duration_minutes: number;
   total_questions: number;
   passing_score: number;
@@ -26,6 +28,64 @@ const subjectLabel = (quiz: Quiz) =>
   quiz.subject_name && quiz.subject_name.trim().length > 0
     ? quiz.subject_name
     : 'General';
+
+const parseScheduleDate = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed;
+  }
+  const normalized = new Date(value.replace(' ', 'T'));
+  if (!Number.isNaN(normalized.getTime())) {
+    return normalized;
+  }
+  return null;
+};
+
+const formatScheduleDate = (date: Date) => {
+  const day = date.getDate();
+  const suffix = (() => {
+    if (day % 100 >= 11 && day % 100 <= 13) {
+      return 'th';
+    }
+    switch (day % 10) {
+      case 1:
+        return 'st';
+      case 2:
+        return 'nd';
+      case 3:
+        return 'rd';
+      default:
+        return 'th';
+    }
+  })();
+  const monthLabel = date.toLocaleString('en-US', { month: 'short' });
+  const year = date.getFullYear();
+  const timeLabel = date
+    .toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' })
+    .toLowerCase()
+    .replace(' ', '');
+  return `${day}${suffix} ${monthLabel} ${year} ${timeLabel}`;
+};
+
+const getScheduleStatus = (quiz: Quiz) => {
+  const now = new Date();
+  const start = parseScheduleDate(quiz.start_time);
+  const end = parseScheduleDate(quiz.end_time);
+
+  if (start && now < start) {
+    return { state: 'upcoming', label: formatScheduleDate(start) };
+  }
+  if (end && now > end) {
+    return { state: 'closed', label: formatScheduleDate(end) };
+  }
+  if (end) {
+    return { state: 'open', label: formatScheduleDate(end) };
+  }
+  return { state: 'open', label: null };
+};
 
 function StudentQuizPortal() {
   const router = useRouter();
@@ -95,7 +155,11 @@ function StudentQuizPortal() {
     );
   }
 
-  const availableCount = filteredQuizzes.length;
+  const availableCount = filteredQuizzes.filter((quiz) => {
+    const schedule = getScheduleStatus(quiz);
+    return schedule.state === 'open';
+  }).length;
+  const filteredCount = filteredQuizzes.length;
   const totalCount = quizzes.length;
 
   return (
@@ -387,6 +451,16 @@ function StudentQuizPortal() {
           text-transform: uppercase;
         }
 
+        .cbt-schedule {
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--cbt-muted);
+        }
+
+        .cbt-schedule strong {
+          color: var(--cbt-ink);
+        }
+
         .cbt-btn {
           border: none;
           border-radius: 999px;
@@ -547,17 +621,20 @@ function StudentQuizPortal() {
 
       <section className="cbt-card">
         <h3>Available quizzes</h3>
-        {availableCount === 0 ? (
+        {filteredCount === 0 ? (
           <div className="cbt-alert">No quizzes found for this selection.</div>
         ) : (
           <div className="cbt-quiz-grid">
             {filteredQuizzes.map((quiz, index) => {
               const attemptCount = quiz.attempt_count ?? (quiz.attempted ? 1 : 0);
               const hasLimit = quiz.allow_multiple_attempts && quiz.max_attempts;
-              const isLocked =
+              const schedule = getScheduleStatus(quiz);
+              const isAttemptLocked =
                 quiz.allow_multiple_attempts === false
                   ? quiz.attempted
                   : Boolean(hasLimit && attemptCount >= (quiz.max_attempts || 0));
+              const isScheduleLocked = schedule.state !== 'open';
+              const canStart = !isAttemptLocked && !isScheduleLocked;
               return (
               <div
                 key={quiz.id}
@@ -588,28 +665,62 @@ function StudentQuizPortal() {
                     Pass score
                     <strong>{quiz.passing_score}%</strong>
                   </div>
+                  {schedule.state === 'upcoming' ? (
+                    <div>
+                      Opens
+                      <strong>{schedule.label}</strong>
+                    </div>
+                  ) : null}
+                  {schedule.state === 'open' && schedule.label ? (
+                    <div>
+                      Closes
+                      <strong>{schedule.label}</strong>
+                    </div>
+                  ) : null}
+                  {schedule.state === 'closed' ? (
+                    <div>
+                      Closed
+                      <strong>{schedule.label}</strong>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="cbt-quiz-footer">
                   <span className="cbt-subject">{subjectLabel(quiz)}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isLocked) {
-                        return;
-                      }
-                      if (student) {
-                        router.push(`/cbt/${quiz.id}/take`);
-                      } else {
-                        router.push(
-                          `/cbt/login?next=${encodeURIComponent(`/cbt/${quiz.id}/take`)}`,
-                        );
-                      }
-                    }}
-                    className="cbt-btn"
-                    disabled={isLocked}
-                  >
-                    {isLocked ? 'Attempted' : 'Start quiz'}
-                  </button>
+                  {isScheduleLocked ? (
+                    <span className="cbt-schedule">
+                      {schedule.state === 'upcoming' ? (
+                        <>
+                          Opens <strong>{schedule.label}</strong>
+                        </>
+                      ) : schedule.state === 'closed' ? (
+                        <>
+                          Closed <strong>{schedule.label}</strong>
+                        </>
+                      ) : (
+                        'Unavailable'
+                      )}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!canStart) {
+                          return;
+                        }
+                        if (student) {
+                          router.push(`/cbt/${quiz.id}/take`);
+                        } else {
+                          router.push(
+                            `/cbt/login?next=${encodeURIComponent(`/cbt/${quiz.id}/take`)}`,
+                          );
+                        }
+                      }}
+                      className="cbt-btn"
+                      disabled={!canStart}
+                    >
+                      {isAttemptLocked ? 'Attempted' : 'Start quiz'}
+                    </button>
+                  )}
                 </div>
               </div>
               );

@@ -15,6 +15,8 @@ interface Quiz {
   duration_minutes: number;
   total_questions: number;
   passing_score: number;
+  start_time: string | null;
+  end_time: string | null;
   status: 'draft' | 'published' | 'closed';
   show_answers: boolean;
   show_score: boolean;
@@ -71,6 +73,71 @@ export default function EditQuizPage() {
   const [subjectsLoading, setSubjectsLoading] = useState(false);
   const [subjectsError, setSubjectsError] = useState<string | null>(null);
 
+  const toInputDateTime = (value?: string | null) => {
+    if (!value) {
+      return '';
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      const normalized = new Date(value.replace(' ', 'T'));
+      if (Number.isNaN(normalized.getTime())) {
+        return '';
+      }
+      const local = new Date(normalized.getTime() - normalized.getTimezoneOffset() * 60000);
+      return local.toISOString().slice(0, 16);
+    }
+    const local = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  };
+
+  const normalizeDateTime = (value: string | null) => {
+    if (!value) {
+      return null;
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    return parsed.toISOString();
+  };
+
+  const formatScheduleValue = (value: string) => {
+    const [datePart, timePart] = value.split('T');
+    if (!datePart || !timePart) {
+      return value;
+    }
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hour, minute] = timePart.split(':').map(Number);
+    if (!year || !month || !day || Number.isNaN(hour) || Number.isNaN(minute)) {
+      return value;
+    }
+    const date = new Date(year, month - 1, day, hour, minute);
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+    const suffix = (() => {
+      if (day % 100 >= 11 && day % 100 <= 13) {
+        return 'th';
+      }
+      switch (day % 10) {
+        case 1:
+          return 'st';
+        case 2:
+          return 'nd';
+        case 3:
+          return 'rd';
+        default:
+          return 'th';
+      }
+    })();
+    const monthLabel = date.toLocaleString('en-US', { month: 'short' });
+    const timeLabel = date
+      .toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' })
+      .toLowerCase()
+      .replace(' ', '');
+    return `${day}${suffix} ${monthLabel} ${year} ${timeLabel}`;
+  };
+
   const questionMismatch = useMemo(() => {
     if (!quizForm) return false;
     return quizForm.total_questions !== questionCount;
@@ -107,6 +174,8 @@ export default function EditQuizPage() {
           show_score: quizRes.value.data.show_score ?? true,
           max_attempts: quizRes.value.data.max_attempts ?? 1,
           total_questions: nextQuestionCount,
+          start_time: toInputDateTime(quizRes.value.data.start_time),
+          end_time: toInputDateTime(quizRes.value.data.end_time),
         };
         setQuiz(loadedQuiz);
         setQuizForm(loadedQuiz);
@@ -209,6 +278,11 @@ export default function EditQuizPage() {
       return;
     }
 
+    if (quizForm.start_time && quizForm.end_time && quizForm.end_time < quizForm.start_time) {
+      setError('End time must be after the start time.');
+      return;
+    }
+
     try {
       setSavingQuiz(true);
       setError(null);
@@ -221,6 +295,8 @@ export default function EditQuizPage() {
         class_id: quizForm.class_id || null,
         duration_minutes: quizForm.duration_minutes,
         passing_score: quizForm.passing_score,
+        start_time: normalizeDateTime(quizForm.start_time),
+        end_time: normalizeDateTime(quizForm.end_time),
         show_answers: quizForm.show_answers,
         show_score: quizForm.show_score,
         shuffle_questions: quizForm.shuffle_questions,
@@ -234,8 +310,13 @@ export default function EditQuizPage() {
         method: 'PUT',
         body: JSON.stringify(payload),
       });
-      setQuiz(response.data);
-      setQuizForm(response.data);
+      const refreshed = {
+        ...response.data,
+        start_time: toInputDateTime(response.data.start_time),
+        end_time: toInputDateTime(response.data.end_time),
+      };
+      setQuiz(refreshed);
+      setQuizForm(refreshed);
       setSuccess('Quiz settings saved.');
     } catch (err: any) {
       setError(err.message || 'Failed to save quiz settings');
@@ -483,6 +564,44 @@ export default function EditQuizPage() {
 
                 <div className="heading-layout1 mg-t-20">
                   <div className="item-title">
+                    <h3>Schedule</h3>
+                  </div>
+                </div>
+
+                <div className="row gutters-20">
+                  <div className="col-md-6 col-12 form-group">
+                    <label>Start Time</label>
+                    <input
+                      type="datetime-local"
+                      value={quizForm.start_time || ''}
+                      onChange={(e) =>
+                        setQuizForm({ ...quizForm, start_time: e.target.value || null })
+                      }
+                      className="form-control"
+                    />
+                    <small className="form-text text-muted">
+                      Leave blank to allow immediate access after publishing.
+                    </small>
+                  </div>
+                  <div className="col-md-6 col-12 form-group">
+                    <label>End Time</label>
+                    <input
+                      type="datetime-local"
+                      value={quizForm.end_time || ''}
+                      onChange={(e) =>
+                        setQuizForm({ ...quizForm, end_time: e.target.value || null })
+                      }
+                      className="form-control"
+                      min={quizForm.start_time || undefined}
+                    />
+                    <small className="form-text text-muted">
+                      Leave blank to keep the quiz open.
+                    </small>
+                  </div>
+                </div>
+
+                <div className="heading-layout1 mg-t-20">
+                  <div className="item-title">
                     <h3>Display Options</h3>
                   </div>
                 </div>
@@ -664,6 +783,22 @@ export default function EditQuizPage() {
                 <li className="d-flex justify-content-between align-items-center mg-b-10">
                   <span>Passing Score</span>
                   <span className="text-dark font-weight-bold">{quizForm.passing_score}%</span>
+                </li>
+                <li className="d-flex justify-content-between align-items-center mg-b-10">
+                  <span>Start</span>
+                  <span className="text-dark font-weight-bold">
+                    {quizForm.start_time
+                      ? formatScheduleValue(quizForm.start_time)
+                      : 'Immediately'}
+                  </span>
+                </li>
+                <li className="d-flex justify-content-between align-items-center mg-b-10">
+                  <span>End</span>
+                  <span className="text-dark font-weight-bold">
+                    {quizForm.end_time
+                      ? formatScheduleValue(quizForm.end_time)
+                      : 'No end time'}
+                  </span>
                 </li>
                 <li className="d-flex justify-content-between align-items-center mg-b-10">
                   <span>Attempts</span>
