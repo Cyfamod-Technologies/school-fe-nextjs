@@ -12,6 +12,8 @@ interface QuizFormData {
   passing_score: number;
   subject_id: string;
   class_id: string;
+  start_time: string;
+  end_time: string;
   show_answers: boolean;
   show_score: boolean;
   shuffle_questions: boolean;
@@ -56,6 +58,8 @@ export default function CreateQuizPage() {
     passing_score: 50,
     subject_id: '',
     class_id: '',
+    start_time: '',
+    end_time: '',
     show_answers: true,
     show_score: true,
     shuffle_questions: false,
@@ -164,6 +168,54 @@ export default function CreateQuizPage() {
     }));
   };
 
+  const normalizeDateTime = (value: string) => {
+    if (!value) {
+      return null;
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    return parsed.toISOString();
+  };
+
+  const formatScheduleValue = (value: string) => {
+    const [datePart, timePart] = value.split('T');
+    if (!datePart || !timePart) {
+      return value;
+    }
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hour, minute] = timePart.split(':').map(Number);
+    if (!year || !month || !day || Number.isNaN(hour) || Number.isNaN(minute)) {
+      return value;
+    }
+    const date = new Date(year, month - 1, day, hour, minute);
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+    const suffix = (() => {
+      if (day % 100 >= 11 && day % 100 <= 13) {
+        return 'th';
+      }
+      switch (day % 10) {
+        case 1:
+          return 'st';
+        case 2:
+          return 'nd';
+        case 3:
+          return 'rd';
+        default:
+          return 'th';
+      }
+    })();
+    const monthLabel = date.toLocaleString('en-US', { month: 'short' });
+    const timeLabel = date
+      .toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' })
+      .toLowerCase()
+      .replace(' ', '');
+    return `${day}${suffix} ${monthLabel} ${year} ${timeLabel}`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -197,6 +249,11 @@ export default function CreateQuizPage() {
       return;
     }
 
+    if (formData.start_time && formData.end_time && formData.end_time < formData.start_time) {
+      setError('End time must be after the start time.');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -207,6 +264,8 @@ export default function CreateQuizPage() {
           ...formData,
           status: 'draft',
           max_attempts: formData.allow_multiple_attempts ? formData.max_attempts : 1,
+          start_time: normalizeDateTime(formData.start_time),
+          end_time: normalizeDateTime(formData.end_time),
         }),
       });
 
@@ -405,6 +464,42 @@ export default function CreateQuizPage() {
 
                 <div className="heading-layout1 mg-t-20">
                   <div className="item-title">
+                    <h3>Schedule</h3>
+                  </div>
+                </div>
+
+                <div className="row gutters-20">
+                  <div className="col-md-6 col-12 form-group">
+                    <label>Start Time</label>
+                    <input
+                      type="datetime-local"
+                      name="start_time"
+                      value={formData.start_time}
+                      onChange={handleInputChange}
+                      className="form-control"
+                    />
+                    <small className="form-text text-muted">
+                      Leave blank to allow immediate access after publishing.
+                    </small>
+                  </div>
+                  <div className="col-md-6 col-12 form-group">
+                    <label>End Time</label>
+                    <input
+                      type="datetime-local"
+                      name="end_time"
+                      value={formData.end_time}
+                      onChange={handleInputChange}
+                      className="form-control"
+                      min={formData.start_time || undefined}
+                    />
+                    <small className="form-text text-muted">
+                      Leave blank to keep the quiz open.
+                    </small>
+                  </div>
+                </div>
+
+                <div className="heading-layout1 mg-t-20">
+                  <div className="item-title">
                     <h3>Display Options</h3>
                   </div>
                 </div>
@@ -585,7 +680,23 @@ export default function CreateQuizPage() {
                   <span>Questions</span>
                   <span className="text-dark font-weight-bold">Auto</span>
                 </li>
+                <li className="d-flex justify-content-between align-items-center mg-b-10">
+                  <span>Start</span>
+                  <span className="text-dark font-weight-bold">
+                    {formData.start_time
+                      ? formatScheduleValue(formData.start_time)
+                      : 'Immediately'}
+                  </span>
+                </li>
                 <li className="d-flex justify-content-between align-items-center">
+                  <span>End</span>
+                  <span className="text-dark font-weight-bold">
+                    {formData.end_time
+                      ? formatScheduleValue(formData.end_time)
+                      : 'No end time'}
+                  </span>
+                </li>
+                <li className="d-flex justify-content-between align-items-center mg-b-10">
                   <span>Passing Score</span>
                   <span className="text-dark font-weight-bold">{formData.passing_score}%</span>
                 </li>
