@@ -215,7 +215,11 @@ export default function ResultsEntryPage() {
 
   const componentMaxScore = useMemo(() => {
     // Use dynamic max score from structures if available
-    if (dynamicMaxScore !== null) {
+    if (
+      dynamicMaxScore !== null &&
+      Number.isFinite(dynamicMaxScore) &&
+      dynamicMaxScore > 0
+    ) {
       return dynamicMaxScore;
     }
 
