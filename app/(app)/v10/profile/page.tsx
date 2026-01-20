@@ -194,6 +194,25 @@ export default function SchoolProfilePage() {
                           </td>
                         </tr>
                         <tr>
+                          <td>Student Portal Link:</td>
+                          <td
+                            id="school-student-portal-link"
+                            className="font-medium text-dark-medium"
+                          >
+                            {school?.student_portal_link ? (
+                              <a
+                                href={school.student_portal_link}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {school.student_portal_link}
+                              </a>
+                            ) : (
+                              "N/A"
+                            )}
+                          </td>
+                        </tr>
+                        <tr>
                           <td>Current Session:</td>
                           <td
                             id="school-current-session"

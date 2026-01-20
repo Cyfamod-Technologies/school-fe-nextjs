@@ -59,6 +59,7 @@ export interface School {
   phone?: string | null;
   address?: string | null;
   signature_url?: string | null;
+  student_portal_link?: string | null;
   current_session_id?: number | null;
   current_term_id?: number | null;
   current_session?: Session | null;
