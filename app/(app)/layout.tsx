@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Menubar } from "@/components/layout/Menubar";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -40,6 +40,13 @@ export default function AppLayout({
     }
     return pathname.startsWith("/v27/cbt") && !pathname.startsWith("/v27/cbt/admin");
   }, [pathname]);
+
+  const handleBodyClick = useCallback(() => {
+    const wrapper = document.getElementById("wrapper");
+    if (wrapper?.classList.contains("sidebar-collapsed-mobile")) {
+      wrapper.classList.remove("sidebar-collapsed-mobile");
+    }
+  }, []);
 
   useEffect(() => {
     if (loading) {
@@ -86,7 +93,9 @@ export default function AppLayout({
       <Menubar />
       <div className="dashboard-page-one">
         <Sidebar />
-        <div className="dashboard-content-one">{children}</div>
+        <div className="dashboard-content-one" onClick={handleBodyClick}>
+          {children}
+        </div>
       </div>
       <OnboardingVideo />
     </div>

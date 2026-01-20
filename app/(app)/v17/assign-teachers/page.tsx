@@ -20,6 +20,10 @@ import {
   type SubjectTeacherAssignment,
   type SubjectTeacherAssignmentListResponse,
 } from "@/lib/subjectTeacherAssignments";
+import {
+  listSubjectAssignments,
+  type SubjectAssignment,
+} from "@/lib/subjectAssignments";
 
 interface AssignmentForm {
   subject_id: string;
@@ -73,6 +77,10 @@ export default function AssignTeachersPage() {
   const [classSectionsByKey, setClassSectionsByKey] = useState<
     Record<string, ClassArmSection[]>
   >({});
+  const [classSubjectsByKey, setClassSubjectsByKey] = useState<
+    Record<string, Subject[]>
+  >({});
+  const [classSubjectsLoading, setClassSubjectsLoading] = useState(false);
 
   const [form, setForm] = useState<AssignmentForm>(initialForm);
   const [filters, setFilters] = useState<AssignmentFilters>(initialFilters);
@@ -148,6 +156,46 @@ export default function AssignTeachersPage() {
     [classSectionsByKey],
   );
 
+  const ensureClassSubjects = useCallback(
+    async (classId: string, armId?: string) => {
+      if (!classId) {
+        return;
+      }
+      const key = `${classId}:${armId || "all"}`;
+      if (classSubjectsByKey[key]) {
+        return;
+      }
+      setClassSubjectsLoading(true);
+      try {
+        const response = await listSubjectAssignments({
+          school_class_id: classId,
+          class_arm_id: armId || undefined,
+          per_page: 500,
+        });
+        const subjectMap = new Map<string, Subject>();
+        (response.data ?? []).forEach((assignment: SubjectAssignment) => {
+          const subject = assignment.subject;
+          if (subject?.id) {
+            subjectMap.set(String(subject.id), subject);
+          }
+        });
+        setClassSubjectsByKey((prev) => ({
+          ...prev,
+          [key]: Array.from(subjectMap.values()),
+        }));
+      } catch (error) {
+        console.error("Unable to load class subjects", error);
+        setClassSubjectsByKey((prev) => ({
+          ...prev,
+          [key]: [],
+        }));
+      } finally {
+        setClassSubjectsLoading(false);
+      }
+    },
+    [classSubjectsByKey],
+  );
+
   const termsForForm = useMemo(() => {
     if (!form.session_id) {
       return [];
@@ -169,6 +217,14 @@ export default function AssignTeachersPage() {
     const key = `${form.school_class_id}:${form.class_arm_id}`;
     return classSectionsByKey[key] ?? [];
   }, [classSectionsByKey, form.school_class_id, form.class_arm_id]);
+
+  const subjectsForForm = useMemo(() => {
+    if (!form.school_class_id) {
+      return [];
+    }
+    const key = `${form.school_class_id}:${form.class_arm_id || "all"}`;
+    return classSubjectsByKey[key] ?? [];
+  }, [classSubjectsByKey, form.school_class_id, form.class_arm_id]);
 
   const classArmsForFilter = useMemo(() => {
     if (!filters.school_class_id) {
@@ -232,6 +288,30 @@ export default function AssignTeachersPage() {
       );
     }
   }, [form.school_class_id, form.class_arm_id, ensureClassSections]);
+
+  useEffect(() => {
+    if (!form.school_class_id) {
+      return;
+    }
+    ensureClassSubjects(form.school_class_id, form.class_arm_id || undefined).catch(
+      (err) => console.error(err),
+    );
+  }, [form.school_class_id, form.class_arm_id, ensureClassSubjects]);
+
+  useEffect(() => {
+    if (!form.subject_id) {
+      return;
+    }
+    const exists = subjectsForForm.some(
+      (subject) => String(subject.id) === form.subject_id,
+    );
+    if (!exists) {
+      setForm((prev) => ({
+        ...prev,
+        subject_id: "",
+      }));
+    }
+  }, [subjectsForForm, form.subject_id]);
 
   useEffect(() => {
     if (filters.school_class_id) {
@@ -346,6 +426,9 @@ export default function AssignTeachersPage() {
     if (classId && armId) {
       await ensureClassSections(classId, armId);
     }
+    if (classId) {
+      await ensureClassSubjects(classId, armId || undefined);
+    }
     const sectionId = assignment.class_section_id
       ? `${assignment.class_section_id}`
       : "";
@@ -418,55 +501,6 @@ export default function AssignTeachersPage() {
               <form onSubmit={handleSubmit}>
                 <div className="row">
                   <div className="col-12 form-group">
-                    <label htmlFor="teacher-subject">Subject *</label>
-                    <select
-                      id="teacher-subject"
-                      className="form-control"
-                      value={form.subject_id}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          subject_id: event.target.value,
-                        }))
-                      }
-                      required
-                    >
-                      <option value="">Select subject</option>
-                      {subjects.map((subject) => (
-                        <option key={subject.id} value={subject.id}>
-                          {subject.code
-                            ? `${subject.name} (${subject.code})`
-                            : subject.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-12 form-group">
-                    <label htmlFor="teacher-staff">Teacher *</label>
-                    <select
-                      id="teacher-staff"
-                      className="form-control"
-                      value={form.staff_id}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          staff_id: event.target.value,
-                        }))
-                      }
-                      required
-                    >
-                      <option value="">Select teacher</option>
-                      {teachers.map((teacher) => (
-                        <option key={teacher.id} value={teacher.id}>
-                          {teacher.full_name ??
-                            teacher.user?.name ??
-                            teacher.email ??
-                            `Staff #${teacher.id}`}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-12 form-group">
                     <label htmlFor="teacher-class">Class *</label>
                     <select
                       id="teacher-class"
@@ -479,6 +513,8 @@ export default function AssignTeachersPage() {
                           school_class_id: value,
                           class_arm_id: "",
                           class_section_id: "",
+                          subject_id: "",
+                          staff_id: "",
                         }));
                         if (value) {
                           ensureClassArms(value).catch((err) =>
@@ -510,6 +546,8 @@ export default function AssignTeachersPage() {
                           ...prev,
                           class_arm_id: value,
                           class_section_id: "",
+                          subject_id: "",
+                          staff_id: "",
                         }));
                         if (value && form.school_class_id) {
                           ensureClassSections(
@@ -526,6 +564,73 @@ export default function AssignTeachersPage() {
                       {classArmsForForm.map((arm) => (
                         <option key={arm.id} value={arm.id}>
                           {arm.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-12 form-group">
+                    <label htmlFor="teacher-subject">Subject *</label>
+                    <select
+                      id="teacher-subject"
+                      className="form-control"
+                      value={form.subject_id}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          subject_id: event.target.value,
+                        }))
+                      }
+                      disabled={
+                        !form.school_class_id ||
+                        classSubjectsLoading ||
+                        subjectsForForm.length === 0
+                      }
+                      required
+                    >
+                      <option value="">
+                        {form.school_class_id
+                          ? classSubjectsLoading
+                            ? "Loading subjects..."
+                            : subjectsForForm.length === 0
+                            ? "No subjects assigned to this class"
+                            : "Select subject"
+                          : "Select class first"}
+                      </option>
+                      {subjectsForForm.map((subject) => (
+                        <option key={subject.id} value={subject.id}>
+                          {subject.code
+                            ? `${subject.name} (${subject.code})`
+                            : subject.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-12 form-group">
+                    <label htmlFor="teacher-staff">Teacher *</label>
+                    <select
+                      id="teacher-staff"
+                      className="form-control"
+                      value={form.staff_id}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          staff_id: event.target.value,
+                        }))
+                      }
+                      disabled={!form.subject_id}
+                      required
+                    >
+                      <option value="">
+                        {form.subject_id
+                          ? "Select teacher"
+                          : "Select subject first"}
+                      </option>
+                      {teachers.map((teacher) => (
+                        <option key={teacher.id} value={teacher.id}>
+                          {teacher.full_name ??
+                            teacher.user?.name ??
+                            teacher.email ??
+                            `Staff #${teacher.id}`}
                         </option>
                       ))}
                     </select>

@@ -129,6 +129,7 @@ export const API_ROUTES = {
   skillCategories: "/api/v1/settings/skill-categories",
   skillTypes: "/api/v1/settings/skill-types",
   assessmentComponents: "/api/v1/settings/assessment-components",
+  resultPageSettings: "/api/v1/settings/result-page",
   results: "/api/v1/results",
   resultsBulkPrint: "/api/v1/results/bulk/print",
   resultPinCardsPrint: "/api/v1/result-pins/cards/print",

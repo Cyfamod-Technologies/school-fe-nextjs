@@ -1492,6 +1492,10 @@ ul {
   -webkit-box-shadow: 0px 1px 10px 0px rgba(0, 0, 0, 0.1);
   box-shadow: 0px 1px 10px 0px rgba(0, 0, 0, 0.1);
 }
+.header-menu-one.navbar {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
 .nav-bar-header-one {
   background: linear-gradient(to right, #ff9d01, #ffaa01);
   display: flex;
@@ -1520,7 +1524,7 @@ ul {
 }
 .nav-bar-header-one .header-logo a {
   display: block;
-  padding: 10px 0;
+  padding: 4px 0;
 }
 @media only screen and (max-width: 767px) {
   .nav-bar-header-one .toggle-button {
@@ -1528,7 +1532,7 @@ ul {
   }
 }
 .nav-bar-header-one .toggle-button .item-link {
-  padding: 26px 15px;
+  padding: 14px 10px;
   display: block;
   background-color: transparent;
   border: none;
@@ -1584,6 +1588,43 @@ ul {
   color: #444444;
   padding: 15px 10px;
 }
+.header-menu-one {
+  min-height: 0;
+}
+@media only screen and (max-width: 767px) {
+  .nav-bar-header-one {
+    margin-top: -2px;
+    margin-bottom: -2px;
+  }
+  .nav-bar-header-one .header-logo a {
+    padding: 2px 0;
+  }
+.mobile-nav-bar .navbar-toggler {
+  font-size: 18px;
+  padding: 4px 6px;
+}
+.mobile-nav-bar .navbar-toggler + .navbar-toggler {
+  margin-left: 14px;
+}
+}
+.header-menu-one.navbar {
+  min-height: 0;
+}
+@media only screen and (max-width: 767px) {
+  .header-menu-one.navbar {
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .nav-bar-header-one {
+    min-width: 0;
+  }
+  .nav-bar-header-one .toggle-button .item-link {
+    padding: 10px 8px;
+  }
+  .header-main-menu {
+    padding: 0 12px 0 16px;
+  }
+}
 .mobile-nav-bar .navbar-toggler:focus {
   outline: none;
 }
@@ -1635,7 +1676,7 @@ ul {
 }
 .header-main-menu .navbar-nav .header-search-bar .stylish-input-group {
   border: none;
-  height: 60px;
+  height: 46px;
   width: 400px;
 }
 @media only screen and (max-width: 1199px) {
@@ -1650,7 +1691,7 @@ ul {
   background: transparent;
   color: #111111;
   font-size: 16px;
-  height: 60px;
+  height: 46px;
 }
 .header-main-menu .navbar-nav .header-search-bar .stylish-input-group .input-group-addon {
   display: flex;
@@ -2092,6 +2133,7 @@ ul {
   -webkit-box-sizing: content-box;
   box-sizing: content-box;
   z-index: 10;
+  --sidebar-menu-top-padding: 10px;
 }
 .sidebar-menu-one .sidebar-menu-content {
   border: none;
@@ -2199,6 +2241,11 @@ ul {
 .sidebar-menu-one .mobile-sidebar-header .header-logo a {
   display: block;
   padding: 18px;
+}
+@media (max-width: 767.98px) {
+  .sidebar-menu-one {
+    --sidebar-menu-top-padding: 48px;
+  }
 }
 .sidebar-menu-two {
   position: fixed;

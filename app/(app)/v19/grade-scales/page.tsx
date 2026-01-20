@@ -9,6 +9,11 @@ import {
   type GradeScale,
   type GradeRangePayload,
 } from "@/lib/gradeScales";
+import {
+  fetchResultPageSettings,
+  updateResultPageSettings,
+  type ResultPageSettings,
+} from "@/lib/resultPageSettings";
 
 interface EditableRange {
   key: string;
@@ -141,6 +146,15 @@ function validateRanges(ranges: EditableRange[]): ValidationResult {
   };
 }
 
+const defaultResultSettings: ResultPageSettings = {
+  show_grade: true,
+  show_position: true,
+  show_class_average: true,
+  show_lowest: true,
+  show_highest: true,
+  show_remarks: true,
+};
+
 export default function GradeScalesPage() {
   const [loading, setLoading] = useState(true);
   const [scales, setScales] = useState<GradeScale[]>([]);
@@ -151,6 +165,17 @@ export default function GradeScalesPage() {
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [resultSettings, setResultSettings] = useState<ResultPageSettings>(
+    defaultResultSettings,
+  );
+  const [resultSettingsLoading, setResultSettingsLoading] = useState(true);
+  const [resultSettingsSaving, setResultSettingsSaving] = useState(false);
+  const [resultSettingsInfo, setResultSettingsInfo] = useState<string | null>(
+    null,
+  );
+  const [resultSettingsError, setResultSettingsError] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     let active = true;
@@ -184,6 +209,34 @@ export default function GradeScalesPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    fetchResultPageSettings()
+      .then((data) => {
+        if (!active) return;
+        setResultSettings(data);
+      })
+      .catch((error) => {
+        console.error("Unable to load result page settings", error);
+        if (active) {
+          setResultSettingsError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load result page settings.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setResultSettingsLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const selectedScale = useMemo(() => {
     if (!selectedScaleId) {
       return null;
@@ -210,6 +263,42 @@ export default function GradeScalesPage() {
     setInfoMessage(null);
     setErrorMessage(null);
   }, [selectedScale]);
+
+  const resultSettingOptions = useMemo(
+    () => [
+      {
+        key: "show_grade" as const,
+        label: "Grade",
+        hint: "Show subject grades and the final grade summary.",
+      },
+      {
+        key: "show_position" as const,
+        label: "Position",
+        hint: "Show subject positions and overall class position.",
+      },
+      {
+        key: "show_class_average" as const,
+        label: "Class Average",
+        hint: "Show class average in the table and summary.",
+      },
+      {
+        key: "show_lowest" as const,
+        label: "Lowest",
+        hint: "Show the lowest score per subject.",
+      },
+      {
+        key: "show_highest" as const,
+        label: "Highest",
+        hint: "Show the highest score per subject.",
+      },
+      {
+        key: "show_remarks" as const,
+        label: "Remarks",
+        hint: "Show remarks derived from the grading scale.",
+      },
+    ],
+    [],
+  );
 
   const handleAddRange = () => {
     setRanges((prev) => [...prev, createEmptyRange()]);
@@ -270,6 +359,34 @@ export default function GradeScalesPage() {
 
   const handleScaleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedScaleId(event.target.value);
+  };
+
+  const handleResultSettingToggle = (key: keyof ResultPageSettings) => {
+    setResultSettings((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const handleResultSettingsSave = async () => {
+    setResultSettingsError(null);
+    setResultSettingsInfo(null);
+
+    try {
+      setResultSettingsSaving(true);
+      const saved = await updateResultPageSettings(resultSettings);
+      setResultSettings(saved);
+      setResultSettingsInfo("Result page settings updated successfully.");
+    } catch (error) {
+      console.error("Unable to save result page settings", error);
+      setResultSettingsError(
+        error instanceof Error
+          ? error.message
+          : "Unable to save result page settings.",
+      );
+    } finally {
+      setResultSettingsSaving(false);
+    }
   };
 
   const handleSave = async () => {
@@ -464,6 +581,56 @@ export default function GradeScalesPage() {
         </div>
       </div>
 
+      <div className="card mb-4">
+        <div className="card-body">
+          <div className="heading-layout1">
+            <div className="item-title">
+              <h3>Visibility Controls</h3>
+            </div>
+            <button
+              type="button"
+              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+              onClick={handleResultSettingsSave}
+              disabled={resultSettingsLoading || resultSettingsSaving}
+            >
+              {resultSettingsSaving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+          <p className="text-muted mb-3">
+            Toggle what appears on the printed result page for this school.
+          </p>
+          {resultSettingsInfo ? (
+            <div className="alert alert-info">{resultSettingsInfo}</div>
+          ) : null}
+          {resultSettingsError ? (
+            <div className="alert alert-danger">{resultSettingsError}</div>
+          ) : null}
+          {resultSettingsLoading ? (
+            <div className="alert alert-info">Loading settings...</div>
+          ) : null}
+          <div className="row gutters-20">
+            {resultSettingOptions.map((option) => (
+              <div key={option.key} className="col-md-6 col-12 form-group">
+                <div className="form-check">
+                  <input
+                    id={option.key}
+                    type="checkbox"
+                    className="form-check-input"
+                    checked={resultSettings[option.key]}
+                    onChange={() => handleResultSettingToggle(option.key)}
+                    disabled={resultSettingsLoading || resultSettingsSaving}
+                  />
+                  <label className="form-check-label" htmlFor={option.key}>
+                    {option.label}
+                  </label>
+                </div>
+                <small className="form-text text-muted">{option.hint}</small>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div className="card height-auto">
         <div className="card-body">
           <div className="heading-layout1">
@@ -509,7 +676,7 @@ export default function GradeScalesPage() {
                   <th>Grade Label</th>
                   <th>Minimum Score</th>
                   <th>Maximum Score</th>
-                  <th>Description</th>
+                  <th>Remarks</th>
                   <th>Grade Point</th>
                   <th className="text-center">Action</th>
                 </tr>

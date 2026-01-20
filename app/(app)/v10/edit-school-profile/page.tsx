@@ -15,6 +15,7 @@ interface FormState {
   email: string;
   phone: string;
   address: string;
+  student_portal_link: string;
   current_session_id: string;
   current_term_id: string;
 }
@@ -24,6 +25,7 @@ const initialFormState: FormState = {
   email: "",
   phone: "",
   address: "",
+  student_portal_link: "",
   current_session_id: "",
   current_term_id: "",
 };
@@ -108,6 +110,7 @@ export default function EditSchoolProfilePage() {
       email: school.email ?? "",
       phone: `${school.phone ?? ""}`,
       address: school.address ?? "",
+      student_portal_link: school.student_portal_link ?? "",
       current_session_id: school.current_session_id
         ? `${school.current_session_id}`
         : "",
@@ -302,6 +305,25 @@ export default function EditSchoolProfilePage() {
                       }
                       required
                     />
+                  </div>
+                  <div className="col-lg-6 col-12 form-group">
+                    <label htmlFor="student-portal-link">Student Portal Link</label>
+                    <input
+                      id="student-portal-link"
+                      type="url"
+                      className="form-control"
+                      value={form.student_portal_link}
+                      onChange={(event) =>
+                        handleFieldChange(
+                          "student_portal_link",
+                          event.target.value,
+                        )
+                      }
+                      placeholder="https://portal.example.com"
+                    />
+                    <small className="form-text text-muted">
+                      This link is shown on result scratch cards.
+                    </small>
                   </div>
                   <div className="col-lg-6 col-12 form-group">
                     <label htmlFor="school-logo">School Logo</label>

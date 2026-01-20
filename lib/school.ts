@@ -6,6 +6,7 @@ export interface UpdateSchoolPayload {
   email?: string;
   phone?: string;
   address?: string;
+  student_portal_link?: string;
   current_session_id?: string | number | null;
   current_term_id?: string | number | null;
   logo?: File | null;
@@ -42,6 +43,9 @@ export async function updateSchoolProfile(
   }
   if (payload.address !== undefined) {
     formData.append("address", `${payload.address}`);
+  }
+  if (payload.student_portal_link !== undefined) {
+    formData.append("student_portal_link", `${payload.student_portal_link}`);
   }
   if (payload.current_session_id) {
     formData.append("current_session_id", `${payload.current_session_id}`);
