@@ -317,8 +317,8 @@ export function Sidebar() {
       const nextOpen = !isCurrentlyOpen;
 
       if (!nextOpen) {
-        // Closing the currently open section: collapse all.
-        return {};
+        // Closing the currently open section: explicitly keep it closed.
+        return { [label]: false };
       }
 
       // Opening a section: close all others so only this one stays open.
@@ -394,7 +394,12 @@ export function Sidebar() {
 
           {filteredSections.map((section, idx) => {
             const active = isSectionActive(section);
-            const open = openSections[section.label] ?? active;
+            const hasExplicitState = Object.keys(openSections).length > 0;
+            const open = Object.prototype.hasOwnProperty.call(openSections, section.label)
+              ? Boolean(openSections[section.label])
+              : hasExplicitState
+                ? false
+                : active;
             const isFirstSection = idx === 0;
             return (
               <li
