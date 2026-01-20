@@ -28,6 +28,8 @@ interface StaffFormState {
   employment_start_date: string;
   address: string;
   qualifications: string;
+  password: string;
+  password_confirmation: string;
 }
 
 const emptyForm: StaffFormState = {
@@ -39,6 +41,8 @@ const emptyForm: StaffFormState = {
   employment_start_date: "",
   address: "",
   qualifications: "",
+  password: "",
+  password_confirmation: "",
 };
 
 export default function EditStaffPage() {
@@ -75,6 +79,8 @@ export default function EditStaffPage() {
             : "",
           address: staff.address ?? "",
           qualifications: staff.qualifications ?? "",
+          password: "",
+          password_confirmation: "",
         });
         setError(null);
       })
@@ -127,6 +133,17 @@ export default function EditStaffPage() {
       return;
     }
 
+    if (form.password || form.password_confirmation) {
+      if (form.password.length < 8) {
+        setError("Password must be at least 8 characters.");
+        return;
+      }
+      if (form.password !== form.password_confirmation) {
+        setError("Password confirmation does not match.");
+        return;
+      }
+    }
+
     const payload = new FormData();
     payload.append("full_name", form.full_name.trim());
     payload.append("email", form.email.trim());
@@ -137,6 +154,11 @@ export default function EditStaffPage() {
     payload.append("employment_start_date", form.employment_start_date);
     payload.append("address", form.address.trim());
     payload.append("qualifications", form.qualifications.trim());
+
+    if (form.password) {
+      payload.append("password", form.password);
+      payload.append("password_confirmation", form.password_confirmation);
+    }
 
     if (photoFile) {
       payload.append("photo", photoFile);
@@ -322,6 +344,30 @@ export default function EditStaffPage() {
                     const file = event.target.files?.[0] ?? null;
                     setPhotoFile(file);
                   }}
+                />
+              </div>
+              <div className="col-lg-6 col-12 form-group">
+                <label htmlFor="staff-password">New Password</label>
+                <input
+                  id="staff-password"
+                  type="password"
+                  className="form-control"
+                  value={form.password}
+                  onChange={(event) => updateField("password", event.target.value)}
+                  placeholder="Leave blank to keep current password"
+                />
+              </div>
+              <div className="col-lg-6 col-12 form-group">
+                <label htmlFor="staff-password-confirm">Confirm Password</label>
+                <input
+                  id="staff-password-confirm"
+                  type="password"
+                  className="form-control"
+                  value={form.password_confirmation}
+                  onChange={(event) =>
+                    updateField("password_confirmation", event.target.value)
+                  }
+                  placeholder="Repeat new password"
                 />
               </div>
               <div className="col-12 form-group d-flex justify-content-between">
