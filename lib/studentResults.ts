@@ -7,12 +7,16 @@ export interface StudentSessionOption {
   terms?: Array<{ id: string; name: string }>;
 }
 
+export interface StudentResultComponent {
+  id?: string | null;
+  label?: string | null;
+  score?: number | null;
+}
+
 export interface StudentResultEntry {
   subject?: string | null;
-  code?: string | null;
-  score?: number | null;
-  grade?: string | null;
-  remarks?: string | null;
+  components?: StudentResultComponent[];
+  total?: number | null;
 }
 
 export interface StudentResultResponse {

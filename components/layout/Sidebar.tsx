@@ -109,6 +109,7 @@ export const menuSections: MenuSection[] = [
       { label: "Add Student", href: "/v14/add-student", requiredPermissions: "students.create" },
       { label: "Bulk Result Print", href: "/v14/bulk-results", requiredPermissions: "students.results.print", excludeRoles: "teacher" },
       { label: "Check Student Result", href: "/v14/check-result", requiredPermissions: "results.view", excludeRoles: "teacher" },
+      { label: "Early Years Report", href: "/v14/early-years-report", requiredPermissions: "results.view", excludeRoles: "teacher" },
       { label: "Result Entry", href: "/v19/results-entry", requiredPermissions: "results.enter" },
       {
         label: "Class Skill Ratings",

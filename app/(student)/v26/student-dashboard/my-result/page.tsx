@@ -60,6 +60,24 @@ export default function StudentMyResultPage() {
     return session?.terms ?? [];
   }, [sessions, selectedSession]);
 
+  const componentHeaders = useMemo(() => {
+    if (!results) {
+      return [] as string[];
+    }
+    const labels: string[] = [];
+    const seen = new Set<string>();
+    results.forEach((row) => {
+      row.components?.forEach((component) => {
+        const label = (component.label ?? "").trim();
+        if (label && !seen.has(label)) {
+          seen.add(label);
+          labels.push(label);
+        }
+      });
+    });
+    return labels;
+  }, [results]);
+
   if (loading || !student) {
     return (
       <div className="card">
@@ -227,22 +245,51 @@ export default function StudentMyResultPage() {
                   <thead>
                     <tr>
                       <th>Subject</th>
-                      <th>Code</th>
-                      <th>Score</th>
-                      <th>Grade</th>
-                      <th>Remarks</th>
+                      {componentHeaders.map((label) => (
+                        <th key={label}>{label}</th>
+                      ))}
+                      <th>Total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {results.map((result, index) => (
-                      <tr key={`${result.subject}-${index}`}>
-                        <td>{result.subject ?? "—"}</td>
-                        <td>{result.code ?? "—"}</td>
-                        <td>{result.score ?? "—"}</td>
-                        <td>{result.grade ?? "—"}</td>
-                        <td>{result.remarks ?? "—"}</td>
-                      </tr>
-                    ))}
+                    {results.map((result, index) => {
+                      const componentMap = new Map(
+                        (result.components ?? []).map((component) => [
+                          component.label ?? "",
+                          component.score,
+                        ]),
+                      );
+                      const componentScores = (result.components ?? [])
+                        .map((component) =>
+                          typeof component.score === "number"
+                            ? component.score
+                            : null,
+                        )
+                        .filter((score): score is number => score !== null);
+                      const derivedTotal =
+                        typeof result.total === "number"
+                          ? result.total
+                          : componentScores.length > 0
+                          ? componentScores.reduce((sum, score) => sum + score, 0)
+                          : null;
+
+                      return (
+                        <tr key={`${result.subject}-${index}`}>
+                          <td>{result.subject ?? "—"}</td>
+                          {componentHeaders.map((label) => {
+                            const value = componentMap.has(label)
+                              ? componentMap.get(label)
+                              : null;
+                            return (
+                              <td key={`${result.subject}-${label}`}>
+                                {value ?? "—"}
+                              </td>
+                            );
+                          })}
+                          <td>{derivedTotal ?? "—"}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
