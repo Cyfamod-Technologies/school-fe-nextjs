@@ -2433,6 +2433,32 @@ ul {
 .sidebar-collapsed-mobile .sidebar-main {
   left: 0;
 }
+@media only screen and (max-width: 767.98px) {
+  #wrapper {
+    overflow-x: hidden;
+  }
+  .sidebar-main.sidebar-menu-one {
+    width: min(84vw, 22rem);
+    max-width: 22rem;
+    left: 0;
+    box-sizing: border-box;
+    transform: translateX(-110%);
+    transition: transform 0.25s ease-out;
+    z-index: 1000;
+  }
+  .sidebar-collapsed-mobile .sidebar-main.sidebar-menu-one {
+    transform: translateX(0);
+    box-shadow: 0 14px 28px rgba(4, 41, 84, 0.32);
+  }
+  .sidebar-main.sidebar-menu-one .sidebar-menu-content {
+    position: absolute;
+    top: 60px;
+    bottom: 0;
+    width: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
 /*=======================================================================
 6. TEMPLATE STYLE
 =========================================================================*/
