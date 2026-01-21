@@ -411,12 +411,14 @@ export default function AllStudentsPage() {
 
           <div className="d-flex justify-content-between align-items-center mb-3">
             <div>
-              <Link
-                href="/v14/add-student"
-                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-              >
-                Add Student
-              </Link>
+              {!isTeacher ? (
+                <Link
+                  href="/v14/add-student"
+                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                >
+                  Add Student
+                </Link>
+              ) : null}
             </div>
             <div className="d-flex align-items-center">
               <span className="mr-2">Rows per page:</span>

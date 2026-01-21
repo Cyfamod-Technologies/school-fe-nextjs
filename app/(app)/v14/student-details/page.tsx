@@ -49,7 +49,16 @@ export default function StudentDetailsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const studentId = searchParams.get("id");
-  const { schoolContext } = useAuth();
+  const { schoolContext, user } = useAuth();
+
+  const normalizedRole = String(user?.role ?? "").toLowerCase();
+  const isTeacher =
+    normalizedRole.includes("teacher") ||
+    (Array.isArray(user?.roles)
+      ? user?.roles?.some((role) =>
+          String(role?.name ?? "").toLowerCase().includes("teacher"),
+        )
+      : false);
 
   const [student, setStudent] = useState<StudentDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,6 +106,8 @@ export default function StudentDetailsPage() {
   const [printProcessing, setPrintProcessing] = useState(false);
 
   const ratingOptions = ["1", "2", "3", "4", "5"];
+
+  const pinTableColspan = isTeacher ? 6 : 7;
 
   const terms = useMemo(() => {
     if (!selectedSession) {
@@ -879,22 +890,26 @@ export default function StudentDetailsPage() {
               >
                 Edit
               </Link>
-              <button
-                type="button"
-                className="btn btn-outline-secondary"
-                onClick={handlePrintResult}
-                disabled={printProcessing}
-              >
-                {printProcessing ? "Loading…" : "Print Result"}
-              </button>
-              <button
-                type="button"
-                className="btn btn-outline-danger"
-                onClick={handleDelete}
-                disabled={removing}
-              >
-                {removing ? "Deleting…" : "Delete"}
-              </button>
+              {!isTeacher ? (
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={handlePrintResult}
+                  disabled={printProcessing}
+                >
+                  {printProcessing ? "Loading…" : "Print Result"}
+                </button>
+              ) : null}
+              {!isTeacher ? (
+                <button
+                  type="button"
+                  className="btn btn-outline-danger"
+                  onClick={handleDelete}
+                  disabled={removing}
+                >
+                  {removing ? "Deleting…" : "Delete"}
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -1102,7 +1117,7 @@ export default function StudentDetailsPage() {
                   <th>Skill</th>
                   <th>Rating</th>
                   <th>Updated</th>
-                  <th>Actions</th>
+                  {!isTeacher ? <th>Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -1241,28 +1256,30 @@ export default function StudentDetailsPage() {
               {pinError}
             </div>
           ) : null}
-          <div className="mb-3">
-            <button
-              type="button"
-              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-3"
-              onClick={() => {
-                void handleGeneratePin(false);
-              }}
-              disabled={pinProcessing || !selectedSession || !selectedTerm}
-            >
-              Generate PIN
-            </button>
-            <button
-              type="button"
-              className="btn-fill-lg btn-outline-secondary"
-              onClick={() => {
-                void handleGeneratePin(true);
-              }}
-              disabled={pinProcessing || !selectedSession || !selectedTerm}
-            >
-              Regenerate PIN
-            </button>
-          </div>
+          {!isTeacher ? (
+            <div className="mb-3">
+              <button
+                type="button"
+                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-3"
+                onClick={() => {
+                  void handleGeneratePin(false);
+                }}
+                disabled={pinProcessing || !selectedSession || !selectedTerm}
+              >
+                Generate PIN
+              </button>
+              <button
+                type="button"
+                className="btn-fill-lg btn-outline-secondary"
+                onClick={() => {
+                  void handleGeneratePin(true);
+                }}
+                disabled={pinProcessing || !selectedSession || !selectedTerm}
+              >
+                Regenerate PIN
+              </button>
+            </div>
+          ) : null}
           <div className="table-responsive">
             <table className="table display text-nowrap">
               <thead>
@@ -1273,17 +1290,17 @@ export default function StudentDetailsPage() {
                   <th>Status</th>
                   <th>Expires</th>
                   <th>Updated</th>
-                  <th>Actions</th>
+                  {!isTeacher ? <th>Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
                 {pinLoading ? (
                   <tr>
-                    <td colSpan={7}>Loading result PINs…</td>
+                    <td colSpan={pinTableColspan}>Loading result PINs…</td>
                   </tr>
                 ) : pins.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={pinTableColspan}>
                       {selectedSession && selectedTerm
                         ? "No result PIN generated for this term."
                         : "Select a session and term to view the PIN."}
@@ -1304,27 +1321,29 @@ export default function StudentDetailsPage() {
                       </td>
                       <td>{formatDate(pin.expires_at)}</td>
                       <td>{formatDateTime(pin.updated_at)}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn btn-link p-0 mr-3"
-                          onClick={() => handleShowPin(pin.pin_code)}
-                        >
-                          Show
-                        </button>
-                        {pin.status === "active" ? (
+                      {!isTeacher ? (
+                        <td>
                           <button
                             type="button"
-                            className="btn btn-link text-danger p-0"
-                            onClick={() => {
-                              void handleInvalidatePin(pin.id);
-                            }}
-                            disabled={pinProcessing}
+                            className="btn btn-link p-0 mr-3"
+                            onClick={() => handleShowPin(pin.pin_code)}
                           >
-                            Invalidate
+                            Show
                           </button>
-                        ) : null}
-                      </td>
+                          {pin.status === "active" ? (
+                            <button
+                              type="button"
+                              className="btn btn-link text-danger p-0"
+                              onClick={() => {
+                                void handleInvalidatePin(pin.id);
+                              }}
+                              disabled={pinProcessing}
+                            >
+                              Invalidate
+                            </button>
+                          ) : null}
+                        </td>
+                      ) : null}
                     </tr>
                   ))
                 )}
