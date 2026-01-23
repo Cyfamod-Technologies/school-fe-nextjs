@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -152,6 +153,8 @@ export default function ResultsEntryPage() {
   const [initializing, setInitializing] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const autoSaveTimersRef = useRef<Record<string, number>>({});
+  const lastAutoSaveKeyRef = useRef<Record<string, string>>({});
 
   const [rows, setRows] = useState<ResultEntryRow[]>([]);
 
@@ -849,6 +852,177 @@ export default function ResultsEntryPage() {
     [],
   );
 
+  const autoSaveRow = useCallback(
+    async (studentId: string, scoreInput: string, remarkInput: string) => {
+      if (!selectedSession || !selectedTerm || !selectedSubject) {
+        return;
+      }
+      const trimmedScore = scoreInput.trim();
+      const trimmedRemark = remarkInput.trim();
+
+      if (!trimmedScore) {
+        return;
+      }
+
+      const scoreValue = Number(trimmedScore);
+      if (
+        Number.isNaN(scoreValue) ||
+        scoreValue < 0 ||
+        scoreValue > componentMaxScore
+      ) {
+        setRows((prev) =>
+          prev.map((row) => {
+            if (String(row.student.id) !== String(studentId)) {
+              return row;
+            }
+            return {
+              ...row,
+              rowError: `Score must be a number between 0 and ${componentMaxScoreLabel}.`,
+              status: "pending",
+            };
+          }),
+        );
+        return;
+      }
+
+      const saveKey = `${selectedSession}|${selectedTerm}|${selectedSubject}|${selectedComponent || "none"}|${studentId}|${trimmedScore}|${trimmedRemark}`;
+      lastAutoSaveKeyRef.current[studentId] = saveKey;
+
+      setRows((prev) =>
+        prev.map((row) => {
+          if (String(row.student.id) !== String(studentId)) {
+            return row;
+          }
+          return {
+            ...row,
+            rowError: null,
+            status: "pending",
+          };
+        }),
+      );
+
+      try {
+        const response = await saveResultsBatch({
+          session_id: selectedSession,
+          term_id: selectedTerm,
+          assessment_component_id: selectedComponent || "none",
+          entries: [
+            {
+              student_id: studentId,
+              subject_id: selectedSubject,
+              score: Number.parseFloat(scoreValue.toFixed(2)),
+              remarks: trimmedRemark ? trimmedRemark : null,
+            },
+          ],
+        });
+
+        const saved = response.results.find(
+          (result) => String(result.student_id) === String(studentId),
+        );
+
+        setRows((prev) =>
+          prev.map((row) => {
+            if (String(row.student.id) !== String(studentId)) {
+              return row;
+            }
+            if (!saved) {
+              return {
+                ...row,
+                rowError: null,
+                status: row.hasResult ? "saved" : "none",
+              };
+            }
+            const savedScore = formatScore(saved.total_score);
+            const savedRemark = (saved.remarks ?? "").trim();
+            return {
+              ...row,
+              score: savedScore,
+              remark: saved.remarks ?? "",
+              originalScore: savedScore,
+              originalRemark: savedRemark,
+              hasResult: true,
+              status: "saved",
+              rowError: null,
+            };
+          }),
+        );
+      } catch (error) {
+        console.error("Unable to auto-save score", error);
+        lastAutoSaveKeyRef.current[studentId] = "";
+        setRows((prev) =>
+          prev.map((row) => {
+            if (String(row.student.id) !== String(studentId)) {
+              return row;
+            }
+            return {
+              ...row,
+              rowError:
+                error instanceof Error
+                  ? error.message
+                  : "Unable to auto-save score.",
+              status: "pending",
+            };
+          }),
+        );
+      }
+    },
+    [
+      componentMaxScore,
+      componentMaxScoreLabel,
+      selectedComponent,
+      selectedSession,
+      selectedSubject,
+      selectedTerm,
+    ],
+  );
+
+  const scheduleAutoSave = useCallback(
+    (row: ResultEntryRow, nextScore: string, nextRemark: string) => {
+      if (!selectedSession || !selectedTerm || !selectedSubject) {
+        return;
+      }
+      const studentKey = String(row.student.id);
+      const trimmedScore = nextScore.trim();
+      const trimmedRemark = nextRemark.trim();
+      const changed =
+        trimmedScore !== row.originalScore.trim() ||
+        trimmedRemark !== row.originalRemark.trim();
+
+      if (!changed) {
+        return;
+      }
+
+      const key = `${selectedSession}|${selectedTerm}|${selectedSubject}|${selectedComponent || "none"}|${studentKey}|${trimmedScore}|${trimmedRemark}`;
+      if (lastAutoSaveKeyRef.current[studentKey] === key) {
+        return;
+      }
+
+      if (autoSaveTimersRef.current[studentKey]) {
+        window.clearTimeout(autoSaveTimersRef.current[studentKey]);
+      }
+      autoSaveTimersRef.current[studentKey] = window.setTimeout(() => {
+        void autoSaveRow(studentKey, trimmedScore, trimmedRemark);
+      }, 600);
+    },
+    [autoSaveRow, selectedComponent, selectedSession, selectedSubject, selectedTerm],
+  );
+
+  useEffect(() => {
+    Object.values(autoSaveTimersRef.current).forEach((timer) => {
+      window.clearTimeout(timer);
+    });
+    autoSaveTimersRef.current = {};
+    lastAutoSaveKeyRef.current = {};
+  }, [selectedSession, selectedTerm, selectedSubject, selectedComponent]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(autoSaveTimersRef.current).forEach((timer) => {
+        window.clearTimeout(timer);
+      });
+    };
+  }, []);
+
   const handleLoadStudents = useCallback(async () => {
     resetMessages();
     setStatusMessage("");
@@ -1326,16 +1500,6 @@ export default function ResultsEntryPage() {
               >
                 {tableLoading ? "Loading…" : "Load Students"}
               </button>
-              <button
-                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                type="button"
-                onClick={() => {
-                  void handleSaveResults();
-                }}
-                disabled={saving || !rows.length}
-              >
-                {saving ? "Saving…" : "Save Results Entry"}
-              </button>
               <span className="ml-auto text-muted small">{statusMessage}</span>
             </div>
           </div>
@@ -1395,9 +1559,11 @@ export default function ResultsEntryPage() {
                             max={componentMaxScore}
                             step={0.01}
                             value={row.score}
-                            onChange={(event) =>
-                              updateRow(index, { score: event.target.value })
-                            }
+                            onChange={(event) => {
+                              const nextScore = event.target.value;
+                              updateRow(index, { score: nextScore });
+                              scheduleAutoSave(row, nextScore, row.remark);
+                            }}
                           />
                         </td>
 
