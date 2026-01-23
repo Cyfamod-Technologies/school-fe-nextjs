@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ChangeEvent,
 } from "react";
@@ -58,6 +59,21 @@ const ratingOptions = ["1", "2", "3", "4", "5"];
 type RatingCell = {
   ratingId?: string;
   value: string;
+  status?: "saved" | "pending" | "none" | "error";
+  error?: string | null;
+};
+
+const ratingStatusBadge = (status?: RatingCell["status"]) => {
+  if (status === "saved") {
+    return { label: "Saved", className: "badge badge-success" };
+  }
+  if (status === "pending") {
+    return { label: "Pending", className: "badge badge-warning" };
+  }
+  if (status === "error") {
+    return { label: "Error", className: "badge badge-danger" };
+  }
+  return { label: "", className: "badge badge-secondary" };
 };
 
 type RatingsGrid = Record<string, Record<string, RatingCell>>;
@@ -95,6 +111,8 @@ export default function ClassSkillRatingsPage() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [feedbackKind, setFeedbackKind] = useState<"success" | "info" | "warning" | "danger">("info");
   const [error, setError] = useState<string | null>(null);
+  const autoSaveTimersRef = useRef<Record<string, number>>({});
+  const lastAutoSaveKeyRef = useRef<Record<string, string>>({});
 
   const [teacherDashboard, setTeacherDashboard] =
     useState<TeacherDashboardResponse | null>(null);
@@ -427,6 +445,8 @@ export default function ClassSkillRatingsPage() {
           studentRow[String(type.id)] = {
             ratingId: rating ? String(rating.id) : undefined,
             value: rating ? String(rating.rating_value ?? "") : "",
+            status: rating ? "saved" : "none",
+            error: null,
           };
         });
 
@@ -437,7 +457,7 @@ export default function ClassSkillRatingsPage() {
       setRatingsGrid(nextGrid);
       setFeedbackKind("info");
       setFeedback(
-        "Loaded students and skill ratings. Select a skill, update the values, and click Save to apply changes.",
+        "Loaded students and skill ratings. Select a skill, update the values, and it auto-saves to apply changes.",
       );
     } catch (err) {
       console.error("Unable to load class skill ratings", err);
@@ -457,10 +477,149 @@ export default function ClassSkillRatingsPage() {
     selectedTerm,
   ]);
 
+  const autoSaveCell = useCallback(
+    async (
+      studentId: string | number,
+      skillTypeId: string,
+      value: string,
+      ratingId?: string,
+    ) => {
+      if (!selectedSession || !selectedTerm) {
+        return;
+      }
+      const trimmedValue = value.trim();
+      if (!trimmedValue) {
+        return;
+      }
+      const ratingValue = Number(trimmedValue);
+      if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+        return;
+      }
+
+      const cellKey = `${studentId}-${skillTypeId}`;
+      const key = `${selectedSession}|${selectedTerm}|${skillTypeId}|${studentId}|${trimmedValue}`;
+      lastAutoSaveKeyRef.current[cellKey] = key;
+
+      try {
+        let saved: StudentSkillRating;
+        if (ratingId) {
+          saved = await updateStudentSkillRating(studentId, ratingId, {
+            session_id: selectedSession,
+            term_id: selectedTerm,
+            skill_type_id: skillTypeId,
+            rating_value: ratingValue,
+          });
+        } else {
+          saved = await createStudentSkillRating(studentId, {
+            session_id: selectedSession,
+            term_id: selectedTerm,
+            skill_type_id: skillTypeId,
+            rating_value: ratingValue,
+          });
+        }
+
+        setRatingsGrid((prev) => {
+          const studentKey = String(studentId);
+          const existingRow = prev[studentKey] ?? {};
+          const existingCell = existingRow[skillTypeId] ?? { value: "" };
+          return {
+            ...prev,
+            [studentKey]: {
+              ...existingRow,
+              [skillTypeId]: {
+                ...existingCell,
+                ratingId: saved?.id ? String(saved.id) : existingCell.ratingId,
+                value: trimmedValue,
+                status: "saved",
+                error: null,
+              },
+            },
+          };
+        });
+      } catch (err) {
+        console.error("Unable to auto-save skill rating", err);
+        lastAutoSaveKeyRef.current[cellKey] = "";
+        setRatingsGrid((prev) => {
+          const studentKey = String(studentId);
+          const existingRow = prev[studentKey] ?? {};
+          const existingCell = existingRow[skillTypeId] ?? { value: "" };
+          return {
+            ...prev,
+            [studentKey]: {
+              ...existingRow,
+              [skillTypeId]: {
+                ...existingCell,
+                status: "error",
+                error:
+                  err instanceof Error
+                    ? err.message
+                    : "Unable to auto-save skill rating.",
+              },
+            },
+          };
+        });
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Unable to auto-save skill rating.",
+        );
+      }
+    },
+    [selectedSession, selectedTerm],
+  );
+
+  const scheduleAutoSave = useCallback(
+    (studentId: string | number, skillTypeId: string, value: string) => {
+      if (!selectedSession || !selectedTerm) {
+        return;
+      }
+      const studentKey = String(studentId);
+      const skillKey = String(skillTypeId);
+      const cellKey = `${studentKey}-${skillKey}`;
+      const trimmedValue = value.trim();
+      if (!trimmedValue) {
+        return;
+      }
+
+      const key = `${selectedSession}|${selectedTerm}|${skillKey}|${studentKey}|${trimmedValue}`;
+      if (lastAutoSaveKeyRef.current[cellKey] === key) {
+        return;
+      }
+
+      const currentCell = ratingsGrid[studentKey]?.[skillKey];
+      const ratingId = currentCell?.ratingId;
+
+      if (autoSaveTimersRef.current[cellKey]) {
+        window.clearTimeout(autoSaveTimersRef.current[cellKey]);
+      }
+      autoSaveTimersRef.current[cellKey] = window.setTimeout(() => {
+        void autoSaveCell(studentId, skillTypeId, trimmedValue, ratingId);
+      }, 500);
+    },
+    [autoSaveCell, ratingsGrid, selectedSession, selectedTerm],
+  );
+
+  useEffect(() => {
+    Object.values(autoSaveTimersRef.current).forEach((timer) => {
+      window.clearTimeout(timer);
+    });
+    autoSaveTimersRef.current = {};
+    lastAutoSaveKeyRef.current = {};
+  }, [selectedSession, selectedTerm, selectedClass, selectedArm, selectedSection, selectedSkillTypeId]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(autoSaveTimersRef.current).forEach((timer) => {
+        window.clearTimeout(timer);
+      });
+    };
+  }, []);
+
   const handleRatingChange = useCallback(
     (studentId: string | number, skillTypeId: string) =>
       (event: ChangeEvent<HTMLSelectElement>) => {
         const value = event.target.value;
+        const trimmedValue = value.trim();
         setRatingsGrid((prev) => {
           const studentKey = String(studentId);
           const existingRow = prev[studentKey] ?? {};
@@ -472,12 +631,15 @@ export default function ClassSkillRatingsPage() {
               [skillTypeId]: {
                 ...existingCell,
                 value,
+                status: trimmedValue ? "pending" : "none",
+                error: null,
               },
             },
           };
         });
+        scheduleAutoSave(studentId, skillTypeId, value);
       },
-    [],
+    [scheduleAutoSave],
   );
 
   const handleSaveAll = useCallback(async () => {
@@ -747,6 +909,7 @@ export default function ClassSkillRatingsPage() {
                         <td className="sticky-col sticky-col-1">{fullName}</td>
                         {visibleSkillTypes.map((type) => {
                           const cell = studentRow[String(type.id)] ?? { value: "" };
+                          const badge = ratingStatusBadge(cell.status);
                           return (
                             <td key={type.id}>
                               <select
@@ -762,6 +925,11 @@ export default function ClassSkillRatingsPage() {
                                   </option>
                                 ))}
                               </select>
+                              {badge.label ? (
+                                <span className={`${badge.className} mt-1`} style={{ display: "inline-block" }}>
+                                  {badge.label}
+                                </span>
+                              ) : null}
                             </td>
                           );
                         })}
@@ -773,18 +941,6 @@ export default function ClassSkillRatingsPage() {
             </table>
           </div>
 
-          <div className="d-flex justify-content-end mt-3">
-            <button
-              type="button"
-              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-              onClick={handleSaveAll}
-              disabled={
-                saving || !students.length || !visibleSkillTypes.length
-              }
-            >
-              {saving ? "Saving…" : "Save All Ratings"}
-            </button>
-          </div>
         </div>
       </div>
       <style jsx>{`

@@ -9,6 +9,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -106,6 +107,8 @@ export default function StudentDetailsPage() {
   const [printProcessing, setPrintProcessing] = useState(false);
 
   const ratingOptions = ["1", "2", "3", "4", "5"];
+  const autoSaveTimerRef = useRef<number | null>(null);
+  const lastAutoSaveKeyRef = useRef<string>("");
 
   const pinTableColspan = isTeacher ? 6 : 7;
 
@@ -122,6 +125,7 @@ export default function StudentDetailsPage() {
       skill_type_id: "",
       rating_value: "3",
     });
+    lastAutoSaveKeyRef.current = "";
   }, []);
 
   const loadSkillRatings = useCallback(async () => {
@@ -228,16 +232,44 @@ export default function StudentDetailsPage() {
     const newSession = event.target.value;
     setSelectedSession(newSession);
     setSelectedTerm("");
+    lastAutoSaveKeyRef.current = "";
   };
 
   const handleTermChange = (event: ChangeEvent<HTMLSelectElement>) => {
     setSelectedTerm(event.target.value);
+    lastAutoSaveKeyRef.current = "";
   };
 
   const handleSkillTypeChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value;
+    if (!value) {
+      setSkillForm((prev) => ({
+        ...prev,
+        id: null,
+        skill_type_id: "",
+      }));
+      lastAutoSaveKeyRef.current = "";
+      return;
+    }
+    const existing = skillRatings.find(
+      (rating) => String(rating.skill_type_id) === value,
+    );
+    if (existing) {
+      const ratingValue = String(existing.rating_value ?? "3");
+      const key = `${selectedSession}|${selectedTerm}|${value}|${ratingValue}`;
+      lastAutoSaveKeyRef.current = key;
+      setSkillForm({
+        id: String(existing.id ?? ""),
+        skill_type_id: value,
+        rating_value: ratingValue,
+      });
+      setSkillFeedback(null);
+      setSkillError(null);
+      return;
+    }
     setSkillForm((prev) => ({
       ...prev,
+      id: null,
       skill_type_id: value,
     }));
   };
@@ -252,17 +284,19 @@ export default function StudentDetailsPage() {
 
   const beginEditSkillRating = useCallback(
     (rating: StudentSkillRating) => {
+      const ratingValue = String(rating?.rating_value ?? "3");
+      const key = `${selectedSession}|${selectedTerm}|${rating?.skill_type_id ?? ""}|${ratingValue}`;
+      lastAutoSaveKeyRef.current = key;
       setSkillForm({
         id: rating?.id != null ? String(rating.id) : null,
         skill_type_id:
           rating?.skill_type_id != null ? String(rating.skill_type_id) : "",
-        rating_value:
-          rating?.rating_value != null ? String(rating.rating_value) : "3",
+        rating_value: ratingValue,
       });
       setSkillFeedback(null);
       setSkillError(null);
     },
-    [],
+    [selectedSession, selectedTerm],
   );
 
   const handleCancelSkillEdit = (event: MouseEvent<HTMLButtonElement>) => {
@@ -338,7 +372,13 @@ export default function StudentDetailsPage() {
         await updateStudentSkillRating(student.id, skillForm.id, payload);
         setSkillFeedback("Skill rating updated successfully.");
       } else {
-        await createStudentSkillRating(student.id, payload);
+        const saved = await createStudentSkillRating(student.id, payload);
+        if (saved?.id) {
+          setSkillForm((prev) => ({
+            ...prev,
+            id: String(saved.id),
+          }));
+        }
         setSkillFeedback("Skill rating saved successfully.");
       }
       setSkillFeedbackType("success");
@@ -355,6 +395,94 @@ export default function StudentDetailsPage() {
       setSkillSubmitting(false);
     }
   };
+
+  const autoSaveSkillRating = useCallback(async () => {
+    if (!student?.id || !selectedSession || !selectedTerm) {
+      return;
+    }
+    if (!skillForm.skill_type_id || !skillForm.rating_value) {
+      return;
+    }
+    const ratingValue = Number(skillForm.rating_value);
+    if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+      return;
+    }
+
+    const key = `${selectedSession}|${selectedTerm}|${skillForm.skill_type_id}|${ratingValue}`;
+    if (key === lastAutoSaveKeyRef.current) {
+      return;
+    }
+    lastAutoSaveKeyRef.current = key;
+
+    setSkillSubmitting(true);
+    setSkillError(null);
+    try {
+      const payload = {
+        session_id: selectedSession,
+        term_id: selectedTerm,
+        skill_type_id: skillForm.skill_type_id,
+        rating_value: ratingValue,
+      };
+      if (skillForm.id) {
+        await updateStudentSkillRating(student.id, skillForm.id, payload);
+        setSkillFeedback("Skill rating updated.");
+      } else {
+        const saved = await createStudentSkillRating(student.id, payload);
+        if (saved?.id) {
+          setSkillForm((prev) => ({
+            ...prev,
+            id: String(saved.id),
+          }));
+        }
+        setSkillFeedback("Skill rating saved.");
+      }
+      setSkillFeedbackType("success");
+      await loadSkillRatings();
+    } catch (err) {
+      console.error("Unable to auto-save skill rating", err);
+      setSkillError(
+        err instanceof Error
+          ? err.message
+          : "Unable to auto-save skill rating.",
+      );
+    } finally {
+      setSkillSubmitting(false);
+    }
+  }, [
+    student?.id,
+    selectedSession,
+    selectedTerm,
+    skillForm.id,
+    skillForm.rating_value,
+    skillForm.skill_type_id,
+    loadSkillRatings,
+  ]);
+
+  useEffect(() => {
+    if (!selectedSession || !selectedTerm) {
+      return;
+    }
+    if (!skillForm.skill_type_id || !skillForm.rating_value) {
+      return;
+    }
+    if (autoSaveTimerRef.current) {
+      window.clearTimeout(autoSaveTimerRef.current);
+    }
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      void autoSaveSkillRating();
+    }, 500);
+    return () => {
+      if (autoSaveTimerRef.current) {
+        window.clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [
+    skillForm.skill_type_id,
+    skillForm.rating_value,
+    selectedSession,
+    selectedTerm,
+    autoSaveSkillRating,
+  ]);
 
   const handleTermSummaryChange = (
     field: "class_teacher_comment" | "principal_comment",
@@ -1081,17 +1209,10 @@ export default function StudentDetailsPage() {
               </div>
             </div>
             <div className="d-flex align-items-center">
-              <button
-                type="submit"
-                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                disabled={skillSubmitting || !selectedSession || !selectedTerm}
-              >
-                {skillForm.id ? "Update Skill Rating" : "Save Skill Rating"}
-              </button>
               {skillForm.id ? (
                 <button
                   type="button"
-                  className="btn-fill-lg btn-light ml-3"
+                  className="btn-fill-lg btn-light"
                   onClick={handleCancelSkillEdit}
                   disabled={skillSubmitting}
                 >
