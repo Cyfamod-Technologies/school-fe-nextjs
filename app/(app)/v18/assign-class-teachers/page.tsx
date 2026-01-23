@@ -136,9 +136,12 @@ export default function AssignClassTeachersPage() {
   );
 
   const ensureTerms = useCallback(
-    async (sessionId: string) => {
-      if (!sessionId || termsCache[sessionId]) {
-        return;
+    async (sessionId: string): Promise<Term[]> => {
+      if (!sessionId) {
+        return [];
+      }
+      if (termsCache[sessionId]) {
+        return termsCache[sessionId] ?? [];
       }
       try {
         const data = await listTermsBySession(sessionId);
@@ -146,8 +149,10 @@ export default function AssignClassTeachersPage() {
           ...prev,
           [sessionId]: data,
         }));
+        return data;
       } catch (error) {
         console.error("Unable to load terms", error);
+        return [];
       }
     },
     [termsCache],
@@ -283,11 +288,13 @@ export default function AssignClassTeachersPage() {
       return;
     }
 
+    const resolvedTerms =
+      termsForForm.length > 0 ? termsForForm : await ensureTerms(form.session_id);
     const derivedTermId =
-      form.term_id || (termsForForm.length > 0 ? `${termsForForm[0].id}` : "");
+      form.term_id || (resolvedTerms.length > 0 ? `${resolvedTerms[0].id}` : "");
 
     if (!derivedTermId) {
-      setFormError("Unable to determine a term for the selected session.");
+      setFormError("No terms found for the selected session. Please add a term.");
       return;
     }
 
