@@ -542,11 +542,11 @@ export default function AllStudentsPage() {
             </table>
           </div>
 
-          <div className="d-flex justify-content-between align-items-center mt-3">
+          <div className="students-pagination-row d-flex flex-column flex-md-row align-items-start align-items-md-center mt-3">
             <div>{summary}</div>
-            <div>
+            <div className="students-pagination-nav">
               <nav aria-label="Students pagination">
-                <ul className="pagination mb-0">
+                <ul className="pagination mb-0 students-pagination">
                   <li className={`page-item ${page <= 1 ? "disabled" : ""}`}>
                     <button
                       type="button"
@@ -598,6 +598,29 @@ export default function AllStudentsPage() {
           </div>
         </div>
       </div>
+      <style jsx>{`
+        .students-pagination-row {
+          gap: 0.75rem;
+        }
+
+        .students-pagination {
+          flex-wrap: wrap;
+        }
+
+        .students-pagination-nav {
+          width: 100%;
+        }
+
+        @media (min-width: 768px) {
+          .students-pagination-row {
+            justify-content: space-between;
+          }
+
+          .students-pagination-nav {
+            width: auto;
+          }
+        }
+      `}</style>
     </>
   );
 }

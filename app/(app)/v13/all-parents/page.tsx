@@ -235,6 +235,21 @@ export default function AllParentsPage() {
           reserved.
         </div>
       </footer>
+      <style jsx>{`
+        :global(.dataTables_wrapper .dataTables_paginate .pagination) {
+          flex-wrap: wrap;
+        }
+
+        :global(.dataTables_wrapper .dataTables_paginate) {
+          width: 100%;
+        }
+
+        @media (min-width: 768px) {
+          :global(.dataTables_wrapper .dataTables_paginate) {
+            width: auto;
+          }
+        }
+      `}</style>
     </>
   );
 }

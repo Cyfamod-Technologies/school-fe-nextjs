@@ -296,10 +296,10 @@ export default function AllStaffPage() {
             </table>
           </div>
 
-          <div className="d-flex justify-content-between align-items-center mt-3 flex-wrap">
-            <div className="text-muted mb-2">{summary}</div>
-            <nav className="mb-2">
-              <ul className="pagination pagination-sm mb-0">
+          <div className="staff-pagination-row d-flex flex-column flex-md-row align-items-start align-items-md-center mt-3">
+            <div className="text-muted">{summary}</div>
+            <nav className="staff-pagination-nav" aria-label="Staff pagination">
+              <ul className="pagination pagination-sm mb-0 staff-pagination">
                 <li className={`page-item ${page <= 1 ? "disabled" : ""}`}>
                   <button
                     type="button"
@@ -346,6 +346,29 @@ export default function AllStaffPage() {
           </div>
         </div>
       </div>
+      <style jsx>{`
+        .staff-pagination-row {
+          gap: 0.75rem;
+        }
+
+        .staff-pagination {
+          flex-wrap: wrap;
+        }
+
+        .staff-pagination-nav {
+          width: 100%;
+        }
+
+        @media (min-width: 768px) {
+          .staff-pagination-row {
+            justify-content: space-between;
+          }
+
+          .staff-pagination-nav {
+            width: auto;
+          }
+        }
+      `}</style>
     </>
   );
 }
