@@ -60,6 +60,8 @@ export default function StudentDetailsPage() {
           String(role?.name ?? "").toLowerCase().includes("teacher"),
         )
       : false);
+  const hidePrintResult =
+    studentId === "4cc05231-689a-4c36-9ba5-8fb4d8b6c51e";
 
   const [student, setStudent] = useState<StudentDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1018,7 +1020,7 @@ export default function StudentDetailsPage() {
               >
                 Edit
               </Link>
-              {!isTeacher ? (
+              {!isTeacher && !hidePrintResult ? (
                 <button
                   type="button"
                   className="btn btn-outline-secondary"
