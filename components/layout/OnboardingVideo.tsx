@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const STORAGE_KEY = "onboarding-video-shown";
+const DISMISS_KEY = "onboarding-video-dismissed";
 const DEFAULT_VIDEO = "https://www.youtube.com/embed/p0Rdc7g6wzM";
 // Configure these in your environment (.env) as NEXT_PUBLIC_ONBOARDING_VIDEO_ADMIN and NEXT_PUBLIC_ONBOARDING_VIDEO_TEACHER
 const VIDEO_EMBED_URL_ADMIN =
@@ -29,10 +30,16 @@ export function OnboardingVideo() {
     : VIDEO_EMBED_URL_ADMIN;
 
   const [showModal, setShowModal] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(false);
   const [videoStarted, setVideoStarted] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") {
+      return;
+    }
+    const dismissed = sessionStorage.getItem(DISMISS_KEY);
+    if (dismissed) {
+      setIsDismissed(true);
       return;
     }
     const hasShown = sessionStorage.getItem(STORAGE_KEY);
@@ -47,23 +54,46 @@ export function OnboardingVideo() {
     setVideoStarted(false);
   };
 
+  const dismissGuide = () => {
+    setShowModal(false);
+    setVideoStarted(false);
+    setIsDismissed(true);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(DISMISS_KEY, new Date().toISOString());
+    }
+  };
+
   const openModal = () => {
     setShowModal(true);
     setVideoStarted(false);
   };
 
+  if (isDismissed) {
+    return null;
+  }
+
   return (
     <>
       {!showModal ? (
-        <button
-          type="button"
-          className="floating-video-launch"
-          onClick={openModal}
-          aria-label="Open onboarding video"
-        >
-          <span className="floating-video-badge">Video Guide</span>
-          <i className="fas fa-play" aria-hidden="true" />
-        </button>
+        <div className="floating-video-launcher">
+          <button
+            type="button"
+            className="floating-video-launch"
+            onClick={openModal}
+            aria-label="Open onboarding video"
+          >
+            <span className="floating-video-badge">Video Guide</span>
+            <i className="fas fa-play" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="floating-video-dismiss"
+            aria-label="Dismiss video guide"
+            onClick={dismissGuide}
+          >
+            &times;
+          </button>
+        </div>
       ) : null}
 
       {showModal ? (
@@ -122,10 +152,17 @@ export function OnboardingVideo() {
       ) : null}
 
       <style jsx>{`
-        .floating-video-launch {
+        .floating-video-launcher {
           position: fixed;
           bottom: 24px;
           right: 24px;
+          width: 64px;
+          height: 64px;
+          z-index: 1040;
+        }
+
+        .floating-video-launch {
+          position: relative;
           width: 64px;
           height: 64px;
           border-radius: 16px;
@@ -137,7 +174,6 @@ export function OnboardingVideo() {
           justify-content: center;
           font-size: 1.75rem;
           box-shadow: 0 8px 20px rgba(64, 118, 255, 0.35);
-          z-index: 1040;
           cursor: pointer;
         }
 
@@ -191,6 +227,25 @@ export function OnboardingVideo() {
           line-height: 1;
           cursor: pointer;
           z-index: 2;
+        }
+
+        .floating-video-dismiss {
+          position: absolute;
+          top: -6px;
+          right: -6px;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          border: none;
+          background: rgba(12, 27, 42, 0.9);
+          color: #ffffff;
+          font-size: 1rem;
+          line-height: 1;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
         }
 
         .floating-video-thumbnail {
@@ -271,4 +326,3 @@ export function OnboardingVideo() {
     </>
   );
 }
-
