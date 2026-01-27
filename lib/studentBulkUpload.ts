@@ -11,18 +11,36 @@ function buildAuthHeaders(): Headers {
   return headers;
 }
 
-export async function downloadStudentTemplate(): Promise<Blob> {
+export interface TemplateDownloadParams {
+  session_id?: string | number;
+  class_id?: string | number;
+  class_arm_id?: string | number;
+}
+
+export async function downloadStudentTemplate(params?: TemplateDownloadParams): Promise<Blob> {
   const headers = buildAuthHeaders();
   headers.set("Accept", "text/csv");
 
-  const response = await fetch(
-    `${BACKEND_URL}${API_ROUTES.studentsBulkTemplate}`,
-    {
-      method: "GET",
-      headers,
-      credentials: "include",
-    },
-  );
+  // Build query string from params
+  const queryParams = new URLSearchParams();
+  if (params?.session_id) {
+    queryParams.set("session_id", String(params.session_id));
+  }
+  if (params?.class_id) {
+    queryParams.set("class_id", String(params.class_id));
+  }
+  if (params?.class_arm_id) {
+    queryParams.set("class_arm_id", String(params.class_arm_id));
+  }
+
+  const queryString = queryParams.toString();
+  const url = `${BACKEND_URL}${API_ROUTES.studentsBulkTemplate}${queryString ? `?${queryString}` : ""}`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers,
+    credentials: "include",
+  });
 
   if (!response.ok) {
     let message = response.statusText || "Failed to download template.";
@@ -40,13 +58,18 @@ export async function downloadStudentTemplate(): Promise<Blob> {
   return response.blob();
 }
 
+export interface BulkUploadParams {
+  session_id?: string | number;
+  class_id?: string | number;
+  class_arm_id?: string | number;
+}
+
 export interface BulkPreviewRow {
   name?: string | null;
   admission_no?: string | null;
   session?: string | null;
   class?: string | null;
   class_arm?: string | null;
-  class_section?: string | null;
   parent_email?: string | null;
   [key: string]: unknown;
 }
@@ -94,9 +117,21 @@ interface BulkPreviewResponsePayload {
 
 export async function previewStudentBulkUpload(
   file: File,
+  params?: BulkUploadParams,
 ): Promise<BulkPreviewResult> {
   const formData = new FormData();
   formData.append("file", file);
+  
+  // Add context params to formData
+  if (params?.session_id) {
+    formData.append("session_id", String(params.session_id));
+  }
+  if (params?.class_id) {
+    formData.append("class_id", String(params.class_id));
+  }
+  if (params?.class_arm_id) {
+    formData.append("class_arm_id", String(params.class_arm_id));
+  }
 
   const headers = buildAuthHeaders();
   const response = await fetch(
