@@ -337,8 +337,9 @@ export default function AddStudentPage() {
     payload.append("gender", form.gender);
     payload.append("date_of_birth", toIsoDate(form.date_of_birth));
     payload.append("admission_date", toIsoDate(form.admission_date));
-    if (form.admission_no) {
-      payload.append("admission_no", form.admission_no.trim());
+    const admissionNoValue = form.admission_no.trim();
+    if (admissionNoValue) {
+      payload.append("admission_no", admissionNoValue);
     }
     payload.append("house", form.house.trim());
     payload.append("club", form.club.trim());
@@ -395,6 +396,9 @@ export default function AddStudentPage() {
     }));
   };
 
+  const admissionNoValue = form.admission_no.trim();
+  const shouldAutoGenerateAdmissionNo = admissionNoValue.length === 0;
+
   return (
     <>
       <div className="breadcrumbs-area">
@@ -423,15 +427,6 @@ export default function AddStudentPage() {
 
           <form id="add-student-form" className="new-added-form" onSubmit={handleSubmit}>
             <div className="row">
-              <div className="col-xl-3 col-lg-6 col-12 form-group">
-                <label>Admission Number</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Auto-generated"
-                  disabled
-                />
-              </div>
               <div className="col-xl-3 col-lg-6 col-12 form-group">
                 <label>First Name *</label>
                 <input
@@ -578,7 +573,20 @@ export default function AddStudentPage() {
                 />
               </div>
               <div className="col-xl-3 col-lg-6 col-12 form-group">
-                <label>Admission Number</label>
+                <label>Admission Number (Auto)</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={
+                    shouldAutoGenerateAdmissionNo
+                      ? "Auto-generated on save"
+                      : "Manual entry provided"
+                  }
+                  disabled
+                />
+              </div>
+              <div className="col-xl-3 col-lg-6 col-12 form-group">
+                <label>Admission Number (Manual)</label>
                 <input
                   type="text"
                   className="form-control"

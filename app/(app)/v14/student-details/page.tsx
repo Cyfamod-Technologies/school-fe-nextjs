@@ -50,6 +50,52 @@ export default function StudentDetailsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const studentId = searchParams.get("id");
+  const filterQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    const search = searchParams.get("search");
+    const currentSessionId = searchParams.get("current_session_id");
+    const schoolClassId = searchParams.get("school_class_id");
+    const classArmId = searchParams.get("class_arm_id");
+    const classSectionId = searchParams.get("class_section_id");
+    const page = searchParams.get("page");
+    const perPage = searchParams.get("per_page");
+    const sortBy = searchParams.get("sortBy");
+    const sortDirection = searchParams.get("sortDirection");
+
+    if (search) {
+      params.set("search", search);
+    }
+    if (currentSessionId) {
+      params.set("current_session_id", currentSessionId);
+    }
+    if (schoolClassId) {
+      params.set("school_class_id", schoolClassId);
+    }
+    if (classArmId) {
+      params.set("class_arm_id", classArmId);
+    }
+    if (classSectionId) {
+      params.set("class_section_id", classSectionId);
+    }
+    if (page) {
+      params.set("page", page);
+    }
+    if (perPage) {
+      params.set("per_page", perPage);
+    }
+    if (sortBy) {
+      params.set("sortBy", sortBy);
+    }
+    if (sortDirection) {
+      params.set("sortDirection", sortDirection);
+    }
+
+    return params.toString();
+  }, [searchParams]);
+
+  const allStudentsHref = useMemo(() => {
+    return filterQuery ? `/v14/all-students?${filterQuery}` : "/v14/all-students";
+  }, [filterQuery]);
   const { schoolContext, user } = useAuth();
 
   const normalizedRole = String(user?.role ?? "").toLowerCase();
@@ -78,6 +124,11 @@ export default function StudentDetailsPage() {
   const [skillFeedback, setSkillFeedback] = useState<string | null>(null);
   const [skillFeedbackType, setSkillFeedbackType] = useState<"success" | "warning">("success");
   const [skillError, setSkillError] = useState<string | null>(null);
+
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [skillSubmitting, setSkillSubmitting] = useState(false);
   const [skillForm, setSkillForm] = useState<{
     id: string | null;
@@ -647,9 +698,9 @@ export default function StudentDetailsPage() {
     studentId,
   ]);
 
-  const handlePrintResult = useCallback(async () => {
+  const fetchPrintableResultHtml = useCallback(async () => {
     if (!studentId) {
-      return;
+      throw new Error("Student not found.");
     }
     const params = buildPrintParams();
     const endpoint = `${resolveBackendUrl(
@@ -657,66 +708,69 @@ export default function StudentDetailsPage() {
     )}?${params.toString()}`;
     const token = getCookie("token");
     if (!token) {
-      window.alert(
+      throw new Error(
         "Your session token is missing. Please log in again before printing the result.",
       );
-      return;
     }
 
-    setPrintProcessing(true);
-    try {
-      const response = await fetch(endpoint, {
-        headers: {
-          Accept: "text/html",
-          "X-Requested-With": "XMLHttpRequest",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        credentials: "include",
-      });
+    const response = await fetch(endpoint, {
+      headers: {
+        Accept: "text/html",
+        "X-Requested-With": "XMLHttpRequest",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: "include",
+    });
 
-      if (!response.ok) {
-        // Try to parse as JSON first (for API error responses)
-        let errorMessage = "Unable to load printable result.";
-        const contentType = response.headers.get("content-type") || "";
-        
-        if (contentType.includes("application/json")) {
-          try {
-            const errorData = await response.json();
-            errorMessage = errorData.message || errorData.error || errorMessage;
-          } catch {
-            // If JSON parsing fails, fall back to text
-            const text = await response.text().catch(() => "");
-            errorMessage = text.trim() || errorMessage;
-          }
+    if (!response.ok) {
+      // Try to parse as JSON first (for API error responses)
+      let errorMessage = "Unable to load printable result.";
+      const contentType = response.headers.get("content-type") || "";
+
+      if (contentType.includes("application/json")) {
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch {
+          // If JSON parsing fails, fall back to text
+          const text = await response.text().catch(() => "");
+          errorMessage = text.trim() || errorMessage;
+        }
+      } else {
+        // For HTML responses, extract a user-friendly message
+        if (response.status === 403) {
+          errorMessage = "You do not have permission to print student results.";
+        } else if (response.status === 401) {
+          errorMessage = "Your session has expired. Please log in again.";
         } else {
-          // For HTML responses, extract a user-friendly message
-          if (response.status === 403) {
-            errorMessage = "You do not have permission to print student results.";
-          } else if (response.status === 401) {
-            errorMessage = "Your session has expired. Please log in again.";
+          const text = await response.text().catch(() => "");
+          const trimmed = text.trim();
+          if (trimmed.length > 0 && /^<\s*(!DOCTYPE|html)/i.test(trimmed)) {
+            errorMessage =
+              response.status === 422
+                ? "Results have not been added for this student in the selected session/term."
+                : "Unable to load printable result. Please try again.";
           } else {
-            const text = await response.text().catch(() => "");
-            const trimmed = text.trim();
-            if (trimmed.length > 0 && /^<\s*(!DOCTYPE|html)/i.test(trimmed)) {
-              errorMessage =
-                response.status === 422
-                  ? "Results have not been added for this student in the selected session/term."
-                  : "Unable to load printable result. Please try again.";
-            } else {
-              errorMessage = trimmed || `Unable to load printable result (${response.status}).`;
-            }
+            errorMessage = trimmed || `Unable to load printable result (${response.status}).`;
           }
         }
-        
-        console.error("Printable result request failed", {
-          endpoint,
-          status: response.status,
-          message: errorMessage,
-        });
-        throw new Error(errorMessage);
       }
 
-      const html = await response.text();
+      console.error("Printable result request failed", {
+        endpoint,
+        status: response.status,
+        message: errorMessage,
+      });
+      throw new Error(errorMessage);
+    }
+
+    return response.text();
+  }, [buildPrintParams, studentId]);
+
+  const handlePrintResult = useCallback(async () => {
+    setPrintProcessing(true);
+    try {
+      const html = await fetchPrintableResultHtml();
       const printWindow = window.open("", "_blank");
       if (!printWindow) {
         window.alert(
@@ -737,7 +791,26 @@ export default function StudentDetailsPage() {
     } finally {
       setPrintProcessing(false);
     }
-  }, [buildPrintParams, studentId]);
+  }, [fetchPrintableResultHtml]);
+
+  const handlePreviewResult = useCallback(async () => {
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    setPreviewHtml("");
+    setPreviewError(null);
+
+    try {
+      const html = await fetchPrintableResultHtml();
+      setPreviewHtml(html);
+    } catch (error) {
+      console.error("Unable to load preview result", error);
+      setPreviewError(
+        error instanceof Error ? error.message : "Unable to load preview result.",
+      );
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [fetchPrintableResultHtml]);
 
   const formatDate = (value?: string | null) => {
     if (!value) {
@@ -788,7 +861,7 @@ export default function StudentDetailsPage() {
 
   useEffect(() => {
     if (!studentId) {
-      router.replace("/v14/all-students");
+      router.replace(allStudentsHref);
       return;
     }
     getStudent(studentId)
@@ -806,7 +879,7 @@ export default function StudentDetailsPage() {
         );
       })
       .finally(() => setLoading(false));
-  }, [studentId, router]);
+  }, [studentId, router, allStudentsHref]);
 
   useEffect(() => {
     if (!student?.id) {
@@ -921,7 +994,7 @@ export default function StudentDetailsPage() {
     setRemoving(true);
     try {
       await deleteStudent(studentId);
-      router.push("/v14/all-students");
+      router.push(allStudentsHref);
     } catch (err) {
       console.error("Unable to delete student", err);
       alert(
@@ -980,7 +1053,7 @@ export default function StudentDetailsPage() {
             <Link href="/v10/dashboard">Home</Link>
           </li>
           <li>
-            <Link href="/v14/all-students">All Students</Link>
+            <Link href={allStudentsHref}>All Students</Link>
           </li>
           <li>Student Details</li>
         </ul>
@@ -1015,7 +1088,11 @@ export default function StudentDetailsPage() {
             </div>
             <div className="btn-group">
               <Link
-                href={`/v14/edit-student?id=${studentId}`}
+                href={
+                  filterQuery
+                    ? `/v14/edit-student?id=${studentId}&${filterQuery}`
+                    : `/v14/edit-student?id=${studentId}`
+                }
                 className="btn btn-outline-primary"
               >
                 Edit
@@ -1302,6 +1379,16 @@ export default function StudentDetailsPage() {
                 Applies to the selected session and term above.
               </p>
             </div>
+            <div>
+              <button
+                type="button"
+                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                onClick={() => void handlePreviewResult()}
+                disabled={previewLoading || !selectedSession || !selectedTerm}
+              >
+                {previewLoading ? "Preparing…" : "Preview Result"}
+              </button>
+            </div>
           </div>
           <form className="mb-3" onSubmit={handleTermSummarySubmit}>
             <div className="row">
@@ -1358,6 +1445,94 @@ export default function StudentDetailsPage() {
           ) : null}
         </div>
       </div>
+
+      {previewOpen ? (
+        <div className="result-preview-backdrop" role="dialog" aria-modal="true">
+          <div className="result-preview-modal">
+            <div className="result-preview-header">
+              <h4 className="mb-0">Result Preview</h4>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => {
+                  setPreviewOpen(false);
+                  setPreviewHtml("");
+                  setPreviewError(null);
+                }}
+              >
+                Close
+              </button>
+            </div>
+            <div className="result-preview-body">
+              {previewLoading ? (
+                <div className="p-3">Loading preview…</div>
+              ) : previewError ? (
+                <div className="alert alert-danger m-3" role="alert">
+                  {previewError}
+                </div>
+              ) : previewHtml ? (
+                <iframe
+                  className="result-preview-frame"
+                  title="Student result preview"
+                  srcDoc={previewHtml}
+                />
+              ) : (
+                <div className="p-3">No preview available.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <style jsx>{`
+        .result-preview-backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          z-index: 1050;
+        }
+
+        .result-preview-modal {
+          background: #ffffff;
+          border-radius: 0;
+          width: 100%;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+
+        .result-preview-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0.75rem 1rem;
+          border-bottom: 1px solid #e5e5e5;
+        }
+
+        .result-preview-body {
+          flex: 1;
+          overflow: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .result-preview-frame {
+          width: 100%;
+          min-width: 980px;
+          height: 100%;
+          border: 0;
+        }
+
+        @media (max-width: 768px) {
+          .result-preview-frame {
+            min-width: 1100px;
+          }
+        }
+      `}</style>
 
       <div className="card height-auto mt-4">
         <div className="card-body">
