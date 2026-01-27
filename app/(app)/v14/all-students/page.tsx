@@ -4,6 +4,8 @@ import Link from "next/link";
 import Image, { type ImageLoader } from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { PermissionGate } from "@/components/PermissionGate";
+import { PERMISSIONS } from "@/lib/permissionKeys";
 import { listSessions, type Session } from "@/lib/sessions";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import {
@@ -411,14 +413,16 @@ export default function AllStudentsPage() {
 
           <div className="d-flex justify-content-between align-items-center mb-3">
             <div>
-              {!isTeacher ? (
-                <Link
-                  href="/v14/add-student"
-                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                >
-                  Add Student
-                </Link>
-              ) : null}
+              <PermissionGate permission={PERMISSIONS.STUDENTS_CREATE}>
+                {!isTeacher ? (
+                  <Link
+                    href="/v14/add-student"
+                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                  >
+                    Add Student
+                  </Link>
+                ) : null}
+              </PermissionGate>
             </div>
             <div className="d-flex align-items-center">
               <span className="mr-2">Rows per page:</span>
@@ -526,12 +530,14 @@ export default function AllStudentsPage() {
                             >
                               View
                             </Link>
-                            <Link
-                              href={`/v14/edit-student?id=${student.id}`}
-                              className="btn btn-sm btn-outline-secondary"
-                            >
-                              Edit
-                            </Link>
+                            <PermissionGate permission={PERMISSIONS.STUDENTS_UPDATE}>
+                              <Link
+                                href={`/v14/edit-student?id=${student.id}`}
+                                className="btn btn-sm btn-outline-secondary"
+                              >
+                                Edit
+                              </Link>
+                            </PermissionGate>
                           </div>
                         </td>
                       </tr>
