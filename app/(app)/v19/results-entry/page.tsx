@@ -1511,7 +1511,7 @@ export default function ResultsEntryPage() {
           ) : null}
 
           <div className="table-responsive">
-            <table className="table display text-nowrap">
+            <table className="table display text-nowrap results-entry-table">
               <thead>
                 <tr>
                   <th>#</th>
@@ -1600,6 +1600,17 @@ export default function ResultsEntryPage() {
           </div>
         </div>
       </div>
+
+      <style jsx global>{`
+        @media (max-width: 768px) {
+          .results-entry-table th:nth-child(3),
+          .results-entry-table td:nth-child(3),
+          .results-entry-table th:nth-child(4),
+          .results-entry-table td:nth-child(4) {
+            display: none;
+          }
+        }
+      `}</style>
     </>
   );
 }
