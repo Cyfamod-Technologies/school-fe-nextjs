@@ -5,6 +5,7 @@ export interface SchoolClass {
   id: number;
   name: string;
   school_id?: number;
+  result_show_position?: boolean | null;
   [key: string]: unknown;
 }
 
@@ -72,6 +73,7 @@ export async function getClass(
 export interface CreateClassPayload {
   name: string;
   school_id: number;
+  result_show_position?: boolean | null;
 }
 
 export async function createClass(
@@ -85,7 +87,7 @@ export async function createClass(
 
 export async function updateClass(
   classId: number | string,
-  payload: { name: string },
+  payload: { name: string; result_show_position?: boolean | null },
 ): Promise<SchoolClass> {
   return apiFetch<SchoolClass>(`${API_ROUTES.classes}/${classId}`, {
     method: "PUT",
