@@ -124,6 +124,7 @@ export default function StudentDetailsPage() {
   const [skillFeedback, setSkillFeedback] = useState<string | null>(null);
   const [skillFeedbackType, setSkillFeedbackType] = useState<"success" | "warning">("success");
   const [skillError, setSkillError] = useState<string | null>(null);
+  const [skillSearchTerm, setSkillSearchTerm] = useState("");
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewHtml, setPreviewHtml] = useState("");
@@ -171,6 +172,30 @@ export default function StudentDetailsPage() {
     }
     return termsCache[selectedSession] ?? [];
   }, [selectedSession, termsCache]);
+
+  const filteredSkillTypes = useMemo(() => {
+    const term = skillSearchTerm.trim().toLowerCase();
+    if (!term) {
+      return skillTypes;
+    }
+    const filtered = skillTypes.filter((type) => {
+      const label = `${type.category ?? ""} ${type.name ?? ""}`.toLowerCase();
+      return label.includes(term);
+    });
+    if (!skillForm.skill_type_id) {
+      return filtered;
+    }
+    const hasSelected = filtered.some(
+      (type) => String(type.id) === String(skillForm.skill_type_id),
+    );
+    if (hasSelected) {
+      return filtered;
+    }
+    const selected = skillTypes.find(
+      (type) => String(type.id) === String(skillForm.skill_type_id),
+    );
+    return selected ? [selected, ...filtered] : filtered;
+  }, [skillForm.skill_type_id, skillSearchTerm, skillTypes]);
 
   const resetSkillForm = useCallback(() => {
     setSkillForm({
@@ -1254,6 +1279,14 @@ export default function StudentDetailsPage() {
               </div>
               <div className="col-xl-3 col-lg-6 col-12 form-group">
                 <label>Skill</label>
+                <input
+                  type="text"
+                  className="form-control mb-2"
+                  placeholder="Search skill..."
+                  value={skillSearchTerm}
+                  onChange={(event) => setSkillSearchTerm(event.target.value)}
+                  disabled={!selectedSession || !selectedTerm}
+                />
                 <select
                   className="form-control"
                   value={skillForm.skill_type_id}
@@ -1262,7 +1295,7 @@ export default function StudentDetailsPage() {
                   required
                 >
                   <option value="">Select skill</option>
-                  {skillTypes.map((type) => (
+                  {filteredSkillTypes.map((type) => (
                     <option key={type.id} value={type.id}>
                       {type.category ? `${type.category} - ${type.name}` : type.name}
                     </option>

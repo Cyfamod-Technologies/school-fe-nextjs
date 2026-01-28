@@ -586,18 +586,12 @@ export default function AllStudentsPage() {
                             >
                               View
                             </Link>
-                            <Link
-                              href={buildStudentLink(
-                                "/v14/edit-student",
-                                student.id,
-                              )}
-                              className="btn btn-sm btn-outline-secondary"
-                            >
-                              Edit
-                            </Link>
                             <PermissionGate permission={PERMISSIONS.STUDENTS_UPDATE}>
                               <Link
-                                href={`/v14/edit-student?id=${student.id}`}
+                                href={buildStudentLink(
+                                  "/v14/edit-student",
+                                  student.id,
+                                )}
                                 className="btn btn-sm btn-outline-secondary"
                               >
                                 Edit

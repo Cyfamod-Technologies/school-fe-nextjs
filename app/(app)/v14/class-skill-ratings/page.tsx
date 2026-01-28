@@ -103,6 +103,7 @@ export default function ClassSkillRatingsPage() {
 
   const [students, setStudents] = useState<StudentSummary[]>([]);
   const [skillTypes, setSkillTypes] = useState<StudentSkillType[]>([]);
+  const [skillSearchTerm, setSkillSearchTerm] = useState("");
   const [ratingsGrid, setRatingsGrid] = useState<RatingsGrid>({});
 
   const [loadingFilters, setLoadingFilters] = useState(false);
@@ -190,6 +191,30 @@ export default function ClassSkillRatingsPage() {
     const key = `${selectedClass}:${selectedArm}`;
     return sectionsCache[key] ?? [];
   }, [selectedClass, selectedArm, sectionsCache]);
+
+  const filteredSkillTypes = useMemo(() => {
+    const term = skillSearchTerm.trim().toLowerCase();
+    if (!term) {
+      return skillTypes;
+    }
+    const filtered = skillTypes.filter((type) => {
+      const label = `${type.category ?? ""} ${type.name ?? ""}`.toLowerCase();
+      return label.includes(term);
+    });
+    if (!selectedSkillTypeId) {
+      return filtered;
+    }
+    const hasSelected = filtered.some(
+      (type) => String(type.id) === String(selectedSkillTypeId),
+    );
+    if (hasSelected) {
+      return filtered;
+    }
+    const selected = skillTypes.find(
+      (type) => String(type.id) === String(selectedSkillTypeId),
+    );
+    return selected ? [selected, ...filtered] : filtered;
+  }, [selectedSkillTypeId, skillSearchTerm, skillTypes]);
 
   const visibleSkillTypes = useMemo(() => {
     if (!selectedSkillTypeId) {
@@ -820,6 +845,14 @@ export default function ClassSkillRatingsPage() {
             </div>
             <div className="col-xl-3 col-lg-6 col-12 form-group">
               <label htmlFor="skill-filter-skill">Skill</label>
+              <input
+                type="text"
+                className="form-control mb-2"
+                placeholder="Search skill..."
+                value={skillSearchTerm}
+                onChange={(event) => setSkillSearchTerm(event.target.value)}
+                disabled={!skillTypes.length}
+              />
               <select
                 id="skill-filter-skill"
                 className="form-control"
@@ -828,7 +861,7 @@ export default function ClassSkillRatingsPage() {
                 disabled={!skillTypes.length}
               >
                 <option value="">Select skill</option>
-                {skillTypes.map((type) => (
+                {filteredSkillTypes.map((type) => (
                   <option key={type.id} value={type.id}>
                     {type.category
                       ? `${type.category} – ${type.name}`
