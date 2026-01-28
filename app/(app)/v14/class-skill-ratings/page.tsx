@@ -192,29 +192,26 @@ export default function ClassSkillRatingsPage() {
     return sectionsCache[key] ?? [];
   }, [selectedClass, selectedArm, sectionsCache]);
 
-  const filteredSkillTypes = useMemo(() => {
-    const term = skillSearchTerm.trim().toLowerCase();
-    if (!term) {
-      return skillTypes;
-    }
-    const filtered = skillTypes.filter((type) => {
-      const label = `${type.category ?? ""} ${type.name ?? ""}`.toLowerCase();
-      return label.includes(term);
-    });
+  const skillTypeOptions = useMemo(() => {
+    return skillTypes
+      .map((type) => ({
+        id: String(type.id),
+        label: type.category ? `${type.category} - ${type.name}` : `${type.name ?? ""}`,
+      }))
+      .filter((option) => option.label.trim().length > 0);
+  }, [skillTypes]);
+
+  useEffect(() => {
     if (!selectedSkillTypeId) {
-      return filtered;
+      return;
     }
-    const hasSelected = filtered.some(
-      (type) => String(type.id) === String(selectedSkillTypeId),
+    const selected = skillTypeOptions.find(
+      (option) => option.id === String(selectedSkillTypeId),
     );
-    if (hasSelected) {
-      return filtered;
+    if (selected) {
+      setSkillSearchTerm(selected.label);
     }
-    const selected = skillTypes.find(
-      (type) => String(type.id) === String(selectedSkillTypeId),
-    );
-    return selected ? [selected, ...filtered] : filtered;
-  }, [selectedSkillTypeId, skillSearchTerm, skillTypes]);
+  }, [selectedSkillTypeId, skillTypeOptions]);
 
   const visibleSkillTypes = useMemo(() => {
     if (!selectedSkillTypeId) {
@@ -403,6 +400,24 @@ export default function ClassSkillRatingsPage() {
       },
     [ensureArms, ensureSections, ensureTerms, selectedClass],
   );
+
+  const handleSkillSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setSkillSearchTerm(value);
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setFilters((prev) => ({ ...prev, skillTypeId: "" }));
+      return;
+    }
+    const match = skillTypeOptions.find(
+      (option) => option.label.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (match) {
+      setFilters((prev) => ({ ...prev, skillTypeId: match.id }));
+    } else if (selectedSkillTypeId) {
+      setFilters((prev) => ({ ...prev, skillTypeId: "" }));
+    }
+  };
 
   const handleLoadGrid = useCallback(async () => {
     setFeedback(null);
@@ -846,29 +861,20 @@ export default function ClassSkillRatingsPage() {
             <div className="col-xl-3 col-lg-6 col-12 form-group">
               <label htmlFor="skill-filter-skill">Skill</label>
               <input
+                id="skill-filter-skill"
                 type="text"
-                className="form-control mb-2"
-                placeholder="Search skill..."
+                className="form-control"
+                list="class-skill-options"
+                placeholder="Search and select skill..."
                 value={skillSearchTerm}
-                onChange={(event) => setSkillSearchTerm(event.target.value)}
+                onChange={handleSkillSearchChange}
                 disabled={!skillTypes.length}
               />
-              <select
-                id="skill-filter-skill"
-                className="form-control"
-                value={selectedSkillTypeId}
-                onChange={handleFilterChange("skillTypeId")}
-                disabled={!skillTypes.length}
-              >
-                <option value="">Select skill</option>
-                {filteredSkillTypes.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.category
-                      ? `${type.category} – ${type.name}`
-                      : type.name}
-                  </option>
+              <datalist id="class-skill-options">
+                {skillTypeOptions.map((option) => (
+                  <option key={option.id} value={option.label} />
                 ))}
-              </select>
+              </datalist>
             </div>
             {/* Class Section filter intentionally hidden for now */}
             <div className="col-xl-3 col-lg-6 col-12 form-group d-flex align-items-end">

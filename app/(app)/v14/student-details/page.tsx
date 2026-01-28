@@ -173,29 +173,26 @@ export default function StudentDetailsPage() {
     return termsCache[selectedSession] ?? [];
   }, [selectedSession, termsCache]);
 
-  const filteredSkillTypes = useMemo(() => {
-    const term = skillSearchTerm.trim().toLowerCase();
-    if (!term) {
-      return skillTypes;
-    }
-    const filtered = skillTypes.filter((type) => {
-      const label = `${type.category ?? ""} ${type.name ?? ""}`.toLowerCase();
-      return label.includes(term);
-    });
+  const skillTypeOptions = useMemo(() => {
+    return skillTypes
+      .map((type) => ({
+        id: String(type.id),
+        label: type.category ? `${type.category} - ${type.name}` : `${type.name ?? ""}`,
+      }))
+      .filter((option) => option.label.trim().length > 0);
+  }, [skillTypes]);
+
+  useEffect(() => {
     if (!skillForm.skill_type_id) {
-      return filtered;
+      return;
     }
-    const hasSelected = filtered.some(
-      (type) => String(type.id) === String(skillForm.skill_type_id),
+    const selected = skillTypeOptions.find(
+      (option) => option.id === String(skillForm.skill_type_id),
     );
-    if (hasSelected) {
-      return filtered;
+    if (selected) {
+      setSkillSearchTerm(selected.label);
     }
-    const selected = skillTypes.find(
-      (type) => String(type.id) === String(skillForm.skill_type_id),
-    );
-    return selected ? [selected, ...filtered] : filtered;
-  }, [skillForm.skill_type_id, skillSearchTerm, skillTypes]);
+  }, [skillForm.skill_type_id, skillTypeOptions]);
 
   const resetSkillForm = useCallback(() => {
     setSkillForm({
@@ -203,6 +200,7 @@ export default function StudentDetailsPage() {
       skill_type_id: "",
       rating_value: "3",
     });
+    setSkillSearchTerm("");
     lastAutoSaveKeyRef.current = "";
   }, []);
 
@@ -318,8 +316,7 @@ export default function StudentDetailsPage() {
     lastAutoSaveKeyRef.current = "";
   };
 
-  const handleSkillTypeChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const value = event.target.value;
+  const selectSkillTypeId = useCallback((value: string) => {
     if (!value) {
       setSkillForm((prev) => ({
         ...prev,
@@ -350,6 +347,24 @@ export default function StudentDetailsPage() {
       id: null,
       skill_type_id: value,
     }));
+  }, [selectedSession, selectedTerm, skillRatings]);
+
+  const handleSkillSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setSkillSearchTerm(value);
+    const trimmed = value.trim();
+    if (!trimmed) {
+      selectSkillTypeId("");
+      return;
+    }
+    const match = skillTypeOptions.find(
+      (option) => option.label.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (match) {
+      selectSkillTypeId(match.id);
+    } else if (skillForm.skill_type_id) {
+      selectSkillTypeId("");
+    }
   };
 
   const handleSkillRatingChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -1281,26 +1296,19 @@ export default function StudentDetailsPage() {
                 <label>Skill</label>
                 <input
                   type="text"
-                  className="form-control mb-2"
-                  placeholder="Search skill..."
-                  value={skillSearchTerm}
-                  onChange={(event) => setSkillSearchTerm(event.target.value)}
-                  disabled={!selectedSession || !selectedTerm}
-                />
-                <select
                   className="form-control"
-                  value={skillForm.skill_type_id}
-                  onChange={handleSkillTypeChange}
+                  list="student-skill-options"
+                  placeholder="Search and select skill..."
+                  value={skillSearchTerm}
+                  onChange={handleSkillSearchChange}
                   disabled={!selectedSession || !selectedTerm}
                   required
-                >
-                  <option value="">Select skill</option>
-                  {filteredSkillTypes.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.category ? `${type.category} - ${type.name}` : type.name}
-                    </option>
+                />
+                <datalist id="student-skill-options">
+                  {skillTypeOptions.map((option) => (
+                    <option key={option.id} value={option.label} />
                   ))}
-                </select>
+                </datalist>
               </div>
               <div className="col-xl-3 col-lg-6 col-12 form-group">
                 <label>Rating (1 - 5)</label>
