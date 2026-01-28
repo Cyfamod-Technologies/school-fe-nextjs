@@ -8,6 +8,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { PERMISSION_ACTIONS } from "@/lib/permissionCatalog";
 import {
   listPermissions,
   type Permission,
@@ -27,17 +29,22 @@ interface FeedbackState {
   message: string;
 }
 
-interface PermissionGroupItem {
+interface PermissionActionItem {
   id: string;
-  permission: Permission;
-  displayName: string;
+  permission: Permission | null;
+  permissionId: string | null;
+  permissionKey: string;
+  functionLabel: string;
+  description: string;
   subtitle?: string | null;
 }
 
 interface PermissionGroup {
   key: string;
   title: string;
-  items: PermissionGroupItem[];
+  items: PermissionActionItem[];
+  icon?: string;
+  color?: string;
 }
 
 const formatDateTime = (value: string | null | undefined): string => {
@@ -96,6 +103,8 @@ interface PermissionGroupTemplate {
   key: string;
   title: string;
   patterns: Array<string | RegExp>;
+  icon?: string;
+  color?: string;
   sections?: Array<{
     label: string;
     patterns: Array<string | RegExp>;
@@ -107,62 +116,99 @@ const SIDEBAR_PERMISSION_GROUPS: PermissionGroupTemplate[] = [
     key: "management",
     title: "Management",
     patterns: [],
+    icon: "fas fa-cogs",
+    color: "#6366f1",
     sections: [
       { label: "Sessions", patterns: ["sessions."] },
       { label: "Terms", patterns: ["terms."] },
       { label: "Subjects", patterns: ["subjects."] },
       { label: "Result Pin", patterns: ["result.pin."] },
+      { label: "Academic Rollover", patterns: ["academic.rollover."] },
     ],
   },
   {
     key: "parent",
     title: "Parent",
     patterns: ["parents."],
+    icon: "fas fa-user-friends",
+    color: "#ec4899",
   },
   {
     key: "staff",
     title: "Staff",
     patterns: ["staff."],
+    icon: "fas fa-user-tie",
+    color: "#8b5cf6",
   },
   {
     key: "classes",
     title: "Classes",
-    patterns: ["classes.", "class-arms."],
+    patterns: ["classes.", "class-arms.", "class-sections."],
+    icon: "fas fa-chalkboard",
+    color: "#f59e0b",
   },
   {
     key: "assign",
     title: "Assign",
-    patterns: ["subject.assignments", "class-teachers."],
+    patterns: ["subject.assignments", "teacher.assignments.", "class-teachers."],
+    icon: "fas fa-tasks",
+    color: "#10b981",
   },
   {
     key: "student",
     title: "Student",
-    patterns: ["students."],
+    patterns: ["students.", "student."],
+    icon: "fas fa-user-graduate",
+    color: "#3b82f6",
+  },
+  {
+    key: "results",
+    title: "Results",
+    patterns: ["results.", "assessment.", "skills.", "settings.result-page."],
+    icon: "fas fa-poll",
+    color: "#14b8a6",
   },
   {
     key: "attendance",
     title: "Attendance",
     patterns: ["attendance."],
+    icon: "fas fa-calendar-check",
+    color: "#06b6d4",
   },
   {
     key: "settings",
     title: "Settings",
-    patterns: ["assessment.", "skills.", "settings."],
+    patterns: ["settings.school."],
+    icon: "fas fa-sliders-h",
+    color: "#64748b",
   },
   {
-    key: "fees",
-    title: "Fee Management",
-    patterns: ["fees."],
+    key: "finance",
+    title: "Finance",
+    patterns: ["finance."],
+    icon: "fas fa-wallet",
+    color: "#22c55e",
+  },
+  {
+    key: "cbt",
+    title: "CBT",
+    patterns: ["cbt."],
+    icon: "fas fa-laptop",
+    color: "#a855f7",
   },
   {
     key: "rbac",
     title: "RBAC",
-    patterns: ["permissions.", "roles.", /^users\.assignRoles$/],
+    patterns: ["roles.", "user-roles."],
+    icon: "fas fa-shield-alt",
+    color: "#ef4444",
   },
   {
     key: "analytics",
     title: "Analytics",
     patterns: ["analytics."],
+    icon: "fas fa-chart-line",
+    color: "#0ea5e9",
   },
 ];
 
@@ -179,35 +225,40 @@ const matchesPattern = (permissionName: string, pattern: string | RegExp): boole
   );
 };
 
-const filterPermissionsByTerm = (
-  permissions: Permission[],
+const filterPermissionActionsByTerm = (
+  items: PermissionActionItem[],
   term: string,
-): Permission[] => {
+): PermissionActionItem[] => {
   const normalized = term.trim().toLowerCase();
   if (!normalized) {
-    return permissions;
+    return items;
   }
-  return permissions.filter((permission) => {
-    const name = String(permission?.name ?? "").toLowerCase();
-    const description = String(permission?.description ?? "").toLowerCase();
-    return name.includes(normalized) || description.includes(normalized);
+  return items.filter((item) => {
+    const name = String(item.permissionKey ?? "").toLowerCase();
+    const description = String(item.description ?? "").toLowerCase();
+    const functionLabel = String(item.functionLabel ?? "").toLowerCase();
+    return (
+      name.includes(normalized) ||
+      description.includes(normalized) ||
+      functionLabel.includes(normalized)
+    );
   });
 };
 
 const collectPermissionGroups = (
-  permissions: Permission[],
+  items: PermissionActionItem[],
   filterTerm: string,
 ): PermissionGroup[] => {
-  let remaining = filterPermissionsByTerm(permissions, filterTerm);
+  let remaining = filterPermissionActionsByTerm(items, filterTerm);
   const groups: PermissionGroup[] = [];
 
   SIDEBAR_PERMISSION_GROUPS.forEach((template) => {
     const sectionEntries: PermissionGroup[] = [];
-    let matchedIds = new Set<number | string>();
+    let matchedIds = new Set<string>();
 
     const processSection = (sectionLabel: string | null, patterns: Array<string | RegExp>) => {
-      const sectionMatches = remaining.filter((permission) => {
-        const name = String(permission?.name ?? "");
+      const sectionMatches = remaining.filter((item) => {
+        const name = String(item.permissionKey ?? "");
         return patterns.some((pattern) => matchesPattern(name, pattern));
       });
 
@@ -215,22 +266,14 @@ const collectPermissionGroups = (
         return;
       }
 
-      matchedIds = new Set([...matchedIds, ...sectionMatches.map((permission) => permission.id)]);
+      matchedIds = new Set([...matchedIds, ...sectionMatches.map((item) => item.id)]);
 
       sectionEntries.push({
         key: sectionLabel ? `${template.key}-${sectionLabel.toLowerCase().replace(/\s+/g, "-")}` : template.key,
         title: sectionLabel ?? template.title,
         items: sectionMatches
-          .map((permission) => {
-            const labelMeta = formatPermissionLabels(String(permission?.name ?? ""));
-            return {
-              id: String(permission.id),
-              permission,
-              displayName: labelMeta.primaryLabel,
-              subtitle: labelMeta.subtitle,
-            };
-          })
-          .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+          .slice()
+          .sort((a, b) => a.functionLabel.localeCompare(b.functionLabel)),
       });
     };
 
@@ -251,29 +294,28 @@ const collectPermissionGroups = (
     sectionEntries.forEach((entry) => groups.push(entry));
 
     remaining = remaining.filter(
-      (permission) => !matchedIds.has(permission.id),
+      (item) => !matchedIds.has(item.id),
     );
   });
 
   if (remaining.length > 0) {
     const fallbackMap = new Map<string, PermissionGroup>();
 
-    remaining.forEach((permission) => {
-      const name = String(permission?.name ?? "");
+    remaining.forEach((item) => {
+      const name = String(item.permissionKey ?? "");
       const { groupKey, groupTitle, primaryLabel, subtitle } = formatPermissionLabels(name);
       const entry =
         fallbackMap.get(groupKey) ??
         {
           key: groupKey,
           title: groupTitle,
-          items: [] as PermissionGroupItem[],
+          items: [] as PermissionActionItem[],
         };
 
       entry.items.push({
-        id: String(permission.id),
-        permission,
-        displayName: primaryLabel,
-        subtitle,
+        ...item,
+        functionLabel: item.functionLabel || primaryLabel,
+        subtitle: item.subtitle ?? subtitle,
       });
 
       fallbackMap.set(groupKey, entry);
@@ -283,7 +325,7 @@ const collectPermissionGroups = (
       key: `other-${group.key}`,
       title: group.key === "general" ? "Other" : group.title,
       items: group.items.sort((a, b) =>
-        a.displayName.localeCompare(b.displayName),
+        a.functionLabel.localeCompare(b.functionLabel),
       ),
     }));
 
@@ -326,7 +368,83 @@ const summarizeRolePermissions = (role: Role): ReactNode => {
   );
 };
 
+const buildPermissionActionItems = (
+  permissions: Permission[],
+): PermissionActionItem[] => {
+  const permissionByKey = new Map<string, Permission>();
+  permissions.forEach((permission) => {
+    const name = String(permission?.name ?? "");
+    if (name) {
+      permissionByKey.set(name, permission);
+    }
+  });
+
+  const actionItems: PermissionActionItem[] = [];
+  PERMISSION_ACTIONS.forEach((entry, index) => {
+    const permissionKey = String(entry.permission ?? "");
+    const permission = permissionByKey.get(permissionKey) ?? null;
+    const permissionId =
+      permission && permission.id !== undefined && permission.id !== null
+        ? String(permission.id)
+        : null;
+    const { subtitle } = formatPermissionLabels(permissionKey);
+    actionItems.push({
+      id: `action-${index}`,
+      permission,
+      permissionId,
+      permissionKey,
+      functionLabel: String(entry.function ?? "").trim() || permissionKey,
+      description: String(entry.description ?? "").trim(),
+      subtitle,
+    });
+  });
+
+  const catalogKeys = new Set(
+    PERMISSION_ACTIONS.map((entry) => String(entry.permission ?? "")),
+  );
+  permissions.forEach((permission) => {
+    const permissionKey = String(permission?.name ?? "");
+    if (!permissionKey || catalogKeys.has(permissionKey)) {
+      return;
+    }
+    const { primaryLabel, subtitle } = formatPermissionLabels(permissionKey);
+    const functionLabel = subtitle ? `${primaryLabel} ${subtitle}` : primaryLabel;
+    actionItems.push({
+      id: `fallback-${permissionKey}`,
+      permission,
+      permissionId:
+        permission.id !== undefined && permission.id !== null
+          ? String(permission.id)
+          : null,
+      permissionKey,
+      functionLabel,
+      description: String(permission?.description ?? "").trim(),
+      subtitle,
+    });
+  });
+
+  return actionItems;
+};
+
 export default function RolesPage() {
+  const { hasPermission, user } = useAuth();
+  const isAdmin = useMemo(() => {
+    const directRole = String((user as { role?: string | null })?.role ?? "").toLowerCase();
+    if (directRole === "admin") {
+      return true;
+    }
+    const roles = (user as { roles?: Array<{ name?: string | null }> })?.roles;
+    if (Array.isArray(roles)) {
+      return roles.some((role) => String(role?.name ?? "").toLowerCase() === "admin");
+    }
+    return false;
+  }, [user]);
+  const canViewRoles = isAdmin || hasPermission("roles.view");
+  const canCreateRole = isAdmin || hasPermission("roles.create");
+  const canUpdateRole = isAdmin || hasPermission("roles.update");
+  const canDeleteRole = isAdmin || hasPermission("roles.delete");
+  const canAssignPermissions = isAdmin || hasPermission("roles.permissions.assign");
+
   const [roles, setRoles] = useState<Role[]>([]);
   const [rolesLoading, setRolesLoading] = useState(true);
   const [rolesError, setRolesError] = useState<string | null>(null);
@@ -353,6 +471,7 @@ export default function RolesPage() {
   const [deletingRoleId, setDeletingRoleId] = useState<number | string | null>(
     null,
   );
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
 
   const isSystemRoleName = useCallback((name: string): boolean => {
     const n = name.trim().toLowerCase();
@@ -372,6 +491,11 @@ export default function RolesPage() {
   }, []);
 
   const loadPermissions = useCallback(async () => {
+    if (!canAssignPermissions) {
+      setPermissionsLoading(false);
+      setPermissions([]);
+      return;
+    }
     setPermissionsLoading(true);
     try {
       const response = await listPermissions({
@@ -390,9 +514,15 @@ export default function RolesPage() {
     } finally {
       setPermissionsLoading(false);
     }
-  }, [showFeedback]);
+  }, [canAssignPermissions, showFeedback]);
 
   const loadRoles = useCallback(async () => {
+    if (!canViewRoles) {
+      setRolesLoading(false);
+      setRolesError("You do not have permission to view roles.");
+      setRoles([]);
+      return;
+    }
     setRolesLoading(true);
     setRolesError(null);
     try {
@@ -412,7 +542,7 @@ export default function RolesPage() {
     } finally {
       setRolesLoading(false);
     }
-  }, [showFeedback]);
+  }, [canViewRoles, showFeedback]);
 
   useEffect(() => {
     void (async () => {
@@ -454,16 +584,31 @@ export default function RolesPage() {
     });
   }, [roles, searchTerm]);
 
+  const permissionActionItems = useMemo(() => {
+    if (permissionsLoading) {
+      return [];
+    }
+    return buildPermissionActionItems(permissions);
+  }, [permissions, permissionsLoading]);
+
   const groupedPermissions = useMemo<PermissionGroup[]>(() => {
     if (permissionsLoading) {
       return [];
     }
-    return collectPermissionGroups(permissions, permissionFilter);
-  }, [permissionFilter, permissions, permissionsLoading]);
+    return collectPermissionGroups(permissionActionItems, permissionFilter);
+  }, [permissionActionItems, permissionFilter, permissionsLoading]);
 
   const selectedPermissionsCount = selectedPermissionIds.size;
+  const visibleRoleCount = filteredRoles.length;
+  const totalRolesCount = roles.length;
+  const permissionCountLabel = canAssignPermissions
+    ? String(permissions.length)
+    : "Restricted";
 
   const openCreateModal = () => {
+    if (!canCreateRole) {
+      return;
+    }
     setModalMode("create");
     setEditingRole(null);
     setRoleName("");
@@ -471,10 +616,14 @@ export default function RolesPage() {
     setSelectedPermissionIds(new Set());
     setPermissionFilter("");
     setFormError(null);
+    setExpandedGroups(new Set(SIDEBAR_PERMISSION_GROUPS.map((g) => g.key)));
     setModalOpen(true);
   };
 
   const openEditModal = (role: Role) => {
+    if (!canUpdateRole) {
+      return;
+    }
     setModalMode("edit");
     setEditingRole(role);
     setRoleName(role.name ?? "");
@@ -490,6 +639,7 @@ export default function RolesPage() {
     setSelectedPermissionIds(permissionIds);
     setPermissionFilter("");
     setFormError(null);
+    setExpandedGroups(new Set(SIDEBAR_PERMISSION_GROUPS.map((g) => g.key)));
     setModalOpen(true);
   };
 
@@ -508,12 +658,68 @@ export default function RolesPage() {
     if (roleName !== "teacher") {
       return false;
     }
-    const lockedPermissionNames = ["profile.view", "profile.edit", "profile.password"];
+    const lockedPermissionNames = [
+      "staff.dashboard.view",
+      "staff.profile.view",
+      "staff.profile.update",
+    ];
     const permissionName = permission?.name ?? "";
     return lockedPermissionNames.includes(permissionName);
   }, [modalMode, editingRole]);
 
-  const togglePermissionSelection = (permissionId: string, checked: boolean, permission?: Permission) => {
+  const toggleGroupExpanded = useCallback((groupKey: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleAllGroupPermissions = useCallback((group: PermissionGroup, checked: boolean) => {
+    if (!canAssignPermissions) return;
+    setSelectedPermissionIds((prev) => {
+      const next = new Set(prev);
+      group.items.forEach((item) => {
+        if (!item.permissionId) return;
+        const permission = item.permission;
+        const isLocked = permission ? isLockedPermission(permission) : false;
+        if (isLocked && !checked) return; // Don't uncheck locked permissions
+        if (checked) {
+          next.add(item.permissionId);
+        } else {
+          next.delete(item.permissionId);
+        }
+      });
+      return next;
+    });
+  }, [canAssignPermissions, isLockedPermission]);
+
+  const getGroupSelectionState = useCallback((group: PermissionGroup): "all" | "some" | "none" => {
+    const selectableItems = group.items.filter((item) => item.permissionId);
+    if (selectableItems.length === 0) return "none";
+    const selectedCount = selectableItems.filter((item) => 
+      item.permissionId && selectedPermissionIds.has(item.permissionId)
+    ).length;
+    if (selectedCount === 0) return "none";
+    if (selectedCount === selectableItems.length) return "all";
+    return "some";
+  }, [selectedPermissionIds]);
+
+  const togglePermissionSelection = (
+    permissionId: string | null,
+    checked: boolean,
+    permission?: Permission | null,
+  ) => {
+    if (!permissionId) {
+      return;
+    }
+    if (!canAssignPermissions) {
+      return;
+    }
     // Prevent unchecking locked permissions for teacher role
     if (!checked && permission && isLockedPermission(permission)) {
       return;
@@ -543,30 +749,37 @@ export default function RolesPage() {
       setFormError("Role name cannot contain 'admin' or 'super_admin'.");
       return;
     }
+    if (modalMode === "edit" && !canUpdateRole) {
+      setFormError("You do not have permission to update roles.");
+      return;
+    }
+    if (modalMode === "create" && !canCreateRole) {
+      setFormError("You do not have permission to create roles.");
+      return;
+    }
 
     setSaving(true);
     setFormError(null);
     try {
-      const permissionsPayload = Array.from(selectedPermissionIds).map(
-        (value) => {
-          const numeric = Number(value);
-          return Number.isNaN(numeric) ? value : numeric;
-        },
-      );
+      const basePayload = {
+        name: trimmedName,
+        description: trimmedDescription || null,
+      };
+      const permissionsPayload = canAssignPermissions
+        ? Array.from(selectedPermissionIds).map((value) => {
+            const numeric = Number(value);
+            return Number.isNaN(numeric) ? value : numeric;
+          })
+        : undefined;
+      const payload = canAssignPermissions
+        ? { ...basePayload, permissions: permissionsPayload }
+        : basePayload;
 
       if (modalMode === "edit" && editingRole) {
-        await updateRole(editingRole.id, {
-          name: trimmedName,
-          description: trimmedDescription || null,
-          permissions: permissionsPayload,
-        });
+        await updateRole(editingRole.id, payload);
         showFeedback("Role updated successfully.", "success");
       } else {
-        await createRole({
-          name: trimmedName,
-          description: trimmedDescription || null,
-          permissions: permissionsPayload,
-        });
+        await createRole(payload);
         showFeedback("Role created successfully.", "success");
       }
 
@@ -586,6 +799,9 @@ export default function RolesPage() {
   };
 
   const handleDeleteRole = async (role: Role) => {
+    if (!canDeleteRole) {
+      return;
+    }
     const confirmationMessage = role.name
       ? `Are you sure you want to delete the role "${role.name}"?`
       : "Are you sure you want to delete this role?";
@@ -642,29 +858,75 @@ export default function RolesPage() {
 
       <div className="card height-auto">
         <div className="card-body">
-          <div className="heading-layout1 mb-3">
-            <div className="item-title">
-              <h3>Roles</h3>
+          <div className="rbac-hero">
+            <div className="rbac-hero-main">
+              <span className="rbac-kicker">Access control</span>
+              <h3>Roles &amp; Permissions</h3>
+              <p>
+                Design roles and assign precise access across the system.
+              </p>
             </div>
-            <div className="d-flex flex-column flex-md-row align-items-md-center">
-              <input
-                type="text"
-                className="form-control form-control-sm mr-md-2 mb-2 mb-md-0"
-                id="roleSearch"
-                placeholder="Search roles..."
-                value={searchTerm}
-                onChange={(event) => {
-                  setSearchTerm(event.target.value);
-                }}
-              />
+            <div className="rbac-hero-stats">
+              <div className="rbac-stat">
+                <span className="rbac-stat-label">Roles</span>
+                <span className="rbac-stat-value">{totalRolesCount}</span>
+              </div>
+              <div className="rbac-stat">
+                <span className="rbac-stat-label">Visible</span>
+                <span className="rbac-stat-value">{visibleRoleCount}</span>
+              </div>
+              <div className="rbac-stat">
+                <span className="rbac-stat-label">Permissions</span>
+                <span className="rbac-stat-value">{permissionCountLabel}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rbac-toolbar-section">
+            <div className="rbac-toolbar-left">
+              <h4 className="rbac-section-title">
+                <i className="fas fa-user-shield" />
+                All Roles
+              </h4>
+            </div>
+            <div className="rbac-toolbar-right">
+              <div className="rbac-search-wrapper">
+                <i className="fas fa-search rbac-search-icon" />
+                <input
+                  type="text"
+                  className="rbac-search-input"
+                  id="roleSearch"
+                  placeholder="Search roles..."
+                  value={searchTerm}
+                  onChange={(event) => {
+                    setSearchTerm(event.target.value);
+                  }}
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    className="rbac-search-clear"
+                    onClick={() => setSearchTerm("")}
+                    title="Clear search"
+                  >
+                    <i className="fas fa-times" />
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
-                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                className="rbac-create-btn"
                 id="addRoleBtn"
                 onClick={openCreateModal}
+                disabled={!canCreateRole}
+                title={
+                  canCreateRole
+                    ? "Create a new role"
+                    : "You do not have permission to create roles."
+                }
               >
-                <i className="fas fa-plus mr-2" />
-                Create Role
+                <i className="fas fa-plus" />
+                <span>Create Role</span>
               </button>
             </div>
           </div>
@@ -687,15 +949,20 @@ export default function RolesPage() {
               </div>
             ) : null}
           </div>
+          {!canViewRoles ? (
+            <div className="alert alert-warning" role="alert">
+              You do not have permission to view roles.
+            </div>
+          ) : null}
 
           <div className="table-responsive">
-            <table className="table display text-nowrap">
+            <table className="table display text-nowrap rbac-table">
               <thead>
                 <tr>
-                  <th>Name</th>
+                  <th>Role</th>
                   <th>Description</th>
                   <th>Permissions</th>
-                  <th>Updated</th>
+                  <th>Last Updated</th>
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
@@ -704,54 +971,84 @@ export default function RolesPage() {
                   <tr>
                     <td
                       colSpan={5}
-                      className={`text-center ${
+                      className={`text-center py-4 ${
                         rolesLoading ? "" : "text-muted"
                       }`}
                     >
-                      {tableMessage}
+                      {rolesLoading ? (
+                        <div className="d-flex flex-column align-items-center">
+                          <div className="table-loader mb-2" />
+                          <span>Loading roles...</span>
+                        </div>
+                      ) : (
+                        tableMessage
+                      )}
                     </td>
                   </tr>
                 ) : (
-                  filteredRoles.map((role) => (
-                    <tr key={String(role.id)}>
-                      <td>{role.name}</td>
-                      <td>{role.description || "—"}</td>
-                      <td>{summarizeRolePermissions(role)}</td>
-                      <td>{formatDateTime(role.updated_at)}</td>
-                      <td className="text-right">
-                        {isSystemRoleName(role.name || "") ? (
-                          <span
-                            className="badge badge-light text-muted"
-                            title="System roles cannot be edited"
-                          >
-                            Locked
-                          </span>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-primary mr-1"
-                              onClick={() => {
-                                openEditModal(role);
-                              }}
-                            >
-                              <i className="fas fa-edit" />
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-danger"
-                              onClick={() => {
-                                void handleDeleteRole(role);
-                              }}
-                              disabled={deletingRoleId === role.id}
-                            >
-                              <i className="fas fa-trash" />
-                            </button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                  filteredRoles.map((role) => {
+                    const permissionCount = Array.isArray(role.permissions) ? role.permissions.length : 0;
+                    const isSystemRole = isSystemRoleName(role.name || "");
+                    return (
+                      <tr key={String(role.id)} className={isSystemRole ? "system-role-row" : ""}>
+                        <td>
+                          <div className="role-name-cell">
+                            <span className="role-name">{role.name}</span>
+                            {isSystemRole && (
+                              <span className="role-system-badge">
+                                <i className="fas fa-shield-alt" /> System
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <span className="role-description">{role.description || "No description"}</span>
+                        </td>
+                        <td>
+                          <div className="permission-count-badge">
+                            <i className="fas fa-key" />
+                            <span>{permissionCount} permission{permissionCount !== 1 ? "s" : ""}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="role-updated">{formatDateTime(role.updated_at)}</span>
+                        </td>
+                        <td className="text-right">
+                          {isSystemRole ? (
+                            <span className="role-locked-indicator" title="System roles cannot be edited">
+                              <i className="fas fa-lock" />
+                            </span>
+                          ) : !canUpdateRole && !canDeleteRole ? (
+                            <span className="text-muted">No access</span>
+                          ) : (
+                            <div className="role-action-buttons">
+                              {canUpdateRole && (
+                                <button
+                                  type="button"
+                                  className="role-action-btn edit"
+                                  onClick={() => openEditModal(role)}
+                                  title="Edit role"
+                                >
+                                  <i className="fas fa-pen" />
+                                </button>
+                              )}
+                              {canDeleteRole && (
+                                <button
+                                  type="button"
+                                  className="role-action-btn delete"
+                                  onClick={() => void handleDeleteRole(role)}
+                                  disabled={deletingRoleId === role.id}
+                                  title="Delete role"
+                                >
+                                  <i className={deletingRoleId === role.id ? "fas fa-spinner fa-spin" : "fas fa-trash-alt"} />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -776,7 +1073,7 @@ export default function RolesPage() {
         {...(modalOpen ? {} : { "aria-hidden": true })}
       >
         <div className="modal-dialog modal-lg" role="document">
-          <div className="modal-content">
+          <div className="modal-content rbac-modal">
             <div className="modal-header">
               <h5 className="modal-title" id="roleModalTitle">
                 {modalMode === "edit" ? "Edit Role" : "Create Role"}
@@ -830,125 +1127,199 @@ export default function RolesPage() {
                     />
                   </div>
                   <div className="col-md-12 form-group">
-                    <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between mb-2">
-                      <label className="mb-2 mb-lg-0 font-weight-medium">
-                        Permissions
-                      </label>
-                      <div className="w-100 w-lg-50">
+                    <div className="permission-section-header">
+                      <div className="permission-section-title">
+                        <i className="fas fa-key" />
+                        <span>Permissions</span>
+                        <span className="permission-badge-count">
+                          {selectedPermissionsCount} selected
+                        </span>
+                      </div>
+                      <div className="permission-search-wrapper">
+                        <i className="fas fa-filter permission-search-icon" />
                         <input
                           type="text"
-                          className="form-control form-control-sm"
+                          className="permission-search-input"
                           id="permissionSearch"
                           placeholder="Filter permissions..."
                           value={permissionFilter}
                           onChange={(event) => {
                             setPermissionFilter(event.target.value);
                           }}
-                          disabled={permissionsLoading}
+                          disabled={permissionsLoading || !canAssignPermissions}
                         />
+                        {permissionFilter && (
+                          <button
+                            type="button"
+                            className="permission-search-clear"
+                            onClick={() => setPermissionFilter("")}
+                          >
+                            <i className="fas fa-times" />
+                          </button>
+                        )}
                       </div>
                     </div>
-                    <div className="border rounded p-3 permission-list" id="rolePermissionsList">
-                      {permissionsLoading ? (
-                        <p className="text-muted mb-0">Loading permissions…</p>
+                    <div className="permission-container" id="rolePermissionsList">
+                      {!canAssignPermissions ? (
+                        <div className="permission-empty-state">
+                          <i className="fas fa-lock" />
+                          <p>You do not have permission to view or assign permissions.</p>
+                        </div>
+                      ) : permissionsLoading ? (
+                        <div className="permission-empty-state">
+                          <div className="permission-loader" />
+                          <p>Loading permissions…</p>
+                        </div>
                       ) : groupedPermissions.length === 0 ? (
-                        <p className="text-muted mb-0">
-                          {permissionFilter
-                            ? "No permissions match your search."
-                            : "No permissions available."}
-                        </p>
+                        <div className="permission-empty-state">
+                          <i className="fas fa-search" />
+                          <p>{permissionFilter ? "No permissions match your search." : "No permissions available."}</p>
+                        </div>
                       ) : (
-                        groupedPermissions.map((group) => (
-                          <div className="permission-group mb-3" key={group.key}>
-                            <h6 className="text-uppercase text-muted small mb-2">
-                              {group.title}
-                            </h6>
-                            <div className="row">
-                              {group.items.map((item) => {
-                                const checkboxId = `permission-${item.id}`;
-                                const checked = selectedPermissionIds.has(
-                                  item.id,
-                                );
-                                const isLocked = isLockedPermission(item.permission);
-                                return (
-                                  <div
-                                    className="col-sm-6 col-lg-4 mb-2"
-                                    key={item.id}
-                                  >
-                                    <div className="custom-control custom-switch">
-              <input
-                type="checkbox"
-                className="custom-control-input permission-checkbox"
-                id={checkboxId}
-                value={item.id}
-                checked={checked}
-                onChange={(event) => {
-                  togglePermissionSelection(
-                    item.id,
-                    event.target.checked,
-                    item.permission,
-                  );
-                }}
-                disabled={saving || isLocked}
-                title={isLocked ? "This permission is locked for teacher role" : undefined}
-                aria-label={`Permission ${item.displayName}`}
-                role="switch"
-              />
-                                      <label
-                                        className="custom-control-label"
-                                        htmlFor={checkboxId}
-                                      >
-                                        <span className="d-block">
-                                          {item.displayName}
-                                          {isLocked ? (
-                                            <small className="text-muted ml-1" title="Locked permanently">
-                                              🔒
-                                            </small>
-                                          ) : null}
-                                        </span>
-                                        {item.subtitle ? (
-                                          <small className="text-muted d-block">
-                                            {item.subtitle}
-                                          </small>
-                                        ) : null}
-                                      </label>
+                        <div className="permission-groups-wrapper">
+                          {groupedPermissions.map((group) => {
+                            const isExpanded = expandedGroups.has(group.key) || !!permissionFilter;
+                            const selectionState = getGroupSelectionState(group);
+                            const groupTemplate = SIDEBAR_PERMISSION_GROUPS.find((t) => t.key === group.key);
+                            const groupIcon = groupTemplate?.icon || "fas fa-folder";
+                            const groupColor = groupTemplate?.color || "#6366f1";
+                            const selectedInGroup = group.items.filter((item) => 
+                              item.permissionId && selectedPermissionIds.has(item.permissionId)
+                            ).length;
+
+                            return (
+                              <div className="permission-group-card" key={group.key}>
+                                <div 
+                                  className="permission-group-header"
+                                  onClick={() => toggleGroupExpanded(group.key)}
+                                  style={{ "--group-color": groupColor } as React.CSSProperties}
+                                >
+                                  <div className="permission-group-header-left">
+                                    <div className="permission-group-icon" style={{ backgroundColor: `${groupColor}15`, color: groupColor }}>
+                                      <i className={groupIcon} />
+                                    </div>
+                                    <div className="permission-group-info">
+                                      <span className="permission-group-title">{group.title}</span>
+                                      <span className="permission-group-count">
+                                        {selectedInGroup} / {group.items.length} selected
+                                      </span>
                                     </div>
                                   </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))
+                                  <div className="permission-group-header-right">
+                                    <button
+                                      type="button"
+                                      className={`permission-group-toggle-all ${selectionState}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleAllGroupPermissions(group, selectionState !== "all");
+                                      }}
+                                      disabled={!canAssignPermissions}
+                                      title={selectionState === "all" ? "Deselect all" : "Select all"}
+                                    >
+                                      <i className={selectionState === "all" ? "fas fa-check-square" : selectionState === "some" ? "fas fa-minus-square" : "far fa-square"} />
+                                    </button>
+                                    <i className={`permission-group-chevron fas fa-chevron-${isExpanded ? "up" : "down"}`} />
+                                  </div>
+                                </div>
+                                {isExpanded && (
+                                  <div className="permission-group-content">
+                                    {group.items.map((item) => {
+                                      const checkboxId = `permission-${item.id}`;
+                                      const permissionKey = item.permissionKey;
+                                      const checked = item.permissionId
+                                        ? selectedPermissionIds.has(item.permissionId)
+                                        : false;
+                                      const isLocked = item.permission
+                                        ? isLockedPermission(item.permission)
+                                        : false;
+                                      const isMissingPermission = !item.permissionId;
+                                      return (
+                                        <div className={`permission-item ${checked ? "selected" : ""} ${isLocked ? "locked" : ""} ${isMissingPermission ? "missing" : ""}`} key={item.id}>
+                                          <label className="permission-toggle-wrapper" htmlFor={checkboxId}>
+                                            <div className="permission-toggle">
+                                              <input
+                                                type="checkbox"
+                                                className="permission-toggle-input"
+                                                id={checkboxId}
+                                                value={item.permissionId ?? item.id}
+                                                checked={checked}
+                                                onChange={(event) => {
+                                                  togglePermissionSelection(
+                                                    item.permissionId,
+                                                    event.target.checked,
+                                                    item.permission,
+                                                  );
+                                                }}
+                                                disabled={saving || isLocked || !canAssignPermissions || isMissingPermission}
+                                              />
+                                              <span className="permission-toggle-track">
+                                                <span className="permission-toggle-thumb" />
+                                              </span>
+                                            </div>
+                                            <div className="permission-item-content">
+                                              <span className="permission-item-label">
+                                                {item.functionLabel}
+                                                {isLocked && <span className="permission-locked-badge" title="Locked for this role"><i className="fas fa-lock" /></span>}
+                                              </span>
+                                              {item.description && (
+                                                <span className="permission-item-description">{item.description}</span>
+                                              )}
+                                              <span className="permission-item-key">
+                                                <code>{permissionKey}</code>
+                                                {isMissingPermission && <span className="permission-missing-badge">Not in backend</span>}
+                                              </span>
+                                            </div>
+                                          </label>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
-                    <small className="form-text text-muted">
-                      Selected <span id="rolePermissionsCount">{selectedPermissionsCount}</span>{" "}
-                      permission(s).
-                    </small>
                   </div>
                 </div>
               </div>
-              <div className="modal-footer">
+              <div className="modal-footer rbac-modal-footer">
                 <button
                   type="button"
-                  className="btn-fill-lg bg-blue-dark btn-hover-yellow"
+                  className="rbac-btn rbac-btn-cancel"
                   data-dismiss="modal"
                   onClick={closeModal}
                   disabled={saving}
                 >
+                  <i className="fas fa-times" />
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                  className="rbac-btn rbac-btn-save"
                   id="saveRoleBtn"
-                  disabled={saving}
+                  disabled={
+                    saving ||
+                    (modalMode === "create" ? !canCreateRole : !canUpdateRole)
+                  }
                 >
-                  {saving
-                    ? "Saving..."
-                    : modalMode === "edit"
-                      ? "Update Role"
-                      : "Create Role"}
+                  {saving ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin" />
+                      Saving...
+                    </>
+                  ) : modalMode === "edit" ? (
+                    <>
+                      <i className="fas fa-check" />
+                      Update Role
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-plus" />
+                      Create Role
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -956,6 +1327,889 @@ export default function RolesPage() {
         </div>
       </div>
       {modalOpen ? <div className="modal-backdrop fade show" /> : null}
+      <style jsx>{`
+        .rbac-hero {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 1.5rem;
+          padding: 1.75rem;
+          border-radius: 18px;
+          background: linear-gradient(135deg, #f7f9ff, #eef5ff);
+          border: 1px solid #e3ebf7;
+          margin-bottom: 1.5rem;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .rbac-hero::after {
+          content: "";
+          position: absolute;
+          top: -60px;
+          right: -40px;
+          width: 160px;
+          height: 160px;
+          background: radial-gradient(circle, rgba(64, 118, 255, 0.2), rgba(64, 118, 255, 0));
+        }
+
+        .rbac-hero-main h3 {
+          margin-bottom: 0.5rem;
+          font-weight: 700;
+          font-size: 1.5rem;
+        }
+
+        .rbac-hero-main p {
+          margin-bottom: 0;
+          color: #4d5b74;
+          font-size: 1.05rem;
+        }
+
+        .rbac-kicker {
+          display: inline-block;
+          font-size: 0.8rem;
+          text-transform: uppercase;
+          letter-spacing: 1.8px;
+          font-weight: 700;
+          color: #2f5bcb;
+          margin-bottom: 0.5rem;
+        }
+
+        .rbac-hero-stats {
+          display: flex;
+          gap: 1rem;
+          flex-wrap: wrap;
+        }
+
+        .rbac-stat {
+          background: #ffffff;
+          border-radius: 14px;
+          border: 1px solid #e4eaf6;
+          padding: 0.875rem 1.25rem;
+          min-width: 120px;
+          box-shadow: 0 8px 18px rgba(38, 73, 149, 0.08);
+        }
+
+        .rbac-stat-label {
+          display: block;
+          font-size: 0.8rem;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: #6c7a92;
+        }
+
+        .rbac-stat-value {
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: #1d2b4a;
+        }
+
+        .rbac-toolbar {
+          gap: 1rem;
+        }
+
+        /* Toolbar Section */
+        :global(.rbac-toolbar-section) {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 1rem;
+          margin-bottom: 1.25rem;
+          flex-wrap: wrap;
+        }
+
+        :global(.rbac-toolbar-left) {
+          display: flex;
+          align-items: center;
+        }
+
+        :global(.rbac-section-title) {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          margin: 0;
+          font-size: 1.35rem;
+          font-weight: 600;
+          color: #1e293b;
+        }
+
+        :global(.rbac-section-title i) {
+          color: #6366f1;
+          font-size: 1.25rem;
+        }
+
+        :global(.rbac-toolbar-right) {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          flex-wrap: wrap;
+        }
+
+        :global(.rbac-search-wrapper) {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        :global(.rbac-search-icon) {
+          position: absolute;
+          left: 1rem;
+          color: #94a3b8;
+          font-size: 1rem;
+          pointer-events: none;
+        }
+
+        :global(.rbac-search-input) {
+          padding: 0.75rem 2.5rem 0.75rem 2.75rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          font-size: 1rem;
+          width: 260px;
+          transition: all 0.2s ease;
+          background: #f8fafc;
+        }
+
+        :global(.rbac-search-input:focus) {
+          outline: none;
+          border-color: #6366f1;
+          background: white;
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        :global(.rbac-search-input::placeholder) {
+          color: #94a3b8;
+        }
+
+        :global(.rbac-search-clear) {
+          position: absolute;
+          right: 0.5rem;
+          background: #e2e8f0;
+          border: none;
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          color: #64748b;
+          font-size: 0.75rem;
+          transition: all 0.15s ease;
+        }
+
+        :global(.rbac-search-clear:hover) {
+          background: #cbd5e1;
+          color: #475569;
+        }
+
+        :global(.rbac-create-btn) {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.625rem;
+          padding: 0.75rem 1.5rem;
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+          color: white;
+          border: none;
+          border-radius: 10px;
+          font-size: 1rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+        }
+
+        :global(.rbac-create-btn:hover) {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+
+        :global(.rbac-create-btn:active) {
+          transform: translateY(0);
+        }
+
+        :global(.rbac-create-btn:disabled) {
+          opacity: 0.5;
+          cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
+        }
+
+        :global(.rbac-create-btn i) {
+          font-size: 0.9rem;
+        }
+
+        :global(.rbac-table thead th) {
+          background: #f3f6fb;
+          border-bottom: 1px solid #e6edf7;
+          color: #47546b;
+          font-weight: 600;
+        }
+
+        :global(.rbac-table tbody tr:hover) {
+          background: #f7fbff;
+        }
+
+        :global(.rbac-modal) {
+          border-radius: 18px;
+          overflow: hidden;
+        }
+
+        :global(.rbac-modal .modal-header) {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border-bottom: none;
+          padding: 1.25rem 1.5rem;
+        }
+
+        :global(.rbac-modal .modal-header .modal-title) {
+          font-weight: 600;
+        }
+
+        :global(.rbac-modal .modal-header .close) {
+          color: white;
+          opacity: 0.8;
+          text-shadow: none;
+        }
+
+        :global(.rbac-modal .modal-header .close:hover) {
+          opacity: 1;
+        }
+
+        :global(.rbac-modal .modal-body) {
+          padding: 1.5rem;
+        }
+
+        :global(.rbac-modal .modal-footer) {
+          border-top: 1px solid #e5e7eb;
+          padding: 1rem 1.5rem;
+          background: #f9fafb;
+        }
+
+        /* Modal Footer Buttons */
+        :global(.rbac-modal-footer) {
+          display: flex;
+          justify-content: flex-end;
+          gap: 0.75rem;
+        }
+
+        :global(.rbac-btn) {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.625rem;
+          padding: 0.75rem 1.5rem;
+          border-radius: 10px;
+          font-size: 1rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          border: none;
+        }
+
+        :global(.rbac-btn:disabled) {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        :global(.rbac-btn-cancel) {
+          background: #f1f5f9;
+          color: #475569;
+        }
+
+        :global(.rbac-btn-cancel:hover:not(:disabled)) {
+          background: #e2e8f0;
+        }
+
+        :global(.rbac-btn-save) {
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+          color: white;
+          box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+        }
+
+        :global(.rbac-btn-save:hover:not(:disabled)) {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+
+        /* Permission Section Header */
+        :global(.permission-section-header) {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 1rem;
+          margin-bottom: 1rem;
+          flex-wrap: wrap;
+        }
+
+        :global(.permission-section-title) {
+          display: flex;
+          align-items: center;
+          gap: 0.625rem;
+          font-weight: 600;
+          color: #1e293b;
+          font-size: 1.15rem;
+        }
+
+        :global(.permission-section-title i) {
+          color: #6366f1;
+          font-size: 1rem;
+        }
+
+        :global(.permission-badge-count) {
+          background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+          color: #4f46e5;
+          padding: 0.35rem 0.875rem;
+          border-radius: 12px;
+          font-size: 0.9rem;
+          font-weight: 600;
+        }
+
+        :global(.permission-search-wrapper) {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        :global(.permission-search-icon) {
+          position: absolute;
+          left: 0.875rem;
+          color: #94a3b8;
+          font-size: 0.9rem;
+          pointer-events: none;
+        }
+
+        :global(.permission-search-input) {
+          padding: 0.625rem 2.25rem 0.625rem 2.5rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          font-size: 0.95rem;
+          width: 220px;
+          transition: all 0.2s ease;
+          background: white;
+        }
+
+        :global(.permission-search-input:focus) {
+          outline: none;
+          border-color: #6366f1;
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        :global(.permission-search-input::placeholder) {
+          color: #94a3b8;
+        }
+
+        :global(.permission-search-input:disabled) {
+          background: #f8fafc;
+          cursor: not-allowed;
+        }
+
+        :global(.permission-search-clear) {
+          position: absolute;
+          right: 0.5rem;
+          background: #e2e8f0;
+          border: none;
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          color: #64748b;
+          font-size: 0.75rem;
+          transition: all 0.15s ease;
+        }
+
+        :global(.permission-search-clear:hover) {
+          background: #cbd5e1;
+          color: #475569;
+        }
+
+        /* Permission Container */
+        :global(.permission-container) {
+          background: #f8fafc;
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
+          max-height: 500px;
+          overflow-y: auto;
+          scrollbar-width: thin;
+          scrollbar-color: #cbd5e1 transparent;
+        }
+
+        :global(.permission-container::-webkit-scrollbar) {
+          width: 6px;
+        }
+
+        :global(.permission-container::-webkit-scrollbar-track) {
+          background: transparent;
+        }
+
+        :global(.permission-container::-webkit-scrollbar-thumb) {
+          background-color: #cbd5e1;
+          border-radius: 3px;
+        }
+
+        /* Permission Empty State */
+        :global(.permission-empty-state) {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 3rem 1.5rem;
+          color: #64748b;
+        }
+
+        :global(.permission-empty-state i) {
+          font-size: 3rem;
+          margin-bottom: 1.25rem;
+          opacity: 0.5;
+        }
+
+        :global(.permission-empty-state p) {
+          margin: 0;
+          font-size: 1.1rem;
+        }
+
+        :global(.permission-loader) {
+          width: 48px;
+          height: 48px;
+          border: 3px solid #e2e8f0;
+          border-top-color: #6366f1;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+          margin-bottom: 1.25rem;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        /* Permission Groups */
+        :global(.permission-groups-wrapper) {
+          padding: 0.75rem;
+        }
+
+        :global(.permission-group-card) {
+          background: white;
+          border-radius: 10px;
+          border: 1px solid #e2e8f0;
+          margin-bottom: 0.75rem;
+          overflow: hidden;
+          transition: box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        :global(.permission-group-card:hover) {
+          border-color: #cbd5e1;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        :global(.permission-group-header) {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0.875rem 1rem;
+          cursor: pointer;
+          user-select: none;
+          background: linear-gradient(to right, rgba(var(--group-color-rgb, 99, 102, 241), 0.03), transparent);
+          border-left: 3px solid var(--group-color, #6366f1);
+          transition: background 0.2s ease;
+        }
+
+        :global(.permission-group-header:hover) {
+          background: linear-gradient(to right, rgba(var(--group-color-rgb, 99, 102, 241), 0.06), transparent);
+        }
+
+        :global(.permission-group-header-left) {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+
+        :global(.permission-group-icon) {
+          width: 42px;
+          height: 42px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.1rem;
+        }
+
+        :global(.permission-group-info) {
+          display: flex;
+          flex-direction: column;
+        }
+
+        :global(.permission-group-title) {
+          font-weight: 600;
+          font-size: 1.1rem;
+          color: #1e293b;
+        }
+
+        :global(.permission-group-count) {
+          font-size: 0.9rem;
+          color: #64748b;
+        }
+
+        :global(.permission-group-header-right) {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+
+        :global(.permission-group-toggle-all) {
+          background: none;
+          border: none;
+          padding: 0.375rem;
+          color: #94a3b8;
+          cursor: pointer;
+          border-radius: 4px;
+          transition: all 0.15s ease;
+          font-size: 1.1rem;
+        }
+
+        :global(.permission-group-toggle-all:hover) {
+          color: #6366f1;
+          background: #eef2ff;
+        }
+
+        :global(.permission-group-toggle-all.all) {
+          color: #22c55e;
+        }
+
+        :global(.permission-group-toggle-all.some) {
+          color: #f59e0b;
+        }
+
+        :global(.permission-group-chevron) {
+          color: #94a3b8;
+          font-size: 0.9rem;
+          transition: transform 0.2s ease;
+        }
+
+        /* Permission Group Content */
+        :global(.permission-group-content) {
+          border-top: 1px solid #f1f5f9;
+          padding: 0.75rem;
+          display: grid;
+          gap: 0.5rem;
+        }
+
+        /* Individual Permission Items */
+        :global(.permission-item) {
+          background: #f8fafc;
+          border-radius: 8px;
+          padding: 1rem 1.25rem;
+          transition: all 0.15s ease;
+          border: 1px solid transparent;
+        }
+
+        :global(.permission-item:hover) {
+          background: #f1f5f9;
+        }
+
+        :global(.permission-item.selected) {
+          background: #eef2ff;
+          border-color: #c7d2fe;
+        }
+
+        :global(.permission-item.locked) {
+          opacity: 0.7;
+        }
+
+        :global(.permission-item.missing) {
+          opacity: 0.5;
+          background: #fef2f2;
+        }
+
+        :global(.permission-toggle-wrapper) {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.875rem;
+          cursor: pointer;
+          margin: 0;
+        }
+
+        /* Toggle Switch Styling */
+        :global(.permission-toggle) {
+          position: relative;
+          flex-shrink: 0;
+          margin-top: 2px;
+        }
+
+        :global(.permission-toggle-input) {
+          position: absolute;
+          opacity: 0;
+          width: 0;
+          height: 0;
+        }
+
+        :global(.permission-toggle-track) {
+          display: block;
+          width: 52px;
+          height: 28px;
+          background: #e2e8f0;
+          border-radius: 14px;
+          transition: all 0.2s ease;
+          position: relative;
+        }
+
+        :global(.permission-toggle-input:checked + .permission-toggle-track) {
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        }
+
+        :global(.permission-toggle-input:focus + .permission-toggle-track) {
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        :global(.permission-toggle-input:disabled + .permission-toggle-track) {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        :global(.permission-toggle-thumb) {
+          position: absolute;
+          top: 3px;
+          left: 3px;
+          width: 22px;
+          height: 22px;
+          background: white;
+          border-radius: 50%;
+          transition: transform 0.2s ease;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+        }
+
+        :global(.permission-toggle-input:checked + .permission-toggle-track .permission-toggle-thumb) {
+          transform: translateX(24px);
+        }
+
+        /* Permission Item Content */
+        :global(.permission-item-content) {
+          flex: 1;
+          min-width: 0;
+        }
+
+        :global(.permission-item-label) {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          font-weight: 600;
+          font-size: 1.05rem;
+          color: #1e293b;
+          margin-bottom: 0.25rem;
+        }
+
+        :global(.permission-locked-badge) {
+          color: #f59e0b;
+          font-size: 0.9rem;
+        }
+
+        :global(.permission-item-description) {
+          display: block;
+          font-size: 0.95rem;
+          color: #64748b;
+          margin-bottom: 0.375rem;
+          line-height: 1.4;
+        }
+
+        :global(.permission-item-key) {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          flex-wrap: wrap;
+        }
+
+        :global(.permission-item-key code) {
+          font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+          font-size: 0.85rem;
+          background: #e2e8f0;
+          padding: 0.2rem 0.5rem;
+          border-radius: 4px;
+          color: #475569;
+        }
+
+        :global(.permission-missing-badge) {
+          font-size: 0.8rem;
+          background: #fee2e2;
+          color: #dc2626;
+          padding: 0.2rem 0.5rem;
+          border-radius: 4px;
+          font-weight: 500;
+        }
+
+        /* Table Loading State */
+        :global(.table-loader) {
+          width: 24px;
+          height: 24px;
+          border: 2px solid #e2e8f0;
+          border-top-color: #6366f1;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+
+        /* Role Table Enhancements */
+        :global(.rbac-table) {
+          border-collapse: separate;
+          border-spacing: 0;
+        }
+
+        :global(.rbac-table thead th) {
+          background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+          border-bottom: 2px solid #e2e8f0;
+          color: #475569;
+          font-weight: 600;
+          font-size: 0.9rem;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          padding: 1rem 1.25rem;
+        }
+
+        :global(.rbac-table tbody tr) {
+          transition: all 0.15s ease;
+        }
+
+        :global(.rbac-table tbody tr:hover) {
+          background: #f8fafc;
+        }
+
+        :global(.rbac-table tbody tr.system-role-row) {
+          background: #fefce8;
+        }
+
+        :global(.rbac-table tbody tr.system-role-row:hover) {
+          background: #fef9c3;
+        }
+
+        :global(.rbac-table tbody td) {
+          padding: 1.125rem 1.25rem;
+          vertical-align: middle;
+          border-bottom: 1px solid #f1f5f9;
+          font-size: 1rem;
+        }
+
+        :global(.role-name-cell) {
+          display: flex;
+          flex-direction: column;
+          gap: 0.375rem;
+        }
+
+        :global(.role-name) {
+          font-weight: 600;
+          color: #1e293b;
+          font-size: 1.1rem;
+        }
+
+        :global(.role-system-badge) {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.25rem;
+          font-size: 0.75rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: #ca8a04;
+          background: #fef3c7;
+          padding: 0.2rem 0.625rem;
+          border-radius: 4px;
+          width: fit-content;
+        }
+
+        :global(.role-description) {
+          color: #64748b;
+          font-size: 1rem;
+          max-width: 250px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        :global(.permission-count-badge) {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+          color: #4f46e5;
+          padding: 0.5rem 1rem;
+          border-radius: 20px;
+          font-size: 0.95rem;
+          font-weight: 500;
+        }
+
+        :global(.permission-count-badge i) {
+          font-size: 0.85rem;
+        }
+
+        :global(.role-updated) {
+          color: #64748b;
+          font-size: 0.95rem;
+        }
+
+        :global(.role-locked-indicator) {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          background: #fef3c7;
+          color: #ca8a04;
+          border-radius: 8px;
+          font-size: 0.85rem;
+        }
+
+        :global(.role-action-buttons) {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 0.5rem;
+        }
+
+        :global(.role-action-btn) {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          font-size: 0.8rem;
+        }
+
+        :global(.role-action-btn.edit) {
+          background: #eef2ff;
+          color: #4f46e5;
+        }
+
+        :global(.role-action-btn.edit:hover) {
+          background: #4f46e5;
+          color: white;
+        }
+
+        :global(.role-action-btn.delete) {
+          background: #fef2f2;
+          color: #dc2626;
+        }
+
+        :global(.role-action-btn.delete:hover) {
+          background: #dc2626;
+          color: white;
+        }
+
+        :global(.role-action-btn:disabled) {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        @media (max-width: 768px) {
+          .rbac-hero {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+
+          :global(.permission-group-content) {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </>
   );
 }
