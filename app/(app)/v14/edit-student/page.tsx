@@ -153,6 +153,52 @@ export default function EditStudentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const studentId = searchParams.get("id");
+  const filterQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    const search = searchParams.get("search");
+    const currentSessionId = searchParams.get("current_session_id");
+    const schoolClassId = searchParams.get("school_class_id");
+    const classArmId = searchParams.get("class_arm_id");
+    const classSectionId = searchParams.get("class_section_id");
+    const page = searchParams.get("page");
+    const perPage = searchParams.get("per_page");
+    const sortBy = searchParams.get("sortBy");
+    const sortDirection = searchParams.get("sortDirection");
+
+    if (search) {
+      params.set("search", search);
+    }
+    if (currentSessionId) {
+      params.set("current_session_id", currentSessionId);
+    }
+    if (schoolClassId) {
+      params.set("school_class_id", schoolClassId);
+    }
+    if (classArmId) {
+      params.set("class_arm_id", classArmId);
+    }
+    if (classSectionId) {
+      params.set("class_section_id", classSectionId);
+    }
+    if (page) {
+      params.set("page", page);
+    }
+    if (perPage) {
+      params.set("per_page", perPage);
+    }
+    if (sortBy) {
+      params.set("sortBy", sortBy);
+    }
+    if (sortDirection) {
+      params.set("sortDirection", sortDirection);
+    }
+
+    return params.toString();
+  }, [searchParams]);
+
+  const allStudentsHref = useMemo(() => {
+    return filterQuery ? `/v14/all-students?${filterQuery}` : "/v14/all-students";
+  }, [filterQuery]);
 
   const [form, setForm] = useState<StudentFormState>(initialForm);
   const [student, setStudent] = useState<StudentDetail | null>(null);
@@ -198,7 +244,7 @@ export default function EditStudentPage() {
 
   useEffect(() => {
     if (!studentId) {
-      router.replace("/v14/all-students");
+      router.replace(allStudentsHref);
       return;
     }
 
@@ -255,7 +301,7 @@ export default function EditStudentPage() {
     }
 
     hydrate().catch((err) => console.error(err));
-  }, [studentId, router]);
+  }, [studentId, router, allStudentsHref]);
 
   useEffect(() => {
     if (!form.current_session_id) {
@@ -561,7 +607,11 @@ export default function EditStudentPage() {
     setSubmitting(true);
     try {
       await updateStudentRequest(studentId, payload);
-      router.push(`/v14/student-details?id=${studentId}`);
+      router.push(
+        filterQuery
+          ? `/v14/student-details?id=${studentId}&${filterQuery}`
+          : `/v14/student-details?id=${studentId}`,
+      );
     } catch (err) {
       console.error("Unable to update student", err);
       setError(
@@ -602,7 +652,7 @@ export default function EditStudentPage() {
             <Link href="/v10/dashboard">Home</Link>
           </li>
           <li>
-            <Link href="/v14/all-students">All Students</Link>
+            <Link href={allStudentsHref}>All Students</Link>
           </li>
           <li>Edit Student</li>
         </ul>
@@ -984,7 +1034,11 @@ export default function EditStudentPage() {
                   {submitting ? "Saving…" : "Save Changes"}
                 </button>
                 <Link
-                  href={`/v14/student-details?id=${studentId}`}
+                  href={
+                    filterQuery
+                      ? `/v14/student-details?id=${studentId}&${filterQuery}`
+                      : `/v14/student-details?id=${studentId}`
+                  }
                   className="btn-fill-lg bg-blue-dark btn-hover-yellow"
                 >
                   Cancel

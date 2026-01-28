@@ -11,6 +11,7 @@ export default function AddClassPage() {
   const { user } = useAuth();
 
   const [name, setName] = useState("");
+  const [showPosition, setShowPosition] = useState<"default" | "show" | "hide">("default");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -34,6 +35,8 @@ export default function AddClassPage() {
       await createClass({
         name: name.trim(),
         school_id: schoolId,
+        result_show_position:
+          showPosition === "default" ? null : showPosition === "show",
       });
       router.push("/v12/all-classes");
     } catch (err) {
@@ -87,6 +90,21 @@ export default function AddClassPage() {
                   onChange={(event) => setName(event.target.value)}
                   required
                 />
+              </div>
+              <div className="col-12 form-group">
+                <label htmlFor="class-show-position">Show Position on Result</label>
+                <select
+                  id="class-show-position"
+                  className="form-control"
+                  value={showPosition}
+                  onChange={(event) =>
+                    setShowPosition(event.target.value as "default" | "show" | "hide")
+                  }
+                >
+                  <option value="default">Use school default</option>
+                  <option value="show">Show position</option>
+                  <option value="hide">Hide position</option>
+                </select>
               </div>
               <div className="col-12 form-group mg-t-8">
                 <button

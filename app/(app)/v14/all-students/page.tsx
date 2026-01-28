@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image, { type ImageLoader } from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { PermissionGate } from "@/components/PermissionGate";
 import { PERMISSIONS } from "@/lib/permissionKeys";
@@ -43,6 +44,7 @@ const initialFilters: FilterState = {
 
 export default function AllStudentsPage() {
   const { user, schoolContext } = useAuth();
+  const searchParams = useSearchParams();
 
   const normalizedRole = String(user?.role ?? "").toLowerCase();
   const isTeacher =
@@ -53,11 +55,31 @@ export default function AllStudentsPage() {
         )
       : false);
 
-  const [filters, setFilters] = useState<FilterState>(initialFilters);
-  const [sortBy, setSortBy] = useState<string>("last_name");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(10);
+  const perPageOptions = [10, 25, 50, 100];
+  const initialPage = (() => {
+    const parsed = Number(searchParams.get("page"));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  })();
+  const initialPerPage = (() => {
+    const parsed = Number(searchParams.get("per_page"));
+    return perPageOptions.includes(parsed) ? parsed : 10;
+  })();
+  const initialSortBy = searchParams.get("sortBy") || "last_name";
+  const initialSortDirection =
+    searchParams.get("sortDirection") === "desc" ? "desc" : "asc";
+
+  const [filters, setFilters] = useState<FilterState>(() => ({
+    ...initialFilters,
+    search: searchParams.get("search") ?? "",
+    current_session_id: searchParams.get("current_session_id") ?? "",
+    school_class_id: searchParams.get("school_class_id") ?? "",
+    class_arm_id: searchParams.get("class_arm_id") ?? "",
+    class_section_id: searchParams.get("class_section_id") ?? "",
+  }));
+  const [sortBy, setSortBy] = useState<string>(initialSortBy);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">(initialSortDirection);
+  const [page, setPage] = useState(initialPage);
+  const [perPage, setPerPage] = useState(initialPerPage);
 
   const [sessions, setSessions] = useState<Session[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
@@ -219,6 +241,37 @@ export default function AllStudentsPage() {
   }, [data]);
 
   const totalPages = data?.last_page ?? 1;
+
+  const buildStudentLink = useCallback(
+    (basePath: string, studentId: number | string) => {
+      const params = new URLSearchParams();
+      params.set("id", String(studentId));
+      const trimmedSearch = filters.search.trim();
+      if (trimmedSearch) {
+        params.set("search", trimmedSearch);
+      }
+      if (filters.current_session_id) {
+        params.set("current_session_id", filters.current_session_id);
+      }
+      if (filters.school_class_id) {
+        params.set("school_class_id", filters.school_class_id);
+      }
+      if (filters.class_arm_id) {
+        params.set("class_arm_id", filters.class_arm_id);
+      }
+      if (filters.class_section_id) {
+        params.set("class_section_id", filters.class_section_id);
+      }
+      params.set("page", String(page));
+      params.set("per_page", String(perPage));
+      if (sortBy) {
+        params.set("sortBy", sortBy);
+      }
+      params.set("sortDirection", sortDirection);
+      return `${basePath}?${params.toString()}`;
+    },
+    [filters, page, perPage, sortBy, sortDirection],
+  );
 
   const renderSortIndicator = (column: string) => {
     if (sortBy !== column) {
@@ -434,7 +487,7 @@ export default function AllStudentsPage() {
                   setPage(1);
                 }}
               >
-                {[10, 25, 50, 100].map((value) => (
+                {perPageOptions.map((value) => (
                   <option key={value} value={value}>
                     {value}
                   </option>
@@ -525,10 +578,22 @@ export default function AllStudentsPage() {
                         <td>
                           <div className="d-flex gap-2">
                             <Link
-                              href={`/v14/student-details?id=${student.id}`}
+                              href={buildStudentLink(
+                                "/v14/student-details",
+                                student.id,
+                              )}
                               className="btn btn-sm btn-outline-primary mr-1"
                             >
                               View
+                            </Link>
+                            <Link
+                              href={buildStudentLink(
+                                "/v14/edit-student",
+                                student.id,
+                              )}
+                              className="btn btn-sm btn-outline-secondary"
+                            >
+                              Edit
                             </Link>
                             <PermissionGate permission={PERMISSIONS.STUDENTS_UPDATE}>
                               <Link
