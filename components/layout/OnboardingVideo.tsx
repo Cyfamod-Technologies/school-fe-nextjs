@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { isTeacherUser } from "@/lib/roleChecks";
 
 const STORAGE_KEY = "onboarding-video-shown";
 const DISMISS_KEY = "onboarding-video-dismissed";
@@ -15,14 +16,7 @@ const VIDEO_EMBED_URL_TEACHER =
 export function OnboardingVideo() {
   const { user } = useAuth();
 
-  const normalizedRole = String(user?.role ?? "").toLowerCase();
-  const isTeacher =
-    normalizedRole.includes("teacher") ||
-    (Array.isArray(user?.roles)
-      ? user?.roles?.some((role) =>
-          String(role?.name ?? "").toLowerCase().includes("teacher"),
-        )
-      : false);
+  const isTeacher = isTeacherUser(user);
 
   // Pick URL based on role — admin uses ADMIN env, teachers use TEACHER env.
   const videoEmbedUrl = isTeacher

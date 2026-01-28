@@ -9,6 +9,7 @@ import {
 } from "@/lib/staff";
 import { fetchSchoolContext, type SchoolContext } from "@/lib/schoolContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { isTeacherUser } from "@/lib/roleChecks";
 
 const iconClasses = [
   "flaticon-classmates",
@@ -27,15 +28,8 @@ export default function StaffDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const normalizedRole = String(user?.role ?? "").toLowerCase();
-  const isTeacher =
-    normalizedRole.includes("teacher") ||
-    (Array.isArray(user?.roles)
-      ? user?.roles?.some((role) =>
-          String(role?.name ?? "").toLowerCase().includes("teacher"),
-        )
-      : false);
-  const canViewDashboard = isTeacher || hasPermission("students.view");
+  const isTeacher = isTeacherUser(user);
+  const canViewDashboard = isTeacher;
 
   useEffect(() => {
     if (!canViewDashboard) {

@@ -273,7 +273,22 @@ const collectPermissionGroups = (
         title: sectionLabel ?? template.title,
         items: sectionMatches
           .slice()
-          .sort((a, b) => a.functionLabel.localeCompare(b.functionLabel)),
+          .sort((a, b) => {
+            // Custom sort order: view, create, edit/update, delete, then others alphabetically
+            const getOrder = (label: string, key: string): number => {
+              const lowerLabel = label.toLowerCase();
+              const lowerKey = key.toLowerCase();
+              if (lowerLabel.startsWith("view") || lowerKey.endsWith(".view")) return 0;
+              if (lowerLabel.startsWith("create") || lowerKey.endsWith(".create")) return 1;
+              if (lowerLabel.startsWith("edit") || lowerLabel.startsWith("update") || lowerKey.endsWith(".update")) return 2;
+              if (lowerLabel.startsWith("delete") || lowerKey.endsWith(".delete")) return 3;
+              return 4;
+            };
+            const orderA = getOrder(a.functionLabel, a.permissionKey);
+            const orderB = getOrder(b.functionLabel, b.permissionKey);
+            if (orderA !== orderB) return orderA - orderB;
+            return a.functionLabel.localeCompare(b.functionLabel);
+          }),
       });
     };
 
@@ -324,9 +339,22 @@ const collectPermissionGroups = (
     const fallbackGroups = Array.from(fallbackMap.values()).map((group) => ({
       key: `other-${group.key}`,
       title: group.key === "general" ? "Other" : group.title,
-      items: group.items.sort((a, b) =>
-        a.functionLabel.localeCompare(b.functionLabel),
-      ),
+      items: group.items.sort((a, b) => {
+        // Custom sort order: view, create, edit/update, delete, then others alphabetically
+        const getOrder = (label: string, key: string): number => {
+          const lowerLabel = label.toLowerCase();
+          const lowerKey = key.toLowerCase();
+          if (lowerLabel.startsWith("view") || lowerKey.endsWith(".view")) return 0;
+          if (lowerLabel.startsWith("create") || lowerKey.endsWith(".create")) return 1;
+          if (lowerLabel.startsWith("edit") || lowerLabel.startsWith("update") || lowerKey.endsWith(".update")) return 2;
+          if (lowerLabel.startsWith("delete") || lowerKey.endsWith(".delete")) return 3;
+          return 4;
+        };
+        const orderA = getOrder(a.functionLabel, a.permissionKey);
+        const orderB = getOrder(b.functionLabel, b.permissionKey);
+        if (orderA !== orderB) return orderA - orderB;
+        return a.functionLabel.localeCompare(b.functionLabel);
+      }),
     }));
 
     groups.push(
@@ -468,6 +496,7 @@ export default function RolesPage() {
   );
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [deletingRoleId, setDeletingRoleId] = useState<number | string | null>(
     null,
   );
@@ -498,9 +527,9 @@ export default function RolesPage() {
     }
     setPermissionsLoading(true);
     try {
-      const response = await listPermissions({
-        per_page: 200,
-      });
+      // The backend now auto-seeds permissions when listing
+      // So we just need to fetch them - no separate sync needed
+      const response = await listPermissions({ per_page: 300 });
       setPermissions(response.data ?? []);
     } catch (error) {
       console.error("Unable to load permissions", error);
@@ -543,6 +572,29 @@ export default function RolesPage() {
       setRolesLoading(false);
     }
   }, [canViewRoles, showFeedback]);
+
+  const handleSyncPermissions = useCallback(async () => {
+    if (!canAssignPermissions) {
+      return;
+    }
+    setSyncing(true);
+    try {
+      // Force refresh permissions (backend auto-seeds if needed)
+      const response = await listPermissions({ per_page: 300 });
+      setPermissions(response.data ?? []);
+      showFeedback("Permissions refreshed successfully.", "success");
+    } catch (error) {
+      console.error("Unable to refresh permissions", error);
+      showFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to refresh permissions. Please try again.",
+        "danger",
+      );
+    } finally {
+      setSyncing(false);
+    }
+  }, [canAssignPermissions, showFeedback]);
 
   useEffect(() => {
     void (async () => {
@@ -616,7 +668,7 @@ export default function RolesPage() {
     setSelectedPermissionIds(new Set());
     setPermissionFilter("");
     setFormError(null);
-    setExpandedGroups(new Set(SIDEBAR_PERMISSION_GROUPS.map((g) => g.key)));
+    setExpandedGroups(new Set());
     setModalOpen(true);
   };
 
@@ -639,7 +691,7 @@ export default function RolesPage() {
     setSelectedPermissionIds(permissionIds);
     setPermissionFilter("");
     setFormError(null);
-    setExpandedGroups(new Set(SIDEBAR_PERMISSION_GROUPS.map((g) => g.key)));
+    setExpandedGroups(new Set());
     setModalOpen(true);
   };
 
@@ -679,6 +731,29 @@ export default function RolesPage() {
     });
   }, []);
 
+  // Helper to find the "view" permission item in a group
+  const findViewPermissionInGroup = useCallback((group: PermissionGroup): PermissionActionItem | null => {
+    return group.items.find((item) => {
+      const key = item.permissionKey.toLowerCase();
+      const label = item.functionLabel.toLowerCase();
+      return key.endsWith(".view") || label.startsWith("view");
+    }) ?? null;
+  }, []);
+
+  // Helper to check if the view permission is enabled for a group
+  const isViewPermissionEnabled = useCallback((group: PermissionGroup): boolean => {
+    const viewItem = findViewPermissionInGroup(group);
+    if (!viewItem || !viewItem.permissionId) return true; // If no view permission, don't block others
+    return selectedPermissionIds.has(viewItem.permissionId);
+  }, [findViewPermissionInGroup, selectedPermissionIds]);
+
+  // Helper to check if a permission item is a "view" permission
+  const isViewPermission = useCallback((item: PermissionActionItem): boolean => {
+    const key = item.permissionKey.toLowerCase();
+    const label = item.functionLabel.toLowerCase();
+    return key.endsWith(".view") || label.startsWith("view");
+  }, []);
+
   const toggleAllGroupPermissions = useCallback((group: PermissionGroup, checked: boolean) => {
     if (!canAssignPermissions) return;
     setSelectedPermissionIds((prev) => {
@@ -713,6 +788,8 @@ export default function RolesPage() {
     permissionId: string | null,
     checked: boolean,
     permission?: Permission | null,
+    group?: PermissionGroup | null,
+    item?: PermissionActionItem | null,
   ) => {
     if (!permissionId) {
       return;
@@ -728,8 +805,27 @@ export default function RolesPage() {
       const next = new Set(previous);
       if (checked) {
         next.add(permissionId);
+        // If enabling a non-view permission, also enable the view permission
+        if (group && item && !isViewPermission(item)) {
+          const viewItem = findViewPermissionInGroup(group);
+          if (viewItem?.permissionId) {
+            next.add(viewItem.permissionId);
+          }
+        }
       } else {
         next.delete(permissionId);
+        // If disabling the view permission, also disable create/edit/delete
+        if (group && item && isViewPermission(item)) {
+          group.items.forEach((groupItem) => {
+            if (groupItem.permissionId && !isViewPermission(groupItem)) {
+              // Don't remove locked permissions
+              const isLocked = groupItem.permission ? isLockedPermission(groupItem.permission) : false;
+              if (!isLocked) {
+                next.delete(groupItem.permissionId);
+              }
+            }
+          });
+        }
       }
       return next;
     });
@@ -928,6 +1024,18 @@ export default function RolesPage() {
                 <i className="fas fa-plus" />
                 <span>Create Role</span>
               </button>
+              {canAssignPermissions && (
+                <button
+                  type="button"
+                  className="rbac-sync-btn"
+                  onClick={handleSyncPermissions}
+                  disabled={syncing}
+                  title="Refresh permissions list"
+                >
+                  <i className={`fas fa-sync-alt ${syncing ? "fa-spin" : ""}`} />
+                  <span>{syncing ? "Refreshing..." : "Refresh"}</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1233,8 +1341,12 @@ export default function RolesPage() {
                                         ? isLockedPermission(item.permission)
                                         : false;
                                       const isMissingPermission = !item.permissionId;
+                                      // Disable non-view permissions if view is not enabled
+                                      const isNonViewPermission = !isViewPermission(item);
+                                      const viewEnabled = isViewPermissionEnabled(group);
+                                      const isDisabledDueToView = isNonViewPermission && !viewEnabled;
                                       return (
-                                        <div className={`permission-item ${checked ? "selected" : ""} ${isLocked ? "locked" : ""} ${isMissingPermission ? "missing" : ""}`} key={item.id}>
+                                        <div className={`permission-item ${checked ? "selected" : ""} ${isLocked ? "locked" : ""} ${isMissingPermission ? "missing" : ""} ${isDisabledDueToView ? "view-required" : ""}`} key={item.id}>
                                           <label className="permission-toggle-wrapper" htmlFor={checkboxId}>
                                             <div className="permission-toggle">
                                               <input
@@ -1248,9 +1360,11 @@ export default function RolesPage() {
                                                     item.permissionId,
                                                     event.target.checked,
                                                     item.permission,
+                                                    group,
+                                                    item,
                                                   );
                                                 }}
-                                                disabled={saving || isLocked || !canAssignPermissions || isMissingPermission}
+                                                disabled={saving || isLocked || !canAssignPermissions || isMissingPermission || isDisabledDueToView}
                                               />
                                               <span className="permission-toggle-track">
                                                 <span className="permission-toggle-thumb" />
@@ -1260,6 +1374,7 @@ export default function RolesPage() {
                                               <span className="permission-item-label">
                                                 {item.functionLabel}
                                                 {isLocked && <span className="permission-locked-badge" title="Locked for this role"><i className="fas fa-lock" /></span>}
+                                                {isDisabledDueToView && <span className="permission-view-required-badge" title="Enable View permission first"><i className="fas fa-eye-slash" /></span>}
                                               </span>
                                               {item.description && (
                                                 <span className="permission-item-description">{item.description}</span>
@@ -1354,14 +1469,16 @@ export default function RolesPage() {
 
         .rbac-hero-main h3 {
           margin-bottom: 0.5rem;
-          font-weight: 700;
-          font-size: 1.5rem;
+          font-weight: 800;
+          font-size: 2rem;
+          color: #0f172a;
         }
 
         .rbac-hero-main p {
           margin-bottom: 0;
-          color: #4d5b74;
-          font-size: 1.05rem;
+          color: #1e293b;
+          font-size: 1.25rem;
+          font-weight: 500;
         }
 
         .rbac-kicker {
@@ -1384,23 +1501,24 @@ export default function RolesPage() {
           background: #ffffff;
           border-radius: 14px;
           border: 1px solid #e4eaf6;
-          padding: 0.875rem 1.25rem;
-          min-width: 120px;
+          padding: 1.25rem 1.75rem;
+          min-width: 140px;
           box-shadow: 0 8px 18px rgba(38, 73, 149, 0.08);
         }
 
         .rbac-stat-label {
           display: block;
-          font-size: 0.8rem;
+          font-size: 1rem;
           text-transform: uppercase;
           letter-spacing: 1px;
-          color: #6c7a92;
+          color: #334155;
+          font-weight: 700;
         }
 
         .rbac-stat-value {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #1d2b4a;
+          font-size: 2rem;
+          font-weight: 800;
+          color: #0f172a;
         }
 
         .rbac-toolbar {
@@ -1427,14 +1545,14 @@ export default function RolesPage() {
           align-items: center;
           gap: 0.75rem;
           margin: 0;
-          font-size: 1.35rem;
-          font-weight: 600;
-          color: #1e293b;
+          font-size: 1.75rem;
+          font-weight: 800;
+          color: #0f172a;
         }
 
         :global(.rbac-section-title i) {
           color: #6366f1;
-          font-size: 1.25rem;
+          font-size: 1.6rem;
         }
 
         :global(.rbac-toolbar-right) {
@@ -1537,15 +1655,59 @@ export default function RolesPage() {
           font-size: 0.9rem;
         }
 
+        :global(.rbac-sync-btn) {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.625rem;
+          padding: 0.75rem 1.5rem;
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          color: white;
+          border: none;
+          border-radius: 10px;
+          font-size: 1rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+        }
+
+        :global(.rbac-sync-btn:hover) {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+
+        :global(.rbac-sync-btn:active) {
+          transform: translateY(0);
+        }
+
+        :global(.rbac-sync-btn:disabled) {
+          opacity: 0.7;
+          cursor: not-allowed;
+          transform: none;
+        }
+
+        :global(.rbac-sync-btn i) {
+          font-size: 0.9rem;
+        }
+
         :global(.rbac-table thead th) {
           background: #f3f6fb;
           border-bottom: 1px solid #e6edf7;
-          color: #47546b;
-          font-weight: 600;
+          color: #0f172a;
+          font-weight: 700;
+          font-size: 1.15rem;
+          padding: 1.25rem 1.5rem;
         }
 
         :global(.rbac-table tbody tr:hover) {
           background: #f7fbff;
+        }
+
+        :global(.rbac-table tbody td) {
+          font-size: 1.15rem;
+          color: #0f172a;
+          padding: 1.25rem 1.5rem;
+          vertical-align: middle;
         }
 
         :global(.rbac-modal) {
@@ -1643,23 +1805,23 @@ export default function RolesPage() {
           display: flex;
           align-items: center;
           gap: 0.625rem;
-          font-weight: 600;
-          color: #1e293b;
-          font-size: 1.15rem;
+          font-weight: 800;
+          color: #0f172a;
+          font-size: 1.5rem;
         }
 
         :global(.permission-section-title i) {
           color: #6366f1;
-          font-size: 1rem;
+          font-size: 1.35rem;
         }
 
         :global(.permission-badge-count) {
           background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-          color: #4f46e5;
-          padding: 0.35rem 0.875rem;
+          color: #3730a3;
+          padding: 0.5rem 1.25rem;
           border-radius: 12px;
-          font-size: 0.9rem;
-          font-weight: 600;
+          font-size: 1.15rem;
+          font-weight: 700;
         }
 
         :global(.permission-search-wrapper) {
@@ -1805,16 +1967,16 @@ export default function RolesPage() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 0.875rem 1rem;
+          padding: 1rem 1.25rem;
           cursor: pointer;
           user-select: none;
-          background: linear-gradient(to right, rgba(var(--group-color-rgb, 99, 102, 241), 0.03), transparent);
-          border-left: 3px solid var(--group-color, #6366f1);
+          background: linear-gradient(to right, rgba(var(--group-color-rgb, 99, 102, 241), 0.04), transparent);
+          border-left: 4px solid var(--group-color, #6366f1);
           transition: background 0.2s ease;
         }
 
         :global(.permission-group-header:hover) {
-          background: linear-gradient(to right, rgba(var(--group-color-rgb, 99, 102, 241), 0.06), transparent);
+          background: linear-gradient(to right, rgba(var(--group-color-rgb, 99, 102, 241), 0.08), transparent);
         }
 
         :global(.permission-group-header-left) {
@@ -1824,13 +1986,13 @@ export default function RolesPage() {
         }
 
         :global(.permission-group-icon) {
-          width: 42px;
-          height: 42px;
-          border-radius: 8px;
+          width: 54px;
+          height: 54px;
+          border-radius: 12px;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 1.1rem;
+          font-size: 1.5rem;
         }
 
         :global(.permission-group-info) {
@@ -1839,14 +2001,15 @@ export default function RolesPage() {
         }
 
         :global(.permission-group-title) {
-          font-weight: 600;
-          font-size: 1.1rem;
-          color: #1e293b;
+          font-weight: 800;
+          font-size: 1.4rem;
+          color: #0f172a;
         }
 
         :global(.permission-group-count) {
-          font-size: 0.9rem;
-          color: #64748b;
+          font-size: 1.1rem;
+          color: #334155;
+          font-weight: 600;
         }
 
         :global(.permission-group-header-right) {
@@ -1896,8 +2059,8 @@ export default function RolesPage() {
         /* Individual Permission Items */
         :global(.permission-item) {
           background: #f8fafc;
-          border-radius: 8px;
-          padding: 1rem 1.25rem;
+          border-radius: 10px;
+          padding: 1.25rem 1.5rem;
           transition: all 0.15s ease;
           border: 1px solid transparent;
         }
@@ -1908,22 +2071,22 @@ export default function RolesPage() {
 
         :global(.permission-item.selected) {
           background: #eef2ff;
-          border-color: #c7d2fe;
+          border-color: #a5b4fc;
         }
 
         :global(.permission-item.locked) {
-          opacity: 0.7;
+          opacity: 0.75;
         }
 
         :global(.permission-item.missing) {
-          opacity: 0.5;
+          opacity: 0.6;
           background: #fef2f2;
         }
 
         :global(.permission-toggle-wrapper) {
           display: flex;
           align-items: flex-start;
-          gap: 0.875rem;
+          gap: 1rem;
           cursor: pointer;
           margin: 0;
         }
@@ -1944,10 +2107,10 @@ export default function RolesPage() {
 
         :global(.permission-toggle-track) {
           display: block;
-          width: 52px;
-          height: 28px;
-          background: #e2e8f0;
-          border-radius: 14px;
+          width: 64px;
+          height: 36px;
+          background: #94a3b8;
+          border-radius: 18px;
           transition: all 0.2s ease;
           position: relative;
         }
@@ -1969,16 +2132,16 @@ export default function RolesPage() {
           position: absolute;
           top: 3px;
           left: 3px;
-          width: 22px;
-          height: 22px;
+          width: 30px;
+          height: 30px;
           background: white;
           border-radius: 50%;
           transition: transform 0.2s ease;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
         }
 
         :global(.permission-toggle-input:checked + .permission-toggle-track .permission-toggle-thumb) {
-          transform: translateX(24px);
+          transform: translateX(28px);
         }
 
         /* Permission Item Content */
@@ -1991,23 +2154,40 @@ export default function RolesPage() {
           display: flex;
           align-items: center;
           gap: 0.5rem;
-          font-weight: 600;
-          font-size: 1.05rem;
-          color: #1e293b;
-          margin-bottom: 0.25rem;
+          font-weight: 800;
+          font-size: 1.35rem;
+          color: #0f172a;
+          margin-bottom: 0.4rem;
         }
 
         :global(.permission-locked-badge) {
           color: #f59e0b;
-          font-size: 0.9rem;
+          font-size: 1.1rem;
+        }
+
+        :global(.permission-view-required-badge) {
+          color: #94a3b8;
+          font-size: 1rem;
+          margin-left: 0.25rem;
+        }
+
+        :global(.permission-item.view-required) {
+          opacity: 0.5;
+          background: #f1f5f9;
+        }
+
+        :global(.permission-item.view-required .permission-toggle-track) {
+          background: #cbd5e1 !important;
+          cursor: not-allowed;
         }
 
         :global(.permission-item-description) {
           display: block;
-          font-size: 0.95rem;
-          color: #64748b;
-          margin-bottom: 0.375rem;
-          line-height: 1.4;
+          font-size: 1.15rem;
+          color: #1e293b;
+          margin-bottom: 0.5rem;
+          line-height: 1.5;
+          font-weight: 500;
         }
 
         :global(.permission-item-key) {
@@ -2019,11 +2199,12 @@ export default function RolesPage() {
 
         :global(.permission-item-key code) {
           font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-          font-size: 0.85rem;
+          font-size: 1.05rem;
           background: #e2e8f0;
-          padding: 0.2rem 0.5rem;
-          border-radius: 4px;
-          color: #475569;
+          padding: 0.3rem 0.75rem;
+          border-radius: 6px;
+          color: #0f172a;
+          font-weight: 600;
         }
 
         :global(.permission-missing-badge) {
@@ -2092,30 +2273,30 @@ export default function RolesPage() {
         }
 
         :global(.role-name) {
-          font-weight: 600;
-          color: #1e293b;
-          font-size: 1.1rem;
+          font-weight: 700;
+          color: #0f172a;
+          font-size: 1.25rem;
         }
 
         :global(.role-system-badge) {
           display: inline-flex;
           align-items: center;
           gap: 0.25rem;
-          font-size: 0.75rem;
-          font-weight: 600;
+          font-size: 0.85rem;
+          font-weight: 700;
           text-transform: uppercase;
           letter-spacing: 0.5px;
           color: #ca8a04;
           background: #fef3c7;
-          padding: 0.2rem 0.625rem;
+          padding: 0.25rem 0.75rem;
           border-radius: 4px;
           width: fit-content;
         }
 
         :global(.role-description) {
-          color: #64748b;
-          font-size: 1rem;
-          max-width: 250px;
+          color: #334155;
+          font-size: 1.1rem;
+          max-width: 280px;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
@@ -2126,20 +2307,20 @@ export default function RolesPage() {
           align-items: center;
           gap: 0.5rem;
           background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-          color: #4f46e5;
-          padding: 0.5rem 1rem;
+          color: #3730a3;
+          padding: 0.6rem 1.25rem;
           border-radius: 20px;
-          font-size: 0.95rem;
-          font-weight: 500;
+          font-size: 1.1rem;
+          font-weight: 600;
         }
 
         :global(.permission-count-badge i) {
-          font-size: 0.85rem;
+          font-size: 1rem;
         }
 
         :global(.role-updated) {
-          color: #64748b;
-          font-size: 0.95rem;
+          color: #334155;
+          font-size: 1.05rem;
         }
 
         :global(.role-locked-indicator) {

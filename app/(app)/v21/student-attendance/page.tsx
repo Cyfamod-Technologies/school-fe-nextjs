@@ -23,6 +23,7 @@ import {
   type StudentAttendanceRecord,
   type StudentAttendanceExportFilters,
 } from "@/lib/attendance";
+import { isTeacherUser } from "@/lib/roleChecks";
 
 type FeedbackKind = "success" | "danger" | "warning" | "info";
 
@@ -65,14 +66,7 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 export default function StudentAttendancePage() {
   const { user, schoolContext } = useAuth();
 
-  const normalizedRole = String(user?.role ?? "").toLowerCase();
-  const isTeacher =
-    normalizedRole.includes("teacher") ||
-    (Array.isArray(user?.roles)
-      ? user?.roles?.some((role) =>
-          String(role?.name ?? "").toLowerCase().includes("teacher"),
-        )
-      : false);
+  const isTeacher = isTeacherUser(user);
 
   const lockSessionAndTerm = isTeacher;
 

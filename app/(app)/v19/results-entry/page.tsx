@@ -40,6 +40,7 @@ import {
   type StudentSummary,
 } from "@/lib/students";
 import { fetchSchoolContext } from "@/lib/schoolContext";
+import { isTeacherUser } from "@/lib/roleChecks";
 
 type ResultRowStatus = "saved" | "pending" | "none";
 
@@ -128,14 +129,7 @@ export default function ResultsEntryPage() {
   const { user } = useAuth();
   const [teacherDashboard, setTeacherDashboard] = useState<TeacherDashboardResponse | null>(null);
 
-  const normalizedRole = String(user?.role ?? "").toLowerCase();
-  const isTeacher =
-    normalizedRole.includes("teacher") ||
-    (Array.isArray(user?.roles)
-      ? user?.roles?.some((role) =>
-          String(role?.name ?? "").toLowerCase().includes("teacher"),
-        )
-      : false);
+  const isTeacher = isTeacherUser(user);
 
   const [filters, setFilters] = useState<FiltersState>(emptyFilters);
 
