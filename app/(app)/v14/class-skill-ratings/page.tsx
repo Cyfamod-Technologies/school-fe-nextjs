@@ -54,7 +54,7 @@ const emptyFilters: FiltersState = {
   skillTypeId: "",
 };
 
-const ratingOptions = ["1", "2", "3", "4", "5"];
+const ratingOptions = ["0", "1", "2", "3", "4", "5"];
 
 type RatingCell = {
   ratingId?: string;
@@ -532,7 +532,7 @@ export default function ClassSkillRatingsPage() {
         return;
       }
       const ratingValue = Number(trimmedValue);
-      if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+      if (!Number.isFinite(ratingValue) || ratingValue < 0 || ratingValue > 5) {
         return;
       }
 
@@ -709,7 +709,7 @@ export default function ClassSkillRatingsPage() {
           return;
         }
         const ratingValue = Number(value);
-        if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+        if (!Number.isFinite(ratingValue) || ratingValue < 0 || ratingValue > 5) {
           return;
         }
 
@@ -949,18 +949,18 @@ export default function ClassSkillRatingsPage() {
                         {visibleSkillTypes.map((type) => {
                           const cell = studentRow[String(type.id)] ?? { value: "" };
                           const badge = ratingStatusBadge(cell.status);
+                          const currentValue = cell.value ? cell.value : "0";
                           return (
                             <td key={type.id}>
                               <select
                                 className="form-control form-control-sm"
-                                value={cell.value}
+                                value={currentValue}
                                 onChange={handleRatingChange(student.id, String(type.id))}
                                 style={{ maxWidth: "100px" }}
                               >
-                                <option value="">—</option>
                                 {ratingOptions.map((option) => (
                                   <option key={option} value={option}>
-                                    {option}
+                                    {option === "0" ? "-----" : option}
                                   </option>
                                 ))}
                               </select>

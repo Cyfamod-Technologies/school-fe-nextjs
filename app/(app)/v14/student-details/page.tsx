@@ -149,7 +149,7 @@ export default function StudentDetailsPage() {
   const [pinProcessing, setPinProcessing] = useState(false);
   const [printProcessing, setPrintProcessing] = useState(false);
 
-  const ratingOptions = ["1", "2", "3", "4", "5"];
+  const ratingOptions = ["0", "1", "2", "3", "4", "5"];
   const skillAutoSaveTimersRef = useRef<Record<string, number>>({});
   const lastSkillSaveKeyRef = useRef<Record<string, string>>({});
   const skillsScrollRangeRef = useRef<HTMLInputElement | null>(null);
@@ -194,7 +194,7 @@ export default function StudentDetailsPage() {
     orderedSkillTypes.forEach((type) => {
       const rating = skillRatingsMap.get(String(type.id));
       nextValues[String(type.id)] =
-        rating?.rating_value != null ? String(rating.rating_value) : "";
+        rating?.rating_value != null ? String(rating.rating_value) : "0";
     });
     setSkillValues(nextValues);
   }, [selectedSession, selectedTerm, orderedSkillTypes, skillRatingsMap]);
@@ -385,7 +385,7 @@ export default function StudentDetailsPage() {
       }
       const trimmedValue = value.trim();
       const ratingValue = Number(trimmedValue);
-      if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+      if (!Number.isFinite(ratingValue) || ratingValue < 0 || ratingValue > 5) {
         return;
       }
 
@@ -451,21 +451,6 @@ export default function StudentDetailsPage() {
   const handleSkillValueChange = useCallback(
     (skillTypeId: string) => (event: ChangeEvent<HTMLSelectElement>) => {
       const value = event.target.value;
-      const existing = skillRatingsMap.get(String(skillTypeId));
-      if (!value) {
-        if (existing?.rating_value != null) {
-          setSkillValues((prev) => ({
-            ...prev,
-            [skillTypeId]: String(existing.rating_value),
-          }));
-        } else {
-          setSkillValues((prev) => ({
-            ...prev,
-            [skillTypeId]: "",
-          }));
-        }
-        return;
-      }
       setSkillValues((prev) => ({
         ...prev,
         [skillTypeId]: value,
@@ -1279,10 +1264,9 @@ export default function StudentDetailsPage() {
                                 onChange={handleSkillValueChange(skillId)}
                                 disabled={!selectedSession || !selectedTerm}
                               >
-                                <option value="">—</option>
                                 {ratingOptions.map((option) => (
                                   <option key={option} value={option}>
-                                    {option}
+                                    {option === "0" ? "-----" : option}
                                   </option>
                                 ))}
                               </select>
