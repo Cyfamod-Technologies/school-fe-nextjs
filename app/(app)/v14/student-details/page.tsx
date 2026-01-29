@@ -1229,7 +1229,7 @@ export default function StudentDetailsPage() {
                 <div ref={skillsScrollSpacerRef} />
               </div>
               <div className="skills-table-scroll" ref={skillsScrollBodyRef}>
-                <table className="table display text-nowrap">
+                <table className="table display skills-table">
                   <thead>
                     <tr>
                       <th>Category</th>
@@ -1258,9 +1258,9 @@ export default function StudentDetailsPage() {
                         const ratingValue = skillValues[skillId] ?? "";
                         return (
                           <tr key={skillId}>
-                            <td>{type.category ?? "—"}</td>
-                            <td>{type.name ?? "—"}</td>
-                            <td>
+                            <td data-label="Category">{type.category ?? "—"}</td>
+                            <td data-label="Skill">{type.name ?? "—"}</td>
+                            <td data-label="Rating">
                               <select
                                 className="form-control form-control-sm"
                                 value={ratingValue}
@@ -1506,6 +1506,59 @@ export default function StudentDetailsPage() {
         }
 
         @media (max-width: 768px) {
+          .skills-scrollbar {
+            display: none;
+          }
+
+          .skills-table-scroll {
+            overflow-x: hidden;
+          }
+
+          .skills-table {
+            width: 100%;
+          }
+
+          .skills-table thead {
+            display: none;
+          }
+
+          .skills-table,
+          .skills-table tbody,
+          .skills-table tr,
+          .skills-table td {
+            display: block;
+            width: 100%;
+          }
+
+          .skills-table tr {
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.75rem;
+          }
+
+          .skills-table td {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.35rem 0;
+            border: 0;
+            white-space: normal;
+            word-break: break-word;
+          }
+
+          .skills-table td::before {
+            content: attr(data-label);
+            font-weight: 600;
+            color: #64748b;
+            flex: 0 0 90px;
+          }
+
+          .skills-table td select {
+            width: 100%;
+            max-width: 160px;
+          }
+
           .result-preview-frame {
             min-width: 1100px;
           }
