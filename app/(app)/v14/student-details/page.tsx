@@ -152,9 +152,8 @@ export default function StudentDetailsPage() {
   const ratingOptions = ["1", "2", "3", "4", "5"];
   const skillAutoSaveTimersRef = useRef<Record<string, number>>({});
   const lastSkillSaveKeyRef = useRef<Record<string, string>>({});
-  const skillsScrollTopRef = useRef<HTMLDivElement | null>(null);
+  const skillsScrollRangeRef = useRef<HTMLInputElement | null>(null);
   const skillsScrollBodyRef = useRef<HTMLDivElement | null>(null);
-  const skillsScrollSpacerRef = useRef<HTMLDivElement | null>(null);
 
   const pinTableColspan = isTeacher ? 6 : 7;
 
@@ -220,38 +219,46 @@ export default function StudentDetailsPage() {
     if (!skillsModalOpen) {
       return;
     }
-    const topScroller = skillsScrollTopRef.current;
     const bodyScroller = skillsScrollBodyRef.current;
-    const spacer = skillsScrollSpacerRef.current;
-    if (!topScroller || !bodyScroller || !spacer) {
+    const rangeScroller = skillsScrollRangeRef.current;
+    if (!bodyScroller || !rangeScroller) {
       return;
     }
 
-    const updateWidth = () => {
-      spacer.style.width = `${bodyScroller.scrollWidth}px`;
+    const updateRange = () => {
+      const max = Math.max(0, bodyScroller.scrollWidth - bodyScroller.clientWidth);
+      rangeScroller.max = String(max);
+      rangeScroller.value = String(bodyScroller.scrollLeft);
+      rangeScroller.disabled = max <= 0;
     };
 
-    const syncFromTop = () => {
-      if (bodyScroller.scrollLeft !== topScroller.scrollLeft) {
-        bodyScroller.scrollLeft = topScroller.scrollLeft;
-      }
+    const scheduleUpdate = () => {
+      window.requestAnimationFrame(() => {
+        updateRange();
+        window.requestAnimationFrame(updateRange);
+      });
+    };
+
+    const syncFromRange = () => {
+      bodyScroller.scrollLeft = Number(rangeScroller.value);
     };
 
     const syncFromBody = () => {
-      if (topScroller.scrollLeft !== bodyScroller.scrollLeft) {
-        topScroller.scrollLeft = bodyScroller.scrollLeft;
+      const nextValue = String(bodyScroller.scrollLeft);
+      if (rangeScroller.value !== nextValue) {
+        rangeScroller.value = nextValue;
       }
     };
 
-    updateWidth();
-    topScroller.addEventListener("scroll", syncFromTop);
+    scheduleUpdate();
+    rangeScroller.addEventListener("input", syncFromRange);
     bodyScroller.addEventListener("scroll", syncFromBody);
-    window.addEventListener("resize", updateWidth);
+    window.addEventListener("resize", scheduleUpdate);
 
     return () => {
-      topScroller.removeEventListener("scroll", syncFromTop);
+      rangeScroller.removeEventListener("input", syncFromRange);
       bodyScroller.removeEventListener("scroll", syncFromBody);
-      window.removeEventListener("resize", updateWidth);
+      window.removeEventListener("resize", scheduleUpdate);
     };
   }, [skillsModalOpen, orderedSkillTypes.length, skillLoading]);
 
@@ -1225,11 +1232,16 @@ export default function StudentDetailsPage() {
               </div>
             ) : null}
             <div className="skills-modal-body">
-              <div className="skills-scrollbar" ref={skillsScrollTopRef}>
-                <div ref={skillsScrollSpacerRef} />
-              </div>
+              <input
+                ref={skillsScrollRangeRef}
+                type="range"
+                className="skills-scrollbar-range"
+                min="0"
+                defaultValue="0"
+                aria-label="Scroll skills table horizontally"
+              />
               <div className="skills-table-scroll" ref={skillsScrollBodyRef}>
-                <table className="table display skills-table">
+                <table className="table display text-nowrap skills-table">
                   <thead>
                     <tr>
                       <th>Category</th>
@@ -1483,17 +1495,11 @@ export default function StudentDetailsPage() {
           min-height: 0;
         }
 
-        .skills-scrollbar {
-          overflow-x: scroll;
-          overflow-y: hidden;
-          height: 16px;
+        .skills-scrollbar-range {
+          width: 100%;
           margin: 0 0 0.75rem;
-          border: 1px solid #e2e8f0;
-          border-radius: 4px;
-        }
-
-        .skills-scrollbar > div {
-          height: 1px;
+          height: 16px;
+          accent-color: #94a3b8;
         }
 
         .skills-table-scroll {
@@ -1505,8 +1511,13 @@ export default function StudentDetailsPage() {
           scrollbar-gutter: stable;
         }
 
+        .skills-table th,
+        .skills-table td {
+          white-space: nowrap;
+        }
+
         @media (max-width: 768px) {
-          .skills-scrollbar {
+          .skills-scrollbar-range {
             display: none;
           }
 
