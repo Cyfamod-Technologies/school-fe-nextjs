@@ -7,6 +7,7 @@ import type { Term } from "@/lib/auth";
 import type { SchoolClass } from "@/lib/classes";
 import type { ClassArm } from "@/lib/classArms";
 import type { ClassArmSection } from "@/lib/classArmSections";
+import type { StudentSummary } from "@/lib/students";
 
 export interface SubjectTeacherAssignment {
   id: string;
@@ -14,11 +15,13 @@ export interface SubjectTeacherAssignment {
   staff_id: string;
   session_id: string;
   term_id: string;
+  student_ids?: Array<string | number> | null;
   school_class_id?: string | null;
   class_arm_id?: string | null;
   class_section_id?: string | null;
   created_at?: string;
   updated_at?: string;
+  students?: StudentSummary[] | null;
   subject?: Subject | null;
   staff?: Staff | null;
   session?: Session | null;
@@ -99,6 +102,7 @@ type AssignmentMutationPayload = {
   staff_id: string | number;
   session_id: string | number;
   term_id: string | number;
+  student_ids?: Array<string | number> | null;
   school_class_id?: string | number | null;
   class_arm_id?: string | number | null;
   class_section_id?: string | number | null;

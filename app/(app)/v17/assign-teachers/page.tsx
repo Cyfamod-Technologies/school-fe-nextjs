@@ -24,6 +24,10 @@ import {
   listSubjectAssignments,
   type SubjectAssignment,
 } from "@/lib/subjectAssignments";
+import {
+  listStudents,
+  type StudentSummary,
+} from "@/lib/students";
 
 interface AssignmentForm {
   subject_id: string;
@@ -33,6 +37,7 @@ interface AssignmentForm {
   school_class_id: string;
   class_arm_id: string;
   class_section_id: string;
+  student_ids: string[];
 }
 
 const initialForm: AssignmentForm = {
@@ -43,6 +48,7 @@ const initialForm: AssignmentForm = {
   school_class_id: "",
   class_arm_id: "",
   class_section_id: "",
+  student_ids: [],
 };
 
 interface AssignmentFilters {
@@ -81,6 +87,10 @@ export default function AssignTeachersPage() {
     Record<string, Subject[]>
   >({});
   const [classSubjectsLoading, setClassSubjectsLoading] = useState(false);
+  const [students, setStudents] = useState<StudentSummary[]>([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
+  const [studentSearch, setStudentSearch] = useState("");
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Record<string, boolean>>({});
 
   const [form, setForm] = useState<AssignmentForm>(initialForm);
   const [filters, setFilters] = useState<AssignmentFilters>(initialFilters);
@@ -196,6 +206,35 @@ export default function AssignTeachersPage() {
     [classSubjectsByKey],
   );
 
+  const fetchStudentsForClass = useCallback(
+    async (classId: string, armId?: string, sectionId?: string, sessionId?: string, termId?: string) => {
+      if (!classId) {
+        setStudents([]);
+        return;
+      }
+      setStudentsLoading(true);
+      try {
+        const response = await listStudents({
+          per_page: 500,
+          school_class_id: classId,
+          class_arm_id: armId || undefined,
+          class_section_id: sectionId || undefined,
+          current_session_id: sessionId || undefined,
+          current_term_id: termId || undefined,
+          sortBy: "first_name",
+          sortDirection: "asc",
+        });
+        setStudents(Array.isArray(response.data) ? response.data : []);
+      } catch (error) {
+        console.error("Unable to load students for assignment", error);
+        setStudents([]);
+      } finally {
+        setStudentsLoading(false);
+      }
+    },
+    [],
+  );
+
   const termsForForm = useMemo(() => {
     if (!form.session_id) {
       return [];
@@ -226,6 +265,25 @@ export default function AssignTeachersPage() {
     return classSubjectsByKey[key] ?? [];
   }, [classSubjectsByKey, form.school_class_id, form.class_arm_id]);
 
+  const filteredStudents = useMemo(() => {
+    const term = studentSearch.trim().toLowerCase();
+    if (!term) {
+      return students;
+    }
+    return students.filter((student) => {
+      const name = [
+        student.first_name,
+        student.middle_name,
+        student.last_name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      const admission = String(student.admission_no ?? "").toLowerCase();
+      return name.includes(term) || admission.includes(term);
+    });
+  }, [studentSearch, students]);
+
   const classArmsForFilter = useMemo(() => {
     if (!filters.school_class_id) {
       return [];
@@ -240,6 +298,25 @@ export default function AssignTeachersPage() {
     const key = `${filters.school_class_id}:${filters.class_arm_id}`;
     return classSectionsByKey[key] ?? [];
   }, [classSectionsByKey, filters.school_class_id, filters.class_arm_id]);
+
+  const selectedStudentCount = useMemo(() => {
+    return Object.values(selectedStudentIds).filter(Boolean).length;
+  }, [selectedStudentIds]);
+
+  const selectedStudentIdList = useMemo(() => {
+    return Object.keys(selectedStudentIds).filter(
+      (studentId) => selectedStudentIds[studentId],
+    );
+  }, [selectedStudentIds]);
+
+  const allFilteredSelected = useMemo(() => {
+    if (!filteredStudents.length) {
+      return false;
+    }
+    return filteredStudents.every(
+      (student) => selectedStudentIds[String(student.id)],
+    );
+  }, [filteredStudents, selectedStudentIds]);
 
   useEffect(() => {
     listAllSubjects()
@@ -297,6 +374,28 @@ export default function AssignTeachersPage() {
       (err) => console.error(err),
     );
   }, [form.school_class_id, form.class_arm_id, ensureClassSubjects]);
+
+  useEffect(() => {
+    if (!form.school_class_id) {
+      setStudents([]);
+      setSelectedStudentIds({});
+      return;
+    }
+    fetchStudentsForClass(
+      form.school_class_id,
+      form.class_arm_id || undefined,
+      form.class_section_id || undefined,
+      form.session_id || undefined,
+      form.term_id || undefined,
+    ).catch((err) => console.error(err));
+  }, [
+    form.school_class_id,
+    form.class_arm_id,
+    form.class_section_id,
+    form.session_id,
+    form.term_id,
+    fetchStudentsForClass,
+  ]);
 
   useEffect(() => {
     if (!form.subject_id) {
@@ -360,6 +459,41 @@ export default function AssignTeachersPage() {
     fetchAssignments().catch((err) => console.error(err));
   }, [fetchAssignments]);
 
+  const handleToggleStudent = useCallback(
+    (studentId: string | number) => () => {
+      const key = String(studentId);
+      setSelectedStudentIds((prev) => {
+        const next = { ...prev };
+        if (next[key]) {
+          delete next[key];
+        } else {
+          next[key] = true;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleToggleAllFiltered = useCallback(() => {
+    setSelectedStudentIds((prev) => {
+      if (!filteredStudents.length) {
+        return prev;
+      }
+      const next = { ...prev };
+      if (allFilteredSelected) {
+        filteredStudents.forEach((student) => {
+          delete next[String(student.id)];
+        });
+      } else {
+        filteredStudents.forEach((student) => {
+          next[String(student.id)] = true;
+        });
+      }
+      return next;
+    });
+  }, [allFilteredSelected, filteredStudents]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
@@ -386,6 +520,7 @@ export default function AssignTeachersPage() {
       staff_id: form.staff_id,
       session_id: form.session_id,
       term_id: derivedTermId,
+      student_ids: selectedStudentCount ? selectedStudentIdList : null,
       school_class_id: form.school_class_id,
       class_arm_id: form.class_arm_id || null,
       class_section_id: form.class_section_id || null,
@@ -400,6 +535,8 @@ export default function AssignTeachersPage() {
       }
       setEditingId(null);
       setForm(initialForm);
+      setSelectedStudentIds({});
+      setStudentSearch("");
       setPage(1);
       await fetchAssignments();
     } catch (err) {
@@ -433,6 +570,15 @@ export default function AssignTeachersPage() {
       ? `${assignment.class_section_id}`
       : "";
 
+    const assignedStudents: Array<string> = Array.isArray(assignment.student_ids)
+      ? assignment.student_ids.map((id) => String(id))
+      : Array.isArray(assignment.students)
+        ? assignment.students
+            .map((student) => student?.id)
+            .filter(Boolean)
+            .map((id) => String(id))
+        : [];
+
     startTransition(() => {
       setForm({
         subject_id: `${assignment.subject_id}`,
@@ -442,7 +588,16 @@ export default function AssignTeachersPage() {
         school_class_id: classId,
         class_arm_id: armId,
         class_section_id: sectionId,
+        student_ids: assignedStudents,
       });
+    });
+
+    setSelectedStudentIds(() => {
+      const next: Record<string, boolean> = {};
+      assignedStudents.forEach((studentId) => {
+        next[String(studentId)] = true;
+      });
+      return next;
     });
   };
 
@@ -515,7 +670,10 @@ export default function AssignTeachersPage() {
                           class_section_id: "",
                           subject_id: "",
                           staff_id: "",
+                          student_ids: [],
                         }));
+                        setSelectedStudentIds({});
+                        setStudentSearch("");
                         if (value) {
                           ensureClassArms(value).catch((err) =>
                             console.error(err),
@@ -548,7 +706,10 @@ export default function AssignTeachersPage() {
                           class_section_id: "",
                           subject_id: "",
                           staff_id: "",
+                          student_ids: [],
                         }));
+                        setSelectedStudentIds({});
+                        setStudentSearch("");
                         if (value && form.school_class_id) {
                           ensureClassSections(
                             form.school_class_id,
@@ -635,6 +796,76 @@ export default function AssignTeachersPage() {
                       ))}
                     </select>
                   </div>
+                  <div className="col-12 form-group">
+                    <label htmlFor="teacher-students">
+                      Students <span className="text-muted">(optional)</span>
+                    </label>
+                    <input
+                      id="teacher-students"
+                      type="text"
+                      className="form-control mb-2"
+                      placeholder="Search students by name or admission number..."
+                      value={studentSearch}
+                      onChange={(event) => setStudentSearch(event.target.value)}
+                      disabled={!form.school_class_id}
+                    />
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <small className="text-muted">
+                        {selectedStudentCount
+                          ? `${selectedStudentCount} selected`
+                          : "No students selected"}
+                      </small>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={handleToggleAllFiltered}
+                        disabled={!filteredStudents.length}
+                      >
+                        {allFilteredSelected ? "Clear filtered" : "Select filtered"}
+                      </button>
+                    </div>
+                    <div className="border rounded p-2" style={{ maxHeight: "240px", overflowY: "auto" }}>
+                      {studentsLoading ? (
+                        <p className="text-muted mb-0">Loading students…</p>
+                      ) : !form.school_class_id ? (
+                        <p className="text-muted mb-0">Select a class to load students.</p>
+                      ) : filteredStudents.length === 0 ? (
+                        <p className="text-muted mb-0">No students found.</p>
+                      ) : (
+                        filteredStudents.map((student) => {
+                          const fullName = [
+                            student.first_name,
+                            student.middle_name,
+                            student.last_name,
+                          ]
+                            .filter(Boolean)
+                            .join(" ")
+                            .trim();
+                          return (
+                            <div className="form-check" key={student.id}>
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                id={`teacher-student-${student.id}`}
+                                checked={Boolean(selectedStudentIds[String(student.id)])}
+                                onChange={handleToggleStudent(student.id)}
+                              />
+                              <label
+                                className="form-check-label"
+                                htmlFor={`teacher-student-${student.id}`}
+                              >
+                                {fullName || "Unnamed Student"}
+                                {student.admission_no ? ` (${student.admission_no})` : ""}
+                              </label>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                    <small className="form-text text-muted">
+                      Leave blank to assign the subject to all students in the class.
+                    </small>
+                  </div>
                   {/* Class Section field intentionally hidden */}
                   <div className="col-12 form-group">
                     <label htmlFor="teacher-session">Session *</label>
@@ -678,6 +909,8 @@ export default function AssignTeachersPage() {
                       onClick={() => {
                         setEditingId(null);
                         setForm(initialForm);
+                        setSelectedStudentIds({});
+                        setStudentSearch("");
                       }}
                     >
                       Reset
@@ -897,6 +1130,7 @@ export default function AssignTeachersPage() {
                       <th>Class</th>
                       <th>Class Arm</th>
                 {/* <th>Class Section</th> */}
+                      <th>Students</th>
                       <th>Session</th>
                       <th>Updated</th>
                       <th />
@@ -905,13 +1139,13 @@ export default function AssignTeachersPage() {
                   <tbody>
                     {loadingList ? (
                       <tr>
-                        <td colSpan={8} className="text-center">
+                        <td colSpan={9} className="text-center">
                           Loading assignments…
                         </td>
                       </tr>
                     ) : assignments.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="text-center">
+                        <td colSpan={9} className="text-center">
                           No assignments found.
                         </td>
                       </tr>
@@ -932,6 +1166,15 @@ export default function AssignTeachersPage() {
                           <td>{assignment.school_class?.name ?? "—"}</td>
                           <td>{assignment.class_arm?.name ?? "—"}</td>
                           {/* <td>{assignment.class_section?.name ?? "—"}</td> */}
+                          <td>
+                            {Array.isArray(assignment.student_ids) &&
+                            assignment.student_ids.length > 0
+                              ? `${assignment.student_ids.length} selected`
+                              : Array.isArray(assignment.students) &&
+                                assignment.students.length > 0
+                              ? `${assignment.students.length} selected`
+                              : "All"}
+                          </td>
                           <td>{assignment.session?.name ?? "N/A"}</td>
                           <td>
                             {assignment.updated_at
