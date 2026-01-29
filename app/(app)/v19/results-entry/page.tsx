@@ -39,6 +39,9 @@ import {
   listStudents,
   type StudentSummary,
 } from "@/lib/students";
+import {
+  listSubjectTeacherAssignments,
+} from "@/lib/subjectTeacherAssignments";
 import { fetchSchoolContext } from "@/lib/schoolContext";
 
 type ResultRowStatus = "saved" | "pending" | "none";
@@ -1117,6 +1120,60 @@ export default function ResultsEntryPage() {
     };
   }, []);
 
+  const getAssignedStudentIds = useCallback(async (): Promise<Set<string> | null> => {
+    if (!isTeacher) {
+      return null;
+    }
+    const teacherId = teacherDashboard?.teacher?.id;
+    if (!teacherId || !selectedSession || !selectedTerm || !selectedSubject || !selectedClass) {
+      return null;
+    }
+    try {
+      const response = await listSubjectTeacherAssignments({
+        per_page: 500,
+        staff_id: String(teacherId),
+        subject_id: selectedSubject,
+        session_id: selectedSession,
+        term_id: selectedTerm,
+        school_class_id: selectedClass,
+        class_arm_id: selectedArm || undefined,
+        class_section_id: selectedSection || undefined,
+      });
+      const ids = new Set<string>();
+      let hasOpenAssignment = false;
+      (response.data ?? []).forEach((assignment) => {
+        const studentIds = Array.isArray(assignment.student_ids)
+          ? assignment.student_ids
+          : Array.isArray(assignment.students)
+            ? assignment.students
+                .map((student) => student?.id)
+                .filter(Boolean)
+            : [];
+        if (studentIds.length) {
+          studentIds.forEach((id) => ids.add(String(id)));
+        } else {
+          hasOpenAssignment = true;
+        }
+      });
+      if (hasOpenAssignment) {
+        return null;
+      }
+      return ids.size ? ids : null;
+    } catch (error) {
+      console.error("Unable to load assigned students", error);
+      return null;
+    }
+  }, [
+    isTeacher,
+    selectedArm,
+    selectedClass,
+    selectedSection,
+    selectedSession,
+    selectedSubject,
+    selectedTerm,
+    teacherDashboard?.teacher?.id,
+  ]);
+
   const handleLoadStudents = useCallback(async () => {
     resetMessages();
     setStatusMessage("");
@@ -1173,12 +1230,26 @@ export default function ResultsEntryPage() {
         }),
       );
 
-      const [studentResponse, ...resultsResponses] = await Promise.all([
+      const assignedStudentIdsPromise = getAssignedStudentIds();
+      const responses = await Promise.all([
         studentPromise,
         ...resultPromises,
+        assignedStudentIdsPromise,
       ]);
+      const studentResponse = responses[0] as Awaited<
+        ReturnType<typeof listStudents>
+      >;
+      const assignedStudentIds = responses[responses.length - 1] as Set<string> | null;
+      const resultsResponses = responses.slice(1, -1) as Array<
+        Awaited<ReturnType<typeof listResults>>
+      >;
 
-      const students = studentResponse.data ?? [];
+      let students = studentResponse.data ?? [];
+      if (assignedStudentIds && assignedStudentIds.size > 0) {
+        students = students.filter((student) =>
+          assignedStudentIds.has(String(student.id)),
+        );
+      }
       const resultMap = new Map<string, ResultRecord>();
       resultsResponses.forEach((response, index) => {
         const componentId = String(displayComponents[index].id);
@@ -1238,6 +1309,7 @@ export default function ResultsEntryPage() {
     }
   }, [
     displayComponents,
+    getAssignedStudentIds,
     resetMessages,
     selectedSession,
     selectedTerm,
