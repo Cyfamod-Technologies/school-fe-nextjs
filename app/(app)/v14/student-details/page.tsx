@@ -1451,18 +1451,19 @@ export default function StudentDetailsPage() {
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 1.5rem;
+          padding: 0;
           z-index: 1050;
         }
 
         .skills-modal {
           background: #ffffff;
           width: 100%;
-          max-width: 980px;
-          max-height: 90vh;
+          max-width: none;
+          max-height: none;
+          height: 100%;
           display: flex;
           flex-direction: column;
-          border-radius: 6px;
+          border-radius: 0;
           overflow: hidden;
         }
 
