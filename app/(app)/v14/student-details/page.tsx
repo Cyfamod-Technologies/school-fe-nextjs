@@ -152,6 +152,9 @@ export default function StudentDetailsPage() {
   const ratingOptions = ["1", "2", "3", "4", "5"];
   const skillAutoSaveTimersRef = useRef<Record<string, number>>({});
   const lastSkillSaveKeyRef = useRef<Record<string, string>>({});
+  const skillsScrollTopRef = useRef<HTMLDivElement | null>(null);
+  const skillsScrollBodyRef = useRef<HTMLDivElement | null>(null);
+  const skillsScrollSpacerRef = useRef<HTMLDivElement | null>(null);
 
   const pinTableColspan = isTeacher ? 6 : 7;
 
@@ -212,6 +215,45 @@ export default function StudentDetailsPage() {
       });
     };
   }, []);
+
+  useEffect(() => {
+    if (!skillsModalOpen) {
+      return;
+    }
+    const topScroller = skillsScrollTopRef.current;
+    const bodyScroller = skillsScrollBodyRef.current;
+    const spacer = skillsScrollSpacerRef.current;
+    if (!topScroller || !bodyScroller || !spacer) {
+      return;
+    }
+
+    const updateWidth = () => {
+      spacer.style.width = `${bodyScroller.scrollWidth}px`;
+    };
+
+    const syncFromTop = () => {
+      if (bodyScroller.scrollLeft !== topScroller.scrollLeft) {
+        bodyScroller.scrollLeft = topScroller.scrollLeft;
+      }
+    };
+
+    const syncFromBody = () => {
+      if (topScroller.scrollLeft !== bodyScroller.scrollLeft) {
+        topScroller.scrollLeft = bodyScroller.scrollLeft;
+      }
+    };
+
+    updateWidth();
+    topScroller.addEventListener("scroll", syncFromTop);
+    bodyScroller.addEventListener("scroll", syncFromBody);
+    window.addEventListener("resize", updateWidth);
+
+    return () => {
+      topScroller.removeEventListener("scroll", syncFromTop);
+      bodyScroller.removeEventListener("scroll", syncFromBody);
+      window.removeEventListener("resize", updateWidth);
+    };
+  }, [skillsModalOpen, orderedSkillTypes.length, skillLoading]);
 
   const loadSkillRatings = useCallback(async () => {
     if (!student?.id || !selectedSession || !selectedTerm) {
@@ -1183,7 +1225,10 @@ export default function StudentDetailsPage() {
               </div>
             ) : null}
             <div className="skills-modal-body">
-              <div className="table-responsive">
+              <div className="skills-scrollbar" ref={skillsScrollTopRef}>
+                <div ref={skillsScrollSpacerRef} />
+              </div>
+              <div className="skills-table-scroll" ref={skillsScrollBodyRef}>
                 <table className="table display text-nowrap">
                   <thead>
                     <tr>
@@ -1431,7 +1476,32 @@ export default function StudentDetailsPage() {
 
         .skills-modal-body {
           padding: 0 1.25rem 1.25rem;
-          overflow: auto;
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          min-height: 0;
+        }
+
+        .skills-scrollbar {
+          overflow-x: scroll;
+          overflow-y: hidden;
+          height: 16px;
+          margin: 0 0 0.75rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 4px;
+        }
+
+        .skills-scrollbar > div {
+          height: 1px;
+        }
+
+        .skills-table-scroll {
+          flex: 1;
+          min-height: 0;
+          width: 100%;
+          overflow-x: auto;
+          overflow-y: scroll;
+          scrollbar-gutter: stable;
         }
 
         @media (max-width: 768px) {
