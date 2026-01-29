@@ -55,6 +55,10 @@ interface FiltersState {
 
 interface ResultEntryRow {
   student: StudentSummary;
+  cells: Record<string, ResultEntryCell>;
+}
+
+interface ResultEntryCell {
   score: string;
   remark: string;
   originalScore: string;
@@ -158,8 +162,7 @@ export default function ResultsEntryPage() {
 
   const [rows, setRows] = useState<ResultEntryRow[]>([]);
 
-  const [dynamicMaxScore, setDynamicMaxScore] = useState<number | null>(null);
-  const [maxScoreLoading, setMaxScoreLoading] = useState(false);
+  const [componentMaxScores, setComponentMaxScores] = useState<Record<string, number>>({});
 
   const [feedback, setFeedback] = useState<{
     type: "success" | "info" | "warning" | "danger";
@@ -177,74 +180,87 @@ export default function ResultsEntryPage() {
 
   const lockSessionAndTerm = true;
 
-  const selectedComponentDetails = useMemo(() => {
-    if (!selectedComponent) {
-      return null;
-    }
-    return (
-      components.find(
+  const displayComponents = useMemo(() => {
+    if (selectedComponent) {
+      return components.filter(
         (component) => String(component.id) === selectedComponent,
-      ) ?? null
-    );
+      );
+    }
+    return components;
   }, [components, selectedComponent]);
 
-  // Fetch dynamic max score from assessment component structures
-  const fetchDynamicMaxScore = useCallback(async () => {
-    if (!selectedComponent || !selectedClass) {
-      setDynamicMaxScore(null);
+  const getComponentMaxScore = useCallback(
+    (componentId: string) => {
+      const dynamicScore = componentMaxScores[String(componentId)];
+      if (Number.isFinite(dynamicScore) && dynamicScore > 0) {
+        return dynamicScore;
+      }
+      const component = components.find(
+        (item) => String(item.id) === String(componentId),
+      );
+      const weightValue = Number(component?.weight);
+      if (Number.isFinite(weightValue) && weightValue > 0) {
+        return weightValue;
+      }
+      return 100;
+    },
+    [componentMaxScores, components],
+  );
+
+  const getComponentMaxScoreLabel = useCallback(
+    (componentId: string) => {
+      const maxScore = getComponentMaxScore(componentId);
+      if (!Number.isFinite(maxScore)) {
+        return "100";
+      }
+      return Number.isInteger(maxScore)
+        ? maxScore.toString()
+        : maxScore.toFixed(2).replace(/\.?0+$/, "");
+    },
+    [getComponentMaxScore],
+  );
+
+  useEffect(() => {
+    if (!selectedClass || !selectedTerm || displayComponents.length === 0) {
+      setComponentMaxScores({});
       return;
     }
 
-    setMaxScoreLoading(true);
-    try {
-      const response = await AssessmentComponentStructureService.getMaxScore({
-        assessment_component_id: selectedComponent,
-        class_id: selectedClass,
-        term_id: selectedTerm || null,
-      }) as { max_score: number; assessment_component_id: string; class_id?: string | null; term_id?: string | null };
-      setDynamicMaxScore(response.max_score);
-    } catch (error) {
-      console.error('Failed to fetch dynamic max score:', error);
-      setDynamicMaxScore(null);
-    } finally {
-      setMaxScoreLoading(false);
-    }
-  }, [selectedComponent, selectedClass, selectedTerm]);
+    let active = true;
+    Promise.all(
+      displayComponents.map((component) =>
+        AssessmentComponentStructureService.getMaxScore({
+          assessment_component_id: String(component.id),
+          class_id: selectedClass,
+          term_id: selectedTerm || null,
+        }) as Promise<{ max_score: number }>,
+      ),
+    )
+      .then((responses) => {
+        if (!active) {
+          return;
+        }
+        const nextScores: Record<string, number> = {};
+        responses.forEach((response, index) => {
+          const maxScore = Number((response as { max_score?: number }).max_score);
+          if (Number.isFinite(maxScore) && maxScore > 0) {
+            nextScores[String(displayComponents[index].id)] = maxScore;
+          }
+        });
+        setComponentMaxScores(nextScores);
+      })
+      .catch((error) => {
+        if (!active) {
+          return;
+        }
+        console.error("Failed to fetch component max scores", error);
+        setComponentMaxScores({});
+      });
 
-  // Update dynamic max score when relevant filters change
-  useEffect(() => {
-    fetchDynamicMaxScore();
-  }, [fetchDynamicMaxScore]);
-
-  const componentMaxScore = useMemo(() => {
-    // Use dynamic max score from structures if available
-    if (
-      dynamicMaxScore !== null &&
-      Number.isFinite(dynamicMaxScore) &&
-      dynamicMaxScore > 0
-    ) {
-      return dynamicMaxScore;
-    }
-
-    // Fall back to component weight
-    if (!selectedComponentDetails) {
-      return 100;
-    }
-    const weightValue = Number(selectedComponentDetails.weight);
-    if (!Number.isFinite(weightValue) || weightValue <= 0) {
-      return 100;
-    }
-    return weightValue;
-  }, [selectedComponentDetails, dynamicMaxScore]);
-
-  const componentMaxScoreLabel = useMemo(() => {
-    if (!Number.isFinite(componentMaxScore)) {
-      return "100";
-    }
-    return Number.isInteger(componentMaxScore)
-      ? componentMaxScore.toString()
-      : componentMaxScore.toFixed(2).replace(/\.?0+$/, "");
-  }, [componentMaxScore]);
+    return () => {
+      active = false;
+    };
+  }, [displayComponents, selectedClass, selectedTerm]);
 
   const updateFilters = useCallback(
     (updater: (current: FiltersState) => FiltersState) => {
@@ -816,36 +832,51 @@ export default function ResultsEntryPage() {
     }));
   };
 
-  const updateRow = useCallback(
-    (index: number, updates: Partial<ResultEntryRow>) => {
+  const updateCell = useCallback(
+    (
+      rowIndex: number,
+      componentId: string,
+      updates: Partial<ResultEntryCell>,
+    ) => {
       setRows((prev) => {
-        if (index < 0 || index >= prev.length) {
+        if (rowIndex < 0 || rowIndex >= prev.length) {
           return prev;
         }
         const next = [...prev];
-        const current = {
-          ...next[index],
+        const row = next[rowIndex];
+        const existingCell = row.cells[componentId];
+        if (!existingCell) {
+          return prev;
+        }
+        const updatedCell: ResultEntryCell = {
+          ...existingCell,
           ...updates,
         };
-        const currentScore = current.score.trim();
-        const originalScore = current.originalScore.trim();
-        const currentRemark = current.remark.trim();
-        const originalRemark = current.originalRemark.trim();
+        const currentScore = updatedCell.score.trim();
+        const originalScore = updatedCell.originalScore.trim();
+        const currentRemark = updatedCell.remark.trim();
+        const originalRemark = updatedCell.originalRemark.trim();
         const changed =
           currentScore !== originalScore ||
           currentRemark !== originalRemark;
-        current.status = changed
+        updatedCell.status = changed
           ? "pending"
-          : current.hasResult
+          : updatedCell.hasResult
             ? "saved"
             : "none";
         if (
           Object.prototype.hasOwnProperty.call(updates, "score") ||
           Object.prototype.hasOwnProperty.call(updates, "remark")
         ) {
-          current.rowError = null;
+          updatedCell.rowError = null;
         }
-        next[index] = current;
+        next[rowIndex] = {
+          ...row,
+          cells: {
+            ...row.cells,
+            [componentId]: updatedCell,
+          },
+        };
         return next;
       });
     },
@@ -853,7 +884,12 @@ export default function ResultsEntryPage() {
   );
 
   const autoSaveRow = useCallback(
-    async (studentId: string, scoreInput: string, remarkInput: string) => {
+    async (
+      studentId: string,
+      componentId: string,
+      scoreInput: string,
+      remarkInput: string,
+    ) => {
       if (!selectedSession || !selectedTerm || !selectedSubject) {
         return;
       }
@@ -864,39 +900,62 @@ export default function ResultsEntryPage() {
         return;
       }
 
+      const maxScore = getComponentMaxScore(componentId);
+      const maxScoreLabel = getComponentMaxScoreLabel(componentId);
       const scoreValue = Number(trimmedScore);
       if (
         Number.isNaN(scoreValue) ||
         scoreValue < 0 ||
-        scoreValue > componentMaxScore
+        scoreValue > maxScore
       ) {
         setRows((prev) =>
           prev.map((row) => {
             if (String(row.student.id) !== String(studentId)) {
               return row;
             }
+            const cell = row.cells[componentId];
+            if (!cell) {
+              return row;
+            }
             return {
               ...row,
-              rowError: `Score must be a number between 0 and ${componentMaxScoreLabel}.`,
-              status: "pending",
+              cells: {
+                ...row.cells,
+                [componentId]: {
+                  ...cell,
+                  rowError: `Score must be a number between 0 and ${maxScoreLabel}.`,
+                  status: "pending",
+                },
+              },
             };
           }),
         );
         return;
       }
 
-      const saveKey = `${selectedSession}|${selectedTerm}|${selectedSubject}|${selectedComponent || "none"}|${studentId}|${trimmedScore}|${trimmedRemark}`;
-      lastAutoSaveKeyRef.current[studentId] = saveKey;
+      const cellKey = `${studentId}-${componentId}`;
+      const saveKey = `${selectedSession}|${selectedTerm}|${selectedSubject}|${componentId}|${studentId}|${trimmedScore}|${trimmedRemark}`;
+      lastAutoSaveKeyRef.current[cellKey] = saveKey;
 
       setRows((prev) =>
         prev.map((row) => {
           if (String(row.student.id) !== String(studentId)) {
             return row;
           }
+          const cell = row.cells[componentId];
+          if (!cell) {
+            return row;
+          }
           return {
             ...row,
-            rowError: null,
-            status: "pending",
+            cells: {
+              ...row.cells,
+              [componentId]: {
+                ...cell,
+                rowError: null,
+                status: "pending",
+              },
+            },
           };
         }),
       );
@@ -905,7 +964,7 @@ export default function ResultsEntryPage() {
         const response = await saveResultsBatch({
           session_id: selectedSession,
           term_id: selectedTerm,
-          assessment_component_id: selectedComponent || "none",
+          assessment_component_id: componentId,
           entries: [
             {
               student_id: studentId,
@@ -925,51 +984,76 @@ export default function ResultsEntryPage() {
             if (String(row.student.id) !== String(studentId)) {
               return row;
             }
+            const cell = row.cells[componentId];
+            if (!cell) {
+              return row;
+            }
             if (!saved) {
               return {
                 ...row,
-                rowError: null,
-                status: row.hasResult ? "saved" : "none",
+                cells: {
+                  ...row.cells,
+                  [componentId]: {
+                    ...cell,
+                    rowError: null,
+                    status: cell.hasResult ? "saved" : "none",
+                  },
+                },
               };
             }
             const savedScore = formatScore(saved.total_score);
             const savedRemark = (saved.remarks ?? "").trim();
             return {
               ...row,
-              score: savedScore,
-              remark: saved.remarks ?? "",
-              originalScore: savedScore,
-              originalRemark: savedRemark,
-              hasResult: true,
-              status: "saved",
-              rowError: null,
+              cells: {
+                ...row.cells,
+                [componentId]: {
+                  ...cell,
+                  score: savedScore,
+                  remark: saved.remarks ?? "",
+                  originalScore: savedScore,
+                  originalRemark: savedRemark,
+                  hasResult: true,
+                  status: "saved",
+                  rowError: null,
+                },
+              },
             };
           }),
         );
       } catch (error) {
         console.error("Unable to auto-save score", error);
-        lastAutoSaveKeyRef.current[studentId] = "";
+        lastAutoSaveKeyRef.current[cellKey] = "";
         setRows((prev) =>
           prev.map((row) => {
             if (String(row.student.id) !== String(studentId)) {
               return row;
             }
+            const cell = row.cells[componentId];
+            if (!cell) {
+              return row;
+            }
             return {
               ...row,
-              rowError:
-                error instanceof Error
-                  ? error.message
-                  : "Unable to auto-save score.",
-              status: "pending",
+              cells: {
+                ...row.cells,
+                [componentId]: {
+                  ...cell,
+                  rowError:
+                    error instanceof Error
+                      ? error.message
+                      : "Unable to auto-save score.",
+                  status: "pending",
+                },
+              },
             };
           }),
         );
       }
     },
     [
-      componentMaxScore,
-      componentMaxScoreLabel,
-      selectedComponent,
+      getComponentMaxScore,
+      getComponentMaxScoreLabel,
       selectedSession,
       selectedSubject,
       selectedTerm,
@@ -977,34 +1061,44 @@ export default function ResultsEntryPage() {
   );
 
   const scheduleAutoSave = useCallback(
-    (row: ResultEntryRow, nextScore: string, nextRemark: string) => {
+    (
+      row: ResultEntryRow,
+      componentId: string,
+      nextScore: string,
+      nextRemark: string,
+    ) => {
       if (!selectedSession || !selectedTerm || !selectedSubject) {
+        return;
+      }
+      const cell = row.cells[componentId];
+      if (!cell) {
         return;
       }
       const studentKey = String(row.student.id);
       const trimmedScore = nextScore.trim();
       const trimmedRemark = nextRemark.trim();
       const changed =
-        trimmedScore !== row.originalScore.trim() ||
-        trimmedRemark !== row.originalRemark.trim();
+        trimmedScore !== cell.originalScore.trim() ||
+        trimmedRemark !== cell.originalRemark.trim();
 
       if (!changed) {
         return;
       }
 
-      const key = `${selectedSession}|${selectedTerm}|${selectedSubject}|${selectedComponent || "none"}|${studentKey}|${trimmedScore}|${trimmedRemark}`;
-      if (lastAutoSaveKeyRef.current[studentKey] === key) {
+      const cellKey = `${studentKey}-${componentId}`;
+      const key = `${selectedSession}|${selectedTerm}|${selectedSubject}|${componentId}|${studentKey}|${trimmedScore}|${trimmedRemark}`;
+      if (lastAutoSaveKeyRef.current[cellKey] === key) {
         return;
       }
 
-      if (autoSaveTimersRef.current[studentKey]) {
-        window.clearTimeout(autoSaveTimersRef.current[studentKey]);
+      if (autoSaveTimersRef.current[cellKey]) {
+        window.clearTimeout(autoSaveTimersRef.current[cellKey]);
       }
-      autoSaveTimersRef.current[studentKey] = window.setTimeout(() => {
-        void autoSaveRow(studentKey, trimmedScore, trimmedRemark);
+      autoSaveTimersRef.current[cellKey] = window.setTimeout(() => {
+        void autoSaveRow(studentKey, componentId, trimmedScore, trimmedRemark);
       }, 600);
     },
-    [autoSaveRow, selectedComponent, selectedSession, selectedSubject, selectedTerm],
+    [autoSaveRow, selectedSession, selectedSubject, selectedTerm],
   );
 
   useEffect(() => {
@@ -1033,11 +1127,6 @@ export default function ResultsEntryPage() {
     if (!selectedClass) missing.push("class");
     if (!selectedSubject) missing.push("subject");
 
-    // Assessment component is required
-    if (!selectedComponent) {
-      missing.push("assessment component");
-    }
-
     if (missing.length) {
       setFeedback({
         type: "warning",
@@ -1047,24 +1136,31 @@ export default function ResultsEntryPage() {
       return;
     }
 
+    if (!displayComponents.length) {
+      setFeedback({
+        type: "info",
+        message: "No assessment components found for the selected subject.",
+      });
+      setRows([]);
+      return;
+    }
+
     setTableLoading(true);
     setStatusMessage("Loading students...");
 
     try {
-      const [
-        studentResponse,
-        resultsResponse,
-      ] = await Promise.all([
-        listStudents({
-          per_page: 500,
-          school_class_id: selectedClass,
-          class_arm_id: selectedArm || undefined,
-          class_section_id: selectedSection || undefined,
-          current_session_id: selectedSession,
-          current_term_id: selectedTerm,
-          sortBy: "first_name",
-          sortDirection: "asc",
-        }),
+      const studentPromise = listStudents({
+        per_page: 500,
+        school_class_id: selectedClass,
+        class_arm_id: selectedArm || undefined,
+        class_section_id: selectedSection || undefined,
+        current_session_id: selectedSession,
+        current_term_id: selectedTerm,
+        sortBy: "first_name",
+        sortDirection: "asc",
+      });
+
+      const resultPromises = displayComponents.map((component) =>
         listResults({
           per_page: 500,
           session_id: selectedSession,
@@ -1073,32 +1169,47 @@ export default function ResultsEntryPage() {
           school_class_id: selectedClass,
           class_arm_id: selectedArm || undefined,
           class_section_id: selectedSection || undefined,
-          assessment_component_id: selectedComponent || "none",
+          assessment_component_id: String(component.id),
         }),
+      );
+
+      const [studentResponse, ...resultsResponses] = await Promise.all([
+        studentPromise,
+        ...resultPromises,
       ]);
 
       const students = studentResponse.data ?? [];
-      const results = resultsResponse.data ?? [];
-
       const resultMap = new Map<string, ResultRecord>();
-      results.forEach((result) => {
-        resultMap.set(String(result.student_id), result);
+      resultsResponses.forEach((response, index) => {
+        const componentId = String(displayComponents[index].id);
+        const results = response.data ?? [];
+        results.forEach((result) => {
+          const key = `${result.student_id}-${componentId}`;
+          resultMap.set(key, result);
+        });
       });
 
       const nextRows: ResultEntryRow[] = students.map((student) => {
-        const result = resultMap.get(String(student.id));
-        const scoreValue = result ? formatScore(result.total_score) : "";
-        const remarkValue = result?.remarks ?? "";
-        const normalizedRemark = remarkValue.trim();
+        const cells: Record<string, ResultEntryCell> = {};
+        displayComponents.forEach((component) => {
+          const componentId = String(component.id);
+          const result = resultMap.get(`${student.id}-${componentId}`);
+          const scoreValue = result ? formatScore(result.total_score) : "";
+          const remarkValue = result?.remarks ?? "";
+          const normalizedRemark = remarkValue.trim();
+          cells[componentId] = {
+            score: scoreValue,
+            remark: remarkValue,
+            originalScore: scoreValue,
+            originalRemark: normalizedRemark,
+            hasResult: Boolean(result),
+            status: result ? "saved" : "none",
+            rowError: null,
+          };
+        });
         return {
           student,
-          score: scoreValue,
-          remark: remarkValue,
-          originalScore: scoreValue,
-          originalRemark: normalizedRemark,
-          hasResult: Boolean(result),
-          status: result ? "saved" : "none",
-          rowError: null,
+          cells,
         };
       });
 
@@ -1126,7 +1237,7 @@ export default function ResultsEntryPage() {
       setTableLoading(false);
     }
   }, [
-    isTeacher,
+    displayComponents,
     resetMessages,
     selectedSession,
     selectedTerm,
@@ -1134,7 +1245,6 @@ export default function ResultsEntryPage() {
     selectedArm,
     selectedSection,
     selectedSubject,
-    selectedComponent,
   ]);
 
   const handleSaveResults = useCallback(async () => {
@@ -1156,70 +1266,92 @@ export default function ResultsEntryPage() {
       return;
     }
 
-    const nextRows = [...rows];
-    const entries: Array<{
+    if (!displayComponents.length) {
+      setFeedback({
+        type: "info",
+        message: "No assessment components available to save.",
+      });
+      return;
+    }
+
+    const nextRows = rows.map((row) => ({
+      ...row,
+      cells: { ...row.cells },
+    }));
+    const entriesByComponent: Record<string, Array<{
       student_id: number | string;
       subject_id: string;
       score: number;
       remarks: string | null;
-    }> = [];
+    }>> = {};
     let hasErrors = false;
 
-    nextRows.forEach((row, index) => {
-      const scoreInput = row.score.trim();
-      const remarkInput = row.remark.trim();
-      const originalRemark = row.originalRemark.trim();
-      const originalScore = row.originalScore.trim();
+    nextRows.forEach((row) => {
+      displayComponents.forEach((component) => {
+        const componentId = String(component.id);
+        const cell = row.cells[componentId];
+        if (!cell) {
+          return;
+        }
+        const scoreInput = cell.score.trim();
+        const remarkInput = cell.remark.trim();
+        const originalRemark = cell.originalRemark.trim();
+        const originalScore = cell.originalScore.trim();
 
-      const changed =
-        scoreInput !== originalScore || remarkInput !== originalRemark;
+        const changed =
+          scoreInput !== originalScore || remarkInput !== originalRemark;
 
-      if (!changed) {
-        nextRows[index] = {
-          ...row,
+        if (!changed) {
+          row.cells[componentId] = {
+            ...cell,
+            rowError: null,
+            status: cell.hasResult ? "saved" : "none",
+          };
+          return;
+        }
+
+        if (!scoreInput) {
+          row.cells[componentId] = {
+            ...cell,
+            rowError:
+              "Score is required when updating a result or providing a remark.",
+            status: "pending",
+          };
+          hasErrors = true;
+          return;
+        }
+
+        const scoreValue = Number(scoreInput);
+        const maxScore = getComponentMaxScore(componentId);
+        if (
+          Number.isNaN(scoreValue) ||
+          scoreValue < 0 ||
+          scoreValue > maxScore
+        ) {
+          row.cells[componentId] = {
+            ...cell,
+            rowError: `Score must be a number between 0 and ${getComponentMaxScoreLabel(componentId)}.`,
+            status: "pending",
+          };
+          hasErrors = true;
+          return;
+        }
+
+        row.cells[componentId] = {
+          ...cell,
           rowError: null,
-          status: row.hasResult ? "saved" : "none",
-        };
-        return;
-      }
-
-      if (!scoreInput) {
-        nextRows[index] = {
-          ...row,
-          rowError:
-            "Score is required when updating a result or providing a remark.",
           status: "pending",
         };
-        hasErrors = true;
-        return;
-      }
 
-      const scoreValue = Number(scoreInput);
-      if (
-        Number.isNaN(scoreValue) ||
-        scoreValue < 0 ||
-        scoreValue > componentMaxScore
-      ) {
-        nextRows[index] = {
-          ...row,
-          rowError: `Score must be a number between 0 and ${componentMaxScoreLabel}.`,
-          status: "pending",
-        };
-        hasErrors = true;
-        return;
-      }
-
-      nextRows[index] = {
-        ...row,
-        rowError: null,
-        status: "pending",
-      };
-
-      entries.push({
-        student_id: row.student.id,
-        subject_id: selectedSubject,
-        score: Number.parseFloat(scoreValue.toFixed(2)),
-        remarks: remarkInput ? remarkInput : null,
+        if (!entriesByComponent[componentId]) {
+          entriesByComponent[componentId] = [];
+        }
+        entriesByComponent[componentId].push({
+          student_id: row.student.id,
+          subject_id: selectedSubject,
+          score: Number.parseFloat(scoreValue.toFixed(2)),
+          remarks: remarkInput ? remarkInput : null,
+        });
       });
     });
 
@@ -1233,7 +1365,12 @@ export default function ResultsEntryPage() {
       return;
     }
 
-    if (!entries.length) {
+    const totalEntries = Object.values(entriesByComponent).reduce(
+      (sum, entries) => sum + entries.length,
+      0,
+    );
+
+    if (!totalEntries) {
       setFeedback({
         type: "info",
         message: "No changes to save.",
@@ -1245,55 +1382,94 @@ export default function ResultsEntryPage() {
     setStatusMessage("Saving scores...");
 
     try {
-      const response = await saveResultsBatch({
-        session_id: selectedSession,
-        term_id: selectedTerm,
-        // Use same sentinel value as listResults when no component is selected
-        assessment_component_id: selectedComponent || "none",
-        entries: entries.map((entry) => ({
-          ...entry,
-        })),
-      });
+      const saveTasks = Object.entries(entriesByComponent).map(
+        ([componentId, entries]) => ({
+          componentId,
+          promise: saveResultsBatch({
+            session_id: selectedSession,
+            term_id: selectedTerm,
+            assessment_component_id: componentId,
+            entries,
+          }),
+        }),
+      );
+
+      const results = await Promise.allSettled(
+        saveTasks.map((task) => task.promise),
+      );
 
       const updatedMap = new Map<string, ResultRecord>();
-      response.results.forEach((result) => {
-        updatedMap.set(String(result.student_id), result);
+      const failedComponentIds = new Set<string>();
+      let savedCount = 0;
+
+      results.forEach((result, index) => {
+        const componentId = saveTasks[index].componentId;
+        if (result.status === "fulfilled") {
+          result.value.results.forEach((item) => {
+            const key = `${item.student_id}-${String(item.assessment_component_id ?? componentId)}`;
+            updatedMap.set(key, item);
+          });
+          savedCount += result.value.results.length;
+        } else {
+          failedComponentIds.add(componentId);
+        }
       });
 
       setRows((prev) =>
         prev.map((row) => {
-          const saved = updatedMap.get(String(row.student.id));
-          if (!saved) {
-            return {
-              ...row,
+          const nextCells = { ...row.cells };
+          displayComponents.forEach((component) => {
+            const componentId = String(component.id);
+            if (failedComponentIds.has(componentId)) {
+              return;
+            }
+            const saved = updatedMap.get(
+              `${row.student.id}-${componentId}`,
+            );
+            const cell = nextCells[componentId];
+            if (!cell) {
+              return;
+            }
+            if (!saved) {
+              nextCells[componentId] = {
+                ...cell,
+                rowError: null,
+                status: cell.hasResult ? "saved" : "none",
+              };
+              return;
+            }
+            const savedScore = formatScore(saved.total_score);
+            const savedRemark = (saved.remarks ?? "").trim();
+            nextCells[componentId] = {
+              ...cell,
+              score: savedScore,
+              remark: saved.remarks ?? "",
+              originalScore: savedScore,
+              originalRemark: savedRemark,
+              hasResult: true,
+              status: "saved",
               rowError: null,
-              status: row.hasResult ? "saved" : "none",
             };
-          }
-          const savedScore = formatScore(saved.total_score);
-          const savedRemark = (saved.remarks ?? "").trim();
+          });
           return {
             ...row,
-            score: savedScore,
-            remark: saved.remarks ?? "",
-            originalScore: savedScore,
-            originalRemark: savedRemark,
-            hasResult: true,
-            status: "saved",
-            rowError: null,
+            cells: nextCells,
           };
         }),
       );
 
-      setFeedback({
-        type: "success",
-        message: response.message ?? "Scores saved successfully.",
-      });
+      if (failedComponentIds.size) {
+        setFeedback({
+          type: "danger",
+          message: `Scores saved for ${savedCount} entries, but ${failedComponentIds.size} component batch${failedComponentIds.size === 1 ? "" : "es"} failed.`,
+        });
+      } else {
+        setFeedback({
+          type: "success",
+          message: "Scores saved successfully.",
+        });
+      }
 
-      const savedCount =
-        typeof response.meta?.total === "number"
-          ? response.meta.total
-          : response.results.length;
       setStatusMessage(`Saved ${savedCount} entries.`);
     } catch (error) {
       console.error("Unable to save scores", error);
@@ -1309,14 +1485,14 @@ export default function ResultsEntryPage() {
       setSaving(false);
     }
   }, [
-    componentMaxScore,
-    componentMaxScoreLabel,
+    displayComponents,
+    getComponentMaxScore,
+    getComponentMaxScoreLabel,
     resetMessages,
     rows,
     selectedSession,
     selectedTerm,
     selectedSubject,
-    selectedComponent,
   ]);
 
   return (
@@ -1475,7 +1651,7 @@ export default function ResultsEntryPage() {
                     !selectedSubject
                   }
                 >
-                  <option value="">Select component</option>
+                  <option value="">All components</option>
                   {components.map((component) => {
                     const label = component.label
                       ? `${component.name} (${component.label})`
@@ -1518,9 +1694,22 @@ export default function ResultsEntryPage() {
                   <th>Student</th>
                   <th>Admission No</th>
                   <th>Class</th>
-                  <th style={{ width: "120px" }}>
-                    Score (0 - {componentMaxScoreLabel})
-                  </th>
+                  {displayComponents.map((component) => {
+                    const label = component.label
+                      ? `${component.name} (${component.label})`
+                      : component.name;
+                    const componentId = String(component.id);
+                    return (
+                      <th key={component.id} style={{ width: "140px" }}>
+                        <div className="text-muted small font-weight-bold">
+                          {label}
+                        </div>
+                        <div className="text-muted small">
+                          Max {getComponentMaxScoreLabel(componentId)}
+                        </div>
+                      </th>
+                    );
+                  })}
                   {/* Remark column commented out per request - UI hidden but data preserved
                   <th style={{ width: "280px" }}>Remark</th>
                   */}
@@ -1530,11 +1719,16 @@ export default function ResultsEntryPage() {
               <tbody>
                 {tableLoading ? (
                   <tr>
-                    <td colSpan={7}>Loading students…</td>
+                    <td colSpan={5 + displayComponents.length}>
+                      Loading students…
+                    </td>
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center text-muted">
+                    <td
+                      colSpan={5 + displayComponents.length}
+                      className="text-center text-muted"
+                    >
                       Select filters and click “Load Students” to begin.
                     </td>
                   </tr>
@@ -1542,53 +1736,72 @@ export default function ResultsEntryPage() {
                   rows.map((row, index) => {
                     const studentName = buildStudentName(row.student);
                     const classLabel = buildClassLabel(row.student);
+                    const visibleCells = displayComponents
+                      .map((component) => row.cells[String(component.id)])
+                      .filter(Boolean) as ResultEntryCell[];
+                    const hasError = visibleCells.some((cell) => cell.rowError);
+                    const hasPending = visibleCells.some(
+                      (cell) => cell.status === "pending",
+                    );
+                    const hasSaved = visibleCells.some(
+                      (cell) => cell.status === "saved",
+                    );
+                    const rowStatus: ResultRowStatus = hasPending
+                      ? "pending"
+                      : hasSaved
+                        ? "saved"
+                        : "none";
                     return (
                       <tr
                         key={String(row.student.id)}
-                        className={row.rowError ? "table-danger" : undefined}
+                        className={hasError ? "table-danger" : undefined}
                       >
                         <td>{index + 1}</td>
                         <td>{studentName}</td>
                         <td>{row.student.admission_no ?? "—"}</td>
                         <td>{classLabel}</td>
-                        <td>
-                          <input
-                            type="number"
-                            className="form-control"
-                            min={0}
-                            max={componentMaxScore}
-                            step={0.01}
-                            value={row.score}
-                            onChange={(event) => {
-                              const nextScore = event.target.value;
-                              updateRow(index, { score: nextScore });
-                              scheduleAutoSave(row, nextScore, row.remark);
-                            }}
-                          />
-                        </td>
+                        {displayComponents.map((component) => {
+                          const componentId = String(component.id);
+                          const cell = row.cells[componentId];
+                          if (!cell) {
+                            return <td key={componentId}>—</td>;
+                          }
+                          return (
+                            <td key={componentId}>
+                              <input
+                                type="number"
+                                className="form-control"
+                                min={0}
+                                max={getComponentMaxScore(componentId)}
+                                step={0.01}
+                                value={cell.score}
+                                onChange={(event) => {
+                                  const nextScore = event.target.value;
+                                  updateCell(index, componentId, {
+                                    score: nextScore,
+                                  });
+                                  scheduleAutoSave(
+                                    row,
+                                    componentId,
+                                    nextScore,
+                                    cell.remark,
+                                  );
+                                }}
+                              />
+                              {cell.rowError ? (
+                                <p className="text-danger small mb-0 mt-1">
+                                  {cell.rowError}
+                                </p>
+                              ) : null}
+                            </td>
+                          );
+                        })}
 
-                        {/* Remark input/comment UI commented out per request
-                        <td>
-                          <textarea
-                            className="form-control"
-                            rows={2}
-                            maxLength={500}
-                            value={row.remark}
-                            onChange={(event) =>
-                              updateRow(index, { remark: event.target.value })
-                            }
-                          />
-                          {row.rowError ? (
-                            <p className="text-danger small mb-0 mt-1">
-                              {row.rowError}
-                            </p>
-                          ) : null}
-                        </td>
-                        */}
+                        {/* Remark UI is hidden for now (remarks are per component). */}
 
                         <td>
-                          <span className={statusBadgeClass(row.status)}>
-                            {statusLabel(row.status)}
+                          <span className={statusBadgeClass(rowStatus)}>
+                            {statusLabel(rowStatus)}
                           </span>
                         </td>
                       </tr>
