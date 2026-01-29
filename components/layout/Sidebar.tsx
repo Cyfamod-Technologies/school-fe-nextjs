@@ -173,7 +173,7 @@ export const menuSections: MenuSection[] = [
   //   icon: "flaticon-technological",
   //   links: [
   //     { label: "Roles", href: "/v24/roles", requiredPermissions: "roles.view" },
-  //     { label: "User Roles", href: "/v24/user-roles", requiredPermissions: "users.assignRoles" },
+  //     { label: "User Roles", href: "/v24/user-roles", requiredPermissions: "user-roles.view" },
   //   ],
   // },
   {

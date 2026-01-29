@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { listRoles, type Role } from "@/lib/roles";
 import {
   listUsers,
@@ -73,11 +74,29 @@ const userHasAdminRole = (user: ManagedUser | null): boolean => {
 };
 
 export default function UserRolesPage() {
+  const { hasPermission, user } = useAuth();
+  const isAdmin = useMemo(() => {
+    const directRole = String((user as { role?: string | null })?.role ?? "").toLowerCase();
+    if (directRole === "admin") {
+      return true;
+    }
+    const roles = (user as { roles?: Array<{ name?: string | null }> })?.roles;
+    if (Array.isArray(roles)) {
+      return roles.some((role) => String(role?.name ?? "").toLowerCase() === "admin");
+    }
+    return false;
+  }, [user]);
+  const canViewUserRoles = isAdmin || hasPermission("user-roles.view");
+  const canAssignUserRoles = isAdmin || hasPermission("user-roles.assign");
+  const canRemoveUserRoles = isAdmin || hasPermission("user-roles.remove");
+  const canEditUserRoles = canAssignUserRoles || canRemoveUserRoles;
+
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
 
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [loadingRoles, setLoadingRoles] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
@@ -108,6 +127,11 @@ export default function UserRolesPage() {
   }, []);
 
   const loadRoles = useCallback(async () => {
+    if (!canViewUserRoles) {
+      setLoadingRoles(false);
+      setRoles([]);
+      return;
+    }
     setLoadingRoles(true);
     try {
       const response = await listRoles({ per_page: 200 });
@@ -124,7 +148,7 @@ export default function UserRolesPage() {
     } finally {
       setLoadingRoles(false);
     }
-  }, [showFeedback]);
+  }, [canViewUserRoles, showFeedback]);
 
   const loadUsers = useCallback(
     async (
@@ -136,7 +160,16 @@ export default function UserRolesPage() {
       const perPageValue = perPageOverride ?? perPage;
       const searchValue = searchOverride ?? searchTerm;
 
+      if (!canViewUserRoles) {
+        setLoadingUsers(false);
+        setUsers([]);
+        setTotalUsers(0);
+        setLastPage(1);
+        setUsersError("You do not have permission to view user roles.");
+        return;
+      }
       setLoadingUsers(true);
+      setUsersError(null);
       try {
         const response = await listUsers({
           page,
@@ -160,11 +193,16 @@ export default function UserRolesPage() {
         setUsers([]);
         setTotalUsers(0);
         setLastPage(1);
+        setUsersError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load users. Please try again.",
+        );
       } finally {
         setLoadingUsers(false);
       }
     },
-    [currentPage, perPage, searchTerm, showFeedback],
+    [canViewUserRoles, currentPage, perPage, searchTerm, showFeedback],
   );
 
   useEffect(() => {
@@ -193,8 +231,18 @@ export default function UserRolesPage() {
   );
 
   const selectedRolesCount = selectedRoleIds.size;
+  const roleChangeNote = !canEditUserRoles
+    ? "You do not have permission to assign or remove roles."
+    : !canAssignUserRoles
+      ? "You can only remove roles from this user."
+      : !canRemoveUserRoles
+        ? "You can only assign roles to this user."
+        : null;
 
   const handleOpenModal = (user: ManagedUser) => {
+    if (!canEditUserRoles) {
+      return;
+    }
     if (userHasAdminRole(user)) {
       return;
     }
@@ -237,6 +285,12 @@ export default function UserRolesPage() {
   }, []);
 
   const toggleRoleSelection = (roleId: string, checked: boolean, role?: Role) => {
+    if (checked && !canAssignUserRoles) {
+      return;
+    }
+    if (!checked && !canRemoveUserRoles) {
+      return;
+    }
     // Prevent unchecking teacher role if user has it
     if (!checked && role && isTeacherRole(role) && userHasTeacherRole()) {
       return;
@@ -256,6 +310,10 @@ export default function UserRolesPage() {
     event.preventDefault();
     if (!selectedUser) {
       setModalError("No user is selected.");
+      return;
+    }
+    if (!canEditUserRoles) {
+      setModalError("You do not have permission to update user roles.");
       return;
     }
 
@@ -372,12 +430,27 @@ export default function UserRolesPage() {
     return items;
   }, [currentPage, lastPage]);
 
+  const tableMessage = useMemo(() => {
+    if (loadingUsers) {
+      return "Loading users...";
+    }
+    if (usersError) {
+      return usersError;
+    }
+    if (!users.length) {
+      return searchTerm ? "No users match your search." : "No users found.";
+    }
+    return null;
+  }, [loadingUsers, searchTerm, users.length, usersError]);
+
   const pageStart = users.length
     ? (currentPage - 1) * perPage + 1
     : 0;
   const pageEnd = users.length
     ? (currentPage - 1) * perPage + users.length
     : 0;
+  const totalRolesCount = roles.length;
+  const visibleUsersCount = users.length;
 
   return (
     <>
@@ -394,7 +467,31 @@ export default function UserRolesPage() {
 
       <div className="card height-auto">
         <div className="card-body">
-          <div className="heading-layout1 mb-3">
+          <div className="rbac-hero">
+            <div className="rbac-hero-main">
+              <span className="rbac-kicker">Role assignments</span>
+              <h3>User Roles</h3>
+              <p>
+                Match users to roles and keep access aligned with responsibilities.
+              </p>
+            </div>
+            <div className="rbac-hero-stats">
+              <div className="rbac-stat">
+                <span className="rbac-stat-label">Users</span>
+                <span className="rbac-stat-value">{totalUsers}</span>
+              </div>
+              <div className="rbac-stat">
+                <span className="rbac-stat-label">Visible</span>
+                <span className="rbac-stat-value">{visibleUsersCount}</span>
+              </div>
+              <div className="rbac-stat">
+                <span className="rbac-stat-label">Roles</span>
+                <span className="rbac-stat-value">{totalRolesCount}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="heading-layout1 mb-3 rbac-toolbar">
             <div className="item-title">
               <h3>Users</h3>
             </div>
@@ -406,12 +503,14 @@ export default function UserRolesPage() {
                 placeholder="Search users..."
                 value={searchTerm}
                 onChange={handleSearchChange}
+                disabled={!canViewUserRoles}
               />
               <select
                 className="form-control form-control-sm mr-sm-2 mb-2 mb-sm-0"
                 id="pageSizeSelect"
                 value={perPage}
                 onChange={handleChangePerPage}
+                disabled={!canViewUserRoles}
               >
                 <option value={10}>10 per page</option>
                 <option value={25}>25 per page</option>
@@ -424,7 +523,7 @@ export default function UserRolesPage() {
                 onClick={() => {
                   void loadUsers();
                 }}
-                disabled={loadingUsers}
+                disabled={loadingUsers || !canViewUserRoles}
               >
                 <i className="fas fa-sync-alt mr-1" />
                 Refresh
@@ -450,9 +549,14 @@ export default function UserRolesPage() {
               </div>
             ) : null}
           </div>
+          {!canViewUserRoles ? (
+            <div className="alert alert-warning" role="alert">
+              You do not have permission to view user roles.
+            </div>
+          ) : null}
 
           <div className="table-responsive">
-            <table className="table display text-nowrap">
+            <table className="table display text-nowrap rbac-table">
               <thead>
                 <tr>
                   <th>Name</th>
@@ -462,16 +566,10 @@ export default function UserRolesPage() {
                 </tr>
               </thead>
               <tbody>
-                {loadingUsers ? (
+                {tableMessage ? (
                   <tr>
                     <td colSpan={4} className="text-center text-muted">
-                      Loading users...
-                    </td>
-                  </tr>
-                ) : users.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="text-center text-muted">
-                      No users found.
+                      {tableMessage}
                     </td>
                   </tr>
                 ) : (
@@ -488,7 +586,7 @@ export default function UserRolesPage() {
                           >
                             Locked
                           </span>
-                        ) : (
+                        ) : canEditUserRoles ? (
                           <button
                             type="button"
                             className="btn btn-sm btn-primary"
@@ -499,6 +597,8 @@ export default function UserRolesPage() {
                             <i className="fas fa-user-shield mr-1" />
                             Assign Roles
                           </button>
+                        ) : (
+                          <span className="text-muted">No access</span>
                         )}
                       </td>
                     </tr>
@@ -510,11 +610,13 @@ export default function UserRolesPage() {
 
           <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mt-3">
             <div className="text-muted mb-2 mb-md-0">
-              {totalUsers
-                ? `Showing ${pageStart}-${pageEnd} of ${totalUsers} user${
-                    totalUsers === 1 ? "" : "s"
-                  }`
-                : "No users to display."}
+              {usersError
+                ? usersError
+                : totalUsers
+                  ? `Showing ${pageStart}-${pageEnd} of ${totalUsers} user${
+                      totalUsers === 1 ? "" : "s"
+                    }`
+                  : "No users to display."}
             </div>
             <nav aria-label="User pagination">
               <ul className="pagination justify-content-end mb-0" id="usersPagination">
@@ -522,7 +624,7 @@ export default function UserRolesPage() {
                   <li
                     key={item.key}
                     className={`page-item ${
-                      item.disabled ? "disabled" : ""
+                      item.disabled || !canViewUserRoles ? "disabled" : ""
                     } ${item.active ? "active" : ""}`}
                   >
                     {item.isEllipsis ? (
@@ -536,7 +638,7 @@ export default function UserRolesPage() {
                             handleChangePage(item.page);
                           }
                         }}
-                        disabled={item.disabled}
+                        disabled={item.disabled || !canViewUserRoles}
                       >
                         {item.label}
                       </button>
@@ -566,7 +668,7 @@ export default function UserRolesPage() {
         {...(modalOpen ? {} : { "aria-hidden": true })}
       >
         <div className="modal-dialog modal-lg" role="document">
-          <div className="modal-content">
+          <div className="modal-content rbac-modal">
             <div className="modal-header">
               <h5 className="modal-title" id="userRoleModalTitle">
                 Assign Roles
@@ -598,6 +700,11 @@ export default function UserRolesPage() {
                     {modalError}
                   </div>
                 ) : null}
+                {roleChangeNote ? (
+                  <div className="alert alert-warning py-2" role="alert">
+                    {roleChangeNote}
+                  </div>
+                ) : null}
 
                 <div className="form-group">
                   <label htmlFor="roleFilter">Available Roles</label>
@@ -610,7 +717,7 @@ export default function UserRolesPage() {
                     onChange={(event) => {
                       setRoleFilter(event.target.value);
                     }}
-                    disabled={loadingRoles}
+                    disabled={loadingRoles || !canEditUserRoles}
                   />
                   <div className="border rounded p-3" id="rolesCheckboxList">
                     {loadingRoles ? (
@@ -640,6 +747,9 @@ export default function UserRolesPage() {
                           const isTeacher = isTeacherRole(role);
                           const hasTeacherRole = userHasTeacherRole();
                           const isLocked = isTeacher && hasTeacherRole;
+                          const disableToggle = checked
+                            ? !canRemoveUserRoles
+                            : !canAssignUserRoles;
                           return (
                             <div
                               className="custom-control custom-checkbox mb-2"
@@ -658,8 +768,16 @@ export default function UserRolesPage() {
                                     role,
                                   );
                                 }}
-                                disabled={saving || isLocked}
-                                title={isLocked ? "Teacher role cannot be removed from this user" : undefined}
+                                disabled={saving || loadingRoles || isLocked || disableToggle}
+                                title={
+                                  isLocked
+                                    ? "Teacher role cannot be removed from this user"
+                                    : disableToggle && !checked
+                                      ? "You do not have permission to assign roles"
+                                      : disableToggle && checked
+                                        ? "You do not have permission to remove roles"
+                                        : undefined
+                                }
                               />
                               <label
                                 className="custom-control-label"
@@ -700,7 +818,7 @@ export default function UserRolesPage() {
                 <button
                   type="submit"
                   className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                  disabled={saving || loadingRoles}
+                  disabled={saving || loadingRoles || !canEditUserRoles}
                 >
                   {saving ? "Saving..." : "Save Changes"}
                 </button>
@@ -710,6 +828,106 @@ export default function UserRolesPage() {
         </div>
       </div>
       {modalOpen ? <div className="modal-backdrop fade show" /> : null}
+      <style jsx>{`
+        .rbac-hero {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 1.5rem;
+          padding: 1.75rem;
+          border-radius: 18px;
+          background: linear-gradient(135deg, #fff7ed, #f2f7ff);
+          border: 1px solid #f0e4d6;
+          margin-bottom: 1.5rem;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .rbac-hero::after {
+          content: "";
+          position: absolute;
+          bottom: -70px;
+          right: -40px;
+          width: 180px;
+          height: 180px;
+          background: radial-gradient(circle, rgba(255, 167, 38, 0.18), rgba(255, 167, 38, 0));
+        }
+
+        .rbac-hero-main h3 {
+          margin-bottom: 0.35rem;
+          font-weight: 700;
+        }
+
+        .rbac-hero-main p {
+          margin-bottom: 0;
+          color: #5a5f66;
+        }
+
+        .rbac-kicker {
+          display: inline-block;
+          font-size: 0.7rem;
+          text-transform: uppercase;
+          letter-spacing: 1.6px;
+          font-weight: 700;
+          color: #d97706;
+          margin-bottom: 0.4rem;
+        }
+
+        .rbac-hero-stats {
+          display: flex;
+          gap: 0.75rem;
+          flex-wrap: wrap;
+        }
+
+        .rbac-stat {
+          background: #ffffff;
+          border-radius: 14px;
+          border: 1px solid #f1e8db;
+          padding: 0.6rem 0.9rem;
+          min-width: 110px;
+          box-shadow: 0 8px 18px rgba(138, 93, 14, 0.08);
+        }
+
+        .rbac-stat-label {
+          display: block;
+          font-size: 0.7rem;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: #9a7a57;
+        }
+
+        .rbac-stat-value {
+          font-size: 1.2rem;
+          font-weight: 700;
+          color: #1f2937;
+        }
+
+        .rbac-toolbar {
+          gap: 1rem;
+        }
+
+        :global(.rbac-table thead th) {
+          background: #fbf7f2;
+          border-bottom: 1px solid #f0e6da;
+          color: #6b5d4a;
+          font-weight: 600;
+        }
+
+        :global(.rbac-table tbody tr:hover) {
+          background: #fff7ed;
+        }
+
+        :global(.rbac-modal) {
+          border-radius: 18px;
+        }
+
+        @media (max-width: 768px) {
+          .rbac-hero {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+        }
+      `}</style>
     </>
   );
 }

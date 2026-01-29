@@ -9,6 +9,8 @@ import {
   type StaffListResponse,
 } from "@/lib/staff";
 import { useAuth } from "@/contexts/AuthContext";
+import { PermissionGate } from "@/components/PermissionGate";
+import { PERMISSIONS } from "@/lib/permissionKeys";
 
 interface FilterState {
   search: string;
@@ -110,8 +112,8 @@ export default function AllStaffPage() {
     return sortDirection === "asc" ? " ▲" : " ▼";
   };
 
-  const canCreateStaff = hasPermission("staff.create");
-  const canDeleteStaff = hasPermission("staff.delete");
+  const canCreateStaff = hasPermission(PERMISSIONS.STAFF_CREATE);
+  const canDeleteStaff = hasPermission(PERMISSIONS.STAFF_DELETE);
 
   return (
     <>
