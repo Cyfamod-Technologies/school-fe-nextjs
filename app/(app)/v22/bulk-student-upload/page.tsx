@@ -37,6 +37,8 @@ interface PreviewState {
   expiresAt: string | null;
 }
 
+type DuplicateAction = "skip" | "overwrite" | "allow";
+
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
 export default function BulkStudentUploadPage() {
@@ -61,8 +63,10 @@ export default function BulkStudentUploadPage() {
   const [confirming, setConfirming] = useState(false);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [validationFailure, setValidationFailure] = useState<BulkPreviewFailure | null>(null);
+  const [duplicateDecisions, setDuplicateDecisions] = useState<Record<string, DuplicateAction>>({});
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const previewCardRef = useRef<HTMLDivElement | null>(null);
 
   // Derived state
   const canDownloadTemplate = !!selectedSessionId && !!selectedClassId && !!selectedClassArmId;
@@ -145,6 +149,31 @@ export default function BulkStudentUploadPage() {
     };
     loadClassArms();
   }, [selectedClassId]);
+
+  useEffect(() => {
+    if (!preview) return;
+    previewCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [preview]);
+
+  useEffect(() => {
+    if (!preview?.rows?.length) {
+      setDuplicateDecisions({});
+      return;
+    }
+
+    const initialDecisions: Record<string, DuplicateAction> = {};
+    preview.rows.forEach((row, index) => {
+      if (!row.duplicate?.id) return;
+      const rowKey = String(row.source_row ?? index);
+      const preferred = row.duplicate_action ?? "skip";
+      if (preferred === "allow" || preferred === "overwrite" || preferred === "skip") {
+        initialDecisions[rowKey] = preferred;
+      } else {
+        initialDecisions[rowKey] = "skip";
+      }
+    });
+    setDuplicateDecisions(initialDecisions);
+  }, [preview?.rows]);
 
   const summaryItems = useMemo(() => {
     if (!preview?.summary) {
@@ -329,12 +358,29 @@ export default function BulkStudentUploadPage() {
     });
 
     try {
-      const result = await commitStudentBulkUpload(preview.batchId);
+      const result = await commitStudentBulkUpload(preview.batchId, duplicateDecisions);
+      // Keep the success message visible instead of clearing feedback immediately.
+      setSelectedFile(null);
+      setPreview(null);
+      setValidationFailure(null);
+      setDuplicateDecisions({});
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      const created = result.summary?.created ?? 0;
+      const updated = result.summary?.updated ?? 0;
+      const skipped = result.summary?.skipped ?? 0;
+      const summaryText = [
+        created ? `${created} created` : null,
+        updated ? `${updated} updated` : null,
+        skipped ? `${skipped} skipped` : null,
+      ]
+        .filter(Boolean)
+        .join(", ");
       setFeedback({
         type: "success",
-        message: result.message ?? `Upload complete! ${result.summary?.total_processed ?? 0} students were created.`,
+        message: result.message ?? `Upload complete! ${summaryText || `${result.summary?.total_processed ?? 0} processed`}.`,
       });
-      resetAllState();
     } catch (error) {
       setFeedback({
         type: "danger",
@@ -380,6 +426,13 @@ export default function BulkStudentUploadPage() {
 
   const previewRows = useMemo(() => preview?.rows ?? [], [preview?.rows]);
   const validationErrors = validationFailure?.errors ?? [];
+
+  const handleDuplicateDecisionChange = (rowKey: string, action: DuplicateAction) => {
+    setDuplicateDecisions((prev) => ({
+      ...prev,
+      [rowKey]: action,
+    }));
+  };
 
   return (
     <>
@@ -690,7 +743,7 @@ export default function BulkStudentUploadPage() {
 
       {/* Step 3: Preview Card */}
       {preview && (
-        <div className="card height-auto mb-4">
+        <div ref={previewCardRef} id="bulk-preview-card" className="card height-auto mb-4">
           <div className="card-body">
             <div className="step-card-header d-flex justify-content-between align-items-start">
               <div>
@@ -756,6 +809,8 @@ export default function BulkStudentUploadPage() {
                         <th>Session</th>
                         <th>Class</th>
                         <th>Parent Email</th>
+                        <th>Duplicate</th>
+                        <th>Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -772,11 +827,40 @@ export default function BulkStudentUploadPage() {
                                 .join(" / ")}
                             </td>
                             <td>{row.parent_email ?? ""}</td>
+                            <td>
+                              {row.duplicate?.id ? (
+                                <span className="badge badge-warning">
+                                  Duplicate
+                                </span>
+                              ) : (
+                                <span className="badge badge-success">New</span>
+                              )}
+                            </td>
+                            <td>
+                              {row.duplicate?.id ? (
+                                <select
+                                  className="form-control"
+                                  value={duplicateDecisions[String(row.source_row ?? index)] ?? "skip"}
+                                  onChange={(event) =>
+                                    handleDuplicateDecisionChange(
+                                      String(row.source_row ?? index),
+                                      event.target.value as DuplicateAction
+                                    )
+                                  }
+                                >
+                                  <option value="skip">Skip</option>
+                                  <option value="overwrite">Overwrite</option>
+                                  <option value="allow">Allow duplicate</option>
+                                </select>
+                              ) : (
+                                <span className="text-muted small">Create</span>
+                              )}
+                            </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={6} className="text-center text-muted">
+                          <td colSpan={8} className="text-center text-muted">
                             No preview rows available.
                           </td>
                         </tr>
