@@ -63,6 +63,7 @@ export default function BulkStudentUploadPage() {
   const [validationFailure, setValidationFailure] = useState<BulkPreviewFailure | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const previewCardRef = useRef<HTMLDivElement | null>(null);
 
   // Derived state
   const canDownloadTemplate = !!selectedSessionId && !!selectedClassId && !!selectedClassArmId;
@@ -145,6 +146,11 @@ export default function BulkStudentUploadPage() {
     };
     loadClassArms();
   }, [selectedClassId]);
+
+  useEffect(() => {
+    if (!preview) return;
+    previewCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [preview]);
 
   const summaryItems = useMemo(() => {
     if (!preview?.summary) {
@@ -330,11 +336,17 @@ export default function BulkStudentUploadPage() {
 
     try {
       const result = await commitStudentBulkUpload(preview.batchId);
+      // Keep the success message visible instead of clearing feedback immediately.
+      setSelectedFile(null);
+      setPreview(null);
+      setValidationFailure(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
       setFeedback({
         type: "success",
         message: result.message ?? `Upload complete! ${result.summary?.total_processed ?? 0} students were created.`,
       });
-      resetAllState();
     } catch (error) {
       setFeedback({
         type: "danger",
@@ -690,7 +702,7 @@ export default function BulkStudentUploadPage() {
 
       {/* Step 3: Preview Card */}
       {preview && (
-        <div className="card height-auto mb-4">
+        <div ref={previewCardRef} id="bulk-preview-card" className="card height-auto mb-4">
           <div className="card-body">
             <div className="step-card-header d-flex justify-content-between align-items-start">
               <div>
