@@ -169,14 +169,14 @@ export const menuSections: MenuSection[] = [
   //     { label: "Bank Details", href: "/v23/bank-details", requiredPermissions: "fees.bank-details" },
   //   ],
   // },
-  // {
-  //   label: "RBAC",
-  //   icon: "flaticon-technological",
-  //   links: [
-  //     { label: "Roles", href: "/v24/roles", requiredPermissions: "roles.view" },
-  //     { label: "User Roles", href: "/v24/user-roles", requiredPermissions: "user-roles.view" },
-  //   ],
-  // },
+  {
+    label: "Roles & Permissions",
+    icon: "flaticon-technological",
+    links: [
+      { label: "Roles", href: "/v24/roles", requiredPermissions: "roles.view" },
+      { label: "User Roles", href: "/v24/user-roles", requiredPermissions: "user-roles.view" },
+    ],
+  },
   {
     label: "School Settings",
     icon: "flaticon-settings",
