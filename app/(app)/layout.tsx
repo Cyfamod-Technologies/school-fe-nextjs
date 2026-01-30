@@ -17,23 +17,6 @@ export default function AppLayout({
   const router = useRouter();
   const pathname = usePathname();
 
-  const isTeacherUser = useMemo(() => {
-    if (!user) {
-      return false;
-    }
-    const normalizedRole = String((user as { role?: string | null }).role ?? "").toLowerCase();
-    if (normalizedRole.includes("teacher")) {
-      return true;
-    }
-    const roles = (user as { roles?: Array<{ name?: string | null }> }).roles;
-    if (Array.isArray(roles)) {
-      return roles.some((role) =>
-        String(role?.name ?? "").toLowerCase().includes("teacher"),
-      );
-    }
-    return false;
-  }, [user]);
-
   const isCbtStudentRoute = useMemo(() => {
     if (!pathname) {
       return false;

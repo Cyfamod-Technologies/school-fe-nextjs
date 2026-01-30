@@ -130,3 +130,67 @@ export async function listPermissions(
   return normalizePermissionList(payload);
 }
 
+/**
+ * Response from the permission catalog endpoint.
+ */
+export interface PermissionCatalogItem {
+  name: string;
+  description: string;
+  id: number | null;
+  seeded: boolean;
+}
+
+export interface PermissionCatalogResponse {
+  data: PermissionCatalogItem[];
+  meta: {
+    total: number;
+    seeded: number;
+    pending: number;
+  };
+}
+
+/**
+ * Response from the permission sync endpoint.
+ */
+export interface PermissionSyncResponse {
+  data: Permission[];
+  meta: {
+    synced: boolean;
+    created: number;
+    total: number;
+  };
+}
+
+/**
+ * Get the permission catalog (all available permissions with their seeding status).
+ */
+export async function getPermissionCatalog(): Promise<PermissionCatalogResponse> {
+  const response = await apiFetch<PermissionCatalogResponse>(
+    `${API_ROUTES.permissions}/catalog`,
+  );
+  return response;
+}
+
+/**
+ * Seed missing permissions for the current school.
+ */
+export async function seedPermissions(): Promise<{
+  message: string;
+  data: { created: number; existing: number; total: number };
+}> {
+  return apiFetch(`${API_ROUTES.permissions}/seed`, {
+    method: "POST",
+  });
+}
+
+/**
+ * Sync permissions: seed missing ones and return all permissions with IDs.
+ * This is the recommended way to ensure all permissions exist before managing roles.
+ */
+export async function syncPermissions(): Promise<PermissionSyncResponse> {
+  const response = await apiFetch<PermissionSyncResponse>(
+    `${API_ROUTES.permissions}/sync`,
+    { method: "POST" },
+  );
+  return response;
+}

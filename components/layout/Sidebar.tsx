@@ -6,6 +6,7 @@ import { useCallback, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { resolveBackendUrl } from "@/lib/config";
+import { isTeacherUser } from "@/lib/roleChecks";
 
 const DEFAULT_LOGO = "/assets/img/logo1.png";
 const passthroughLoader: ImageLoader = ({ src }) => src;
@@ -61,10 +62,10 @@ export const menuSections: MenuSection[] = [
     label: "Management",
     icon: "flaticon-technological",
     links: [
-      { label: "Session", href: "/v11/all-sessions", requiredPermissions: "sessions.manage" },
-      { label: "Term", href: "/v11/all-terms", requiredPermissions: "sessions.manage" },
-      { label: "Subject", href: "/v16/all-subjects", requiredPermissions: "subjects.manage" },
-      { label: "Result Pin", href: "/v19/pins", requiredPermissions: "result.pin.manage" },
+      { label: "Session", href: "/v11/all-sessions", requiredPermissions: "sessions.view" },
+      { label: "Term", href: "/v11/all-terms", requiredPermissions: "terms.view" },
+      { label: "Subject", href: "/v16/all-subjects", requiredPermissions: "subjects.view" },
+      { label: "Result Pin", href: "/v19/pins", requiredPermissions: "result.pin.view" },
     ],
   },
   {
@@ -72,7 +73,7 @@ export const menuSections: MenuSection[] = [
     icon: "flaticon-couple",
     links: [
       { label: "View Parent", href: "/v13/all-parents", requiredPermissions: "parents.view" },
-      { label: "Add Parent", href: "/v13/add-parent", requiredPermissions: "parents.manage" },
+      { label: "Add Parent", href: "/v13/add-parent", requiredPermissions: "parents.create" },
     ],
   },
   {
@@ -87,8 +88,8 @@ export const menuSections: MenuSection[] = [
     label: "Classes",
     icon: "flaticon-maths-class-materials-cross-of-a-pencil-and-a-ruler",
     links: [
-      { label: "Class", href: "/v12/all-classes", requiredPermissions: "classes.manage" },
-      { label: "Class Arm", href: "/v12/all-class-arms", requiredPermissions: "classes.manage" },
+      { label: "Class", href: "/v12/all-classes", requiredPermissions: "classes.view" },
+      { label: "Class Arm", href: "/v12/all-class-arms", requiredPermissions: "class-arms.view" },
       // { label: "Class Section", href: "/v12/all-class-arm-sections" },
     ],
   },
@@ -96,9 +97,9 @@ export const menuSections: MenuSection[] = [
     label: "Assign",
     icon: "flaticon-settings-work-tool",
     links: [
-      { label: "Subject to Class", href: "/v17/assign-subjects", requiredPermissions: "subject.assignments" },
-      { label: "Teachers to Subject", href: "/v17/assign-teachers", requiredPermissions: "subject.assignments" },
-      { label: "Teachers to Class", href: "/v18/assign-class-teachers", requiredPermissions: "subject.assignments" },
+      { label: "Subject to Class", href: "/v17/assign-subjects", requiredPermissions: "subject.assignments.view" },
+      { label: "Teachers to Subject", href: "/v17/assign-teachers", requiredPermissions: "teacher.assignments.view" },
+      { label: "Teachers to Class", href: "/v18/assign-class-teachers", requiredPermissions: "class-teachers.view" },
     ],
   },
   {
@@ -107,15 +108,15 @@ export const menuSections: MenuSection[] = [
     links: [
       { label: "View Student", href: "/v14/all-students", requiredPermissions: "students.view" },
       { label: "Add Student", href: "/v14/add-student", requiredPermissions: "students.create" },
-      { label: "Bulk Result Print", href: "/v14/bulk-results", requiredPermissions: "students.results.print", excludeRoles: "teacher" },
-      { label: "Check Student Result", href: "/v14/check-result", requiredPermissions: "results.view", excludeRoles: "teacher" },
-      { label: "Early Years Report", href: "/v14/early-years-report", requiredPermissions: "results.view", excludeRoles: "teacher" },
-      { label: "Result Entry", href: "/v19/results-entry", requiredPermissions: "results.enter" },
+      { label: "Bulk Result Print", href: "/v14/bulk-results", requiredPermissions: "results.bulk.view", excludeRoles: "teacher" },
+      { label: "Check Student Result", href: "/v14/check-result", requiredPermissions: "results.check", excludeRoles: "teacher" },
+      { label: "Early Years Report", href: "/v14/early-years-report", requiredPermissions: "results.early-years.view", excludeRoles: "teacher" },
+      { label: "Result Entry", href: "/v19/results-entry", requiredPermissions: "results.entry.view" },
       {
         label: "Class Skill Ratings",
         href: "/v14/class-skill-ratings",
-        // Allow either skills.manage (admins) or results.enter (teachers) to see it
-        requiredPermissions: ["skills.manage", "results.enter"],
+        // Allow either skills.ratings.view (admins) or results.entry.enter (teachers) to see it
+        requiredPermissions: ["skills.ratings.view", "results.entry.enter"],
       },
       { label: "Student Bulk Upload", href: "/v22/bulk-student-upload", requiredPermissions: "students.import" },
       { label: "Student Promotion", href: "/v20/student-promotion", requiredPermissions: "students.promote" },
@@ -126,38 +127,38 @@ export const menuSections: MenuSection[] = [
     label: "Attendance",
     icon: "flaticon-checklist",
     links: [
-      { label: "Student Attendance", href: "/v21/student-attendance", requiredPermissions: "attendance.students" },
-      { label: "Staff Attendance", href: "/v21/staff-attendance", requiredPermissions: "staff.attendance" },
-      { label: "Attendance Reports", href: "/v21/attendance-dashboard", requiredPermissions: "attendance.students" },
+      { label: "Student Attendance", href: "/v21/student-attendance", requiredPermissions: "attendance.student.view" },
+      { label: "Staff Attendance", href: "/v21/staff-attendance", requiredPermissions: "attendance.staff.view" },
+      { label: "Attendance Reports", href: "/v21/attendance-dashboard", requiredPermissions: "attendance.dashboard.view" },
     ],
   },
   {
     label: "CBT",
     icon: "flaticon-checklist",
     links: [
-      { label: "Quiz Panel", href: "/v27/cbt/admin", requiredPermissions: "cbt.create" },
-      { label: "CBT Link", href: "/v27/cbt/admin/cbt-link", requiredPermissions: "cbt.create" },
+      { label: "Quiz Panel", href: "/v27/cbt/admin", requiredPermissions: "cbt.admin.view" },
+      { label: "CBT Link", href: "/v27/cbt/admin/cbt-link", requiredPermissions: "cbt.links.view" },
     ],
   },
   {
     label: "Settings",
     icon: "flaticon-settings",
     links: [
-      { id: "grading-scale", label: "Grading Scale & Result Page", href: "/v19/grade-scales", requiredPermissions: "assessment.manage" },
-      { id: "skills", label: "Skills", href: "/v19/skills", requiredPermissions: "skills.manage" },
+      { id: "grading-scale", label: "Grading Scale & Result Page", href: "/v19/grade-scales", requiredPermissions: "assessment.grade-scales.view" },
+      { id: "skills", label: "Skills", href: "/v19/skills", requiredPermissions: "skills.categories.view" },
       {
         id: "assessment-components",
         label: "Assessment Components",
         href: "/v19/assessment-components",
-        requiredPermissions: "assessment.manage",
+        requiredPermissions: "assessment.components.view",
       },
       {
         id: "assessment-structure",
         label: "Assessment Structure",
         href: "/v19/assessment-structures",
-        requiredPermissions: "assessment.manage",
+        requiredPermissions: "assessment.structures.view",
       },
-      { id: "academic-rollover", label: "Academic-Rollover", href: "/v20/academic-rollover", requiredPermissions: "sessions.manage" },
+      { id: "academic-rollover", label: "Academic-Rollover", href: "/v20/academic-rollover", requiredPermissions: "academic.rollover.view" },
     ],
   },
   // {
@@ -243,15 +244,7 @@ export function Sidebar() {
   }, [user]);
 
   const dashboardPath = useMemo(() => {
-    const normalizedRole = String(user?.role ?? "").toLowerCase();
-    const isTeacher =
-      normalizedRole.includes("teacher") ||
-      (Array.isArray(user?.roles)
-        ? user?.roles.some((role) =>
-            String(role?.name ?? "").toLowerCase().includes("teacher"),
-          )
-        : false);
-    return isTeacher ? "/v25/staff-dashboard" : "/v10/dashboard";
+    return isTeacherUser(user) ? "/v25/staff-dashboard" : "/v10/dashboard";
   }, [user]);
 
   const isLinkActive = useCallback(

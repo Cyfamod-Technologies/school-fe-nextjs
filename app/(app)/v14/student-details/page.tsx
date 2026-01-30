@@ -41,6 +41,7 @@ import {
   invalidateResultPin,
   type ResultPin,
 } from "@/lib/resultPins";
+import { isTeacherUser } from "@/lib/roleChecks";
 
 const passthroughLoader: ImageLoader = ({ src }) => src;
 
@@ -96,14 +97,7 @@ export default function StudentDetailsPage() {
   }, [filterQuery]);
   const { schoolContext, user } = useAuth();
 
-  const normalizedRole = String(user?.role ?? "").toLowerCase();
-  const isTeacher =
-    normalizedRole.includes("teacher") ||
-    (Array.isArray(user?.roles)
-      ? user?.roles?.some((role) =>
-          String(role?.name ?? "").toLowerCase().includes("teacher"),
-        )
-      : false);
+  const isTeacher = isTeacherUser(user);
   const hidePrintResult =
     studentId === "4cc05231-689a-4c36-9ba5-8fb4d8b6c51e";
 

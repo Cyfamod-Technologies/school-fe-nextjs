@@ -10,6 +10,7 @@ import {
   menuSections,
   sidebarQuickLinks,
 } from "@/components/layout/Sidebar";
+import { isTeacherUser } from "@/lib/roleChecks";
 
 const DEFAULT_LOGO = "/assets/img/logo.png";
 const DEFAULT_AVATAR = "/assets/img/figure/admin.jpg";
@@ -52,30 +53,16 @@ export function Menubar() {
     return derived && derived.length > 0 ? derived : "Administrator";
   }, [user]);
 
+  const isTeacher = useMemo(() => isTeacherUser(user), [user]);
+
   const dashboardPath = useMemo(() => {
-    const normalizedRole = String((user as { role?: string | null })?.role ?? "").toLowerCase();
-    const isTeacher =
-      normalizedRole.includes("teacher") ||
-      (Array.isArray((user as { roles?: Array<{ name?: string | null }> })?.roles)
-        ? (user as { roles?: Array<{ name?: string | null }> }).roles?.some((role) =>
-            String(role?.name ?? "").toLowerCase().includes("teacher"),
-          )
-        : false);
     return isTeacher ? "/v25/staff-dashboard" : "/v10/dashboard";
-  }, [user]);
+  }, [isTeacher]);
 
   // Profile link should point to teacher profile for teachers, admin profile otherwise
   const profileHref = useMemo(() => {
-    const normalizedRole = String((user as { role?: string | null })?.role ?? "").toLowerCase();
-    const isTeacher =
-      normalizedRole.includes("teacher") ||
-      (Array.isArray((user as { roles?: Array<{ name?: string | null }> })?.roles)
-        ? (user as { roles?: Array<{ name?: string | null }> }).roles?.some((role) =>
-            String(role?.name ?? "").toLowerCase().includes("teacher"),
-          )
-        : false);
     return isTeacher ? "/v25/profile" : "/v10/profile";
-  }, [user]);
+  }, [isTeacher]);
 
   const searchableItems = useMemo(() => {
     const quickLinks = sidebarQuickLinks.map((link) => ({
@@ -103,9 +90,7 @@ export function Menubar() {
       [/\b(bulk\s+upload)\b/, "/v22/bulk-student-upload"],
       [/\b(assign\s+teachers?)\b/, "/v17/assign-teachers"],
       [/\b(assign\s+subjects?)\b/, "/v17/assign-subjects"],
-      [/\b(profile|my profile|manage profile)\b/, 
-        String((user as { role?: string | null })?.role ?? "").toLowerCase().includes("teacher") ? "/v25/profile" : "/v10/profile"
-      ],
+      [/\b(profile|my profile|manage profile)\b/, isTeacher ? "/v25/profile" : "/v10/profile"],
       [/\b(dashboard)\b/, dashboardPath],
       [/\b(assessment\s*component|components|assessment settings)\b/, "/v19/assessment-components"],
       [/\b(grade\s*scale|grading)\b/, "/v19/grade-scales"],
@@ -123,7 +108,7 @@ export function Menubar() {
     if (/\badd\b/.test(t) && /\bstaff|teacher\b/.test(t)) return "/v15/add-staff";
 
     return null;
-  }, [dashboardPath, user]);
+  }, [dashboardPath, isTeacher]);
 
   const handleSearchSubmit = useCallback(() => {
     const term = searchTerm.trim();

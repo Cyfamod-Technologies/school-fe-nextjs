@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   listSessions,
   removeSession,
   type Session,
 } from "@/lib/sessions";
+import { useAuth } from "@/contexts/AuthContext";
+import { PermissionGate } from "@/components/PermissionGate";
+import { PERMISSIONS } from "@/lib/permissionKeys";
 
 function formatDate(value?: string | null) {
   if (!value) {
@@ -21,6 +24,25 @@ function formatDate(value?: string | null) {
 }
 
 export default function AllSessionsPage() {
+  const { hasPermission, user } = useAuth();
+  
+  // Check if user is admin (admins bypass permission checks)
+  const isAdmin = useMemo(() => {
+    const directRole = String((user as { role?: string | null })?.role ?? "").toLowerCase();
+    if (directRole === "admin") {
+      return true;
+    }
+    const roles = (user as { roles?: Array<{ name?: string | null }> })?.roles;
+    if (Array.isArray(roles)) {
+      return roles.some((role) => String(role?.name ?? "").toLowerCase() === "admin");
+    }
+    return false;
+  }, [user]);
+
+  const canCreateSession = isAdmin || hasPermission(PERMISSIONS.SESSIONS_CREATE);
+  const canUpdateSession = isAdmin || hasPermission(PERMISSIONS.SESSIONS_UPDATE);
+  const canDeleteSession = isAdmin || hasPermission(PERMISSIONS.SESSIONS_DELETE);
+
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,12 +124,14 @@ export default function AllSessionsPage() {
             </div>
           </div>
           <div className="text-right mb-3">
-            <Link
-              href="/v11/add-session"
-              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-            >
-              Add New Session
-            </Link>
+            {canCreateSession && (
+              <Link
+                href="/v11/add-session"
+                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+              >
+                Add New Session
+              </Link>
+            )}
           </div>
 
           {error ? (
@@ -149,19 +173,26 @@ export default function AllSessionsPage() {
                       <td>{formatDate(session.end_date)}</td>
                       <td>
                         <div className="d-flex gap-2">
-                          <Link
-                            className="btn btn-sm btn-outline-primary"
-                            href={`/v11/edit-session?id=${session.id}`}
-                          >
-                            Edit
-                          </Link>
-                          <button
-                            className="btn btn-sm btn-outline-danger"
-                            type="button"
-                            onClick={() => onDelete(session)}
-                          >
-                            Delete
-                          </button>
+                          {canUpdateSession && (
+                            <Link
+                              className="btn btn-sm btn-outline-primary"
+                              href={`/v11/edit-session?id=${session.id}`}
+                            >
+                              Edit
+                            </Link>
+                          )}
+                          {canDeleteSession && (
+                            <button
+                              className="btn btn-sm btn-outline-danger"
+                              type="button"
+                              onClick={() => onDelete(session)}
+                            >
+                              Delete
+                            </button>
+                          )}
+                          {!canUpdateSession && !canDeleteSession && (
+                            <span className="text-muted">No actions</span>
+                          )}
                         </div>
                       </td>
                     </tr>

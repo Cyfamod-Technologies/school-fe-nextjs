@@ -35,6 +35,7 @@ import {
   type TeacherDashboardResponse,
 } from "@/lib/staff";
 import { fetchSchoolContext } from "@/lib/schoolContext";
+import { isTeacherUser } from "@/lib/roleChecks";
 
 interface FiltersState {
   sessionId: string;
@@ -84,14 +85,7 @@ type SectionsCache = Record<string, ClassArmSection[]>;
 
 export default function ClassSkillRatingsPage() {
   const { user } = useAuth();
-  const normalizedRole = String(user?.role ?? "").toLowerCase();
-  const isTeacher =
-    normalizedRole.includes("teacher") ||
-    (Array.isArray(user?.roles)
-      ? user?.roles?.some((role) =>
-          String(role?.name ?? "").toLowerCase().includes("teacher"),
-        )
-      : false);
+  const isTeacher = isTeacherUser(user);
 
   const [filters, setFilters] = useState<FiltersState>(emptyFilters);
 
