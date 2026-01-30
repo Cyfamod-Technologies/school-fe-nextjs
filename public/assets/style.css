@@ -2130,6 +2130,7 @@ ul {
   position: fixed;
   top: 0;
   bottom: 0;
+  min-height: 100vh;
   -webkit-box-sizing: content-box;
   box-sizing: content-box;
   z-index: 10;
