@@ -71,6 +71,14 @@ export interface BulkPreviewRow {
   class?: string | null;
   class_arm?: string | null;
   parent_email?: string | null;
+  duplicate?: {
+    id?: string | null;
+    admission_no?: string | null;
+    name?: string | null;
+    match?: string | null;
+  } | null;
+  duplicate_action?: "skip" | "overwrite" | "allow" | "create" | null;
+  source_row?: number | string | null;
   [key: string]: unknown;
 }
 
@@ -183,6 +191,9 @@ export interface BulkCommitResult {
   message?: string;
   summary?: {
     total_processed?: number;
+    created?: number;
+    updated?: number;
+    skipped?: number;
     [key: string]: unknown;
   };
   [key: string]: unknown;
@@ -192,15 +203,21 @@ type BulkCommitResponsePayload = BulkCommitResult;
 
 export async function commitStudentBulkUpload(
   batchId: string,
+  decisions?: Record<string, "skip" | "overwrite" | "allow">,
 ): Promise<BulkCommitResult> {
   const headers = buildAuthHeaders();
   headers.set("Content-Type", "application/json");
+
+  const body = decisions && Object.keys(decisions).length
+    ? JSON.stringify({ decisions })
+    : undefined;
 
   const response = await fetch(
     `${BACKEND_URL}${API_ROUTES.studentsBulkCommit}/${encodeURIComponent(batchId)}/commit`,
     {
       method: "POST",
       headers,
+      body,
       credentials: "include",
     },
   );
