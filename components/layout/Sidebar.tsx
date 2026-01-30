@@ -117,7 +117,7 @@ export const menuSections: MenuSection[] = [
         // Allow either skills.manage (admins) or results.enter (teachers) to see it
         requiredPermissions: ["skills.manage", "results.enter"],
       },
-      { label: "Bulk Upload", href: "/v22/bulk-student-upload", requiredPermissions: "students.import" },
+      { label: "Student Bulk Upload", href: "/v22/bulk-student-upload", requiredPermissions: "students.import" },
       { label: "Student Promotion", href: "/v20/student-promotion", requiredPermissions: "students.promote" },
       { label: "Promotion Reports", href: "/v20/promotion-reports", requiredPermissions: "promotions.history" },
     ],
