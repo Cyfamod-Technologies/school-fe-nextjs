@@ -19,6 +19,7 @@ import {
 } from "@/lib/classArmSections";
 import {
   listStudents,
+  deleteStudent,
   type StudentListResponse,
   type StudentSummary,
 } from "@/lib/students";
@@ -84,6 +85,12 @@ export default function AllStudentsPage() {
   const [students, setStudents] = useState<StudentSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bulkFeedback, setBulkFeedback] = useState<{
+    type: "success" | "info" | "warning" | "danger";
+    message: string;
+  } | null>(null);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Record<string, boolean>>({});
+  const [deletingSelected, setDeletingSelected] = useState(false);
 
   const fetchStudents = useCallback(async () => {
     setLoading(true);
@@ -234,6 +241,31 @@ export default function AllStudentsPage() {
     return `Showing ${from}-${to} of ${total} students`;
   }, [data]);
 
+  const selectedStudentCount = useMemo(() => {
+    return Object.values(selectedStudentIds).filter(Boolean).length;
+  }, [selectedStudentIds]);
+
+  const selectedStudentIdList = useMemo(() => {
+    return Object.keys(selectedStudentIds).filter(
+      (studentId) => selectedStudentIds[studentId],
+    );
+  }, [selectedStudentIds]);
+
+  const selectedVisibleCount = useMemo(() => {
+    if (!students.length) {
+      return 0;
+    }
+    return students.reduce(
+      (count, student) =>
+        count + (selectedStudentIds[String(student.id)] ? 1 : 0),
+      0,
+    );
+  }, [students, selectedStudentIds]);
+
+  const allStudentsSelected = useMemo(() => {
+    return students.length > 0 && selectedVisibleCount === students.length;
+  }, [selectedVisibleCount, students.length]);
+
   const totalPages = data?.last_page ?? 1;
 
   const buildStudentLink = useCallback(
@@ -274,6 +306,106 @@ export default function AllStudentsPage() {
     return sortDirection === "asc" ? " ▲" : " ▼";
   };
 
+  const handleToggleStudent = useCallback(
+    (studentId: string | number) => () => {
+      const key = String(studentId);
+      setSelectedStudentIds((prev) => {
+        const next = { ...prev };
+        if (next[key]) {
+          delete next[key];
+        } else {
+          next[key] = true;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleToggleAllStudents = useCallback(() => {
+    setSelectedStudentIds((prev) => {
+      if (!students.length) {
+        return {};
+      }
+      if (allStudentsSelected) {
+        const next = { ...prev };
+        students.forEach((student) => {
+          delete next[String(student.id)];
+        });
+        return next;
+      }
+      const next: Record<string, boolean> = { ...prev };
+      students.forEach((student) => {
+        next[String(student.id)] = true;
+      });
+      return next;
+    });
+  }, [allStudentsSelected, students]);
+
+  const handleDeleteSelected = useCallback(async () => {
+    if (!selectedStudentIdList.length || deletingSelected) {
+      return;
+    }
+    const count = selectedStudentIdList.length;
+    const confirmMessage = `Delete ${count} student${count === 1 ? "" : "s"} and all related records? This action cannot be undone.`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+    setBulkFeedback(null);
+    setDeletingSelected(true);
+    try {
+      const results = await Promise.allSettled(
+        selectedStudentIdList.map((studentId) => deleteStudent(studentId)),
+      );
+      const succeededIds = selectedStudentIdList.filter(
+        (_studentId, index) => results[index]?.status === "fulfilled",
+      );
+      const failedIds = selectedStudentIdList.filter(
+        (_studentId, index) => results[index]?.status === "rejected",
+      );
+
+      setSelectedStudentIds((prev) => {
+        if (!failedIds.length) {
+          return {};
+        }
+        const next = { ...prev };
+        succeededIds.forEach((studentId) => {
+          delete next[String(studentId)];
+        });
+        return next;
+      });
+
+      if (succeededIds.length && succeededIds.length === students.length && page > 1) {
+        setPage((prev) => Math.max(1, prev - 1));
+      } else if (succeededIds.length) {
+        await fetchStudents();
+      }
+
+      if (failedIds.length) {
+        setBulkFeedback({
+          type: "danger",
+          message: `${failedIds.length} of ${results.length} deletions failed. ${succeededIds.length} student${succeededIds.length === 1 ? "" : "s"} removed.`,
+        });
+      } else {
+        setBulkFeedback({
+          type: "success",
+          message: `Deleted ${succeededIds.length} student${succeededIds.length === 1 ? "" : "s"} successfully.`,
+        });
+      }
+    } catch (err) {
+      console.error("Unable to delete selected students", err);
+      setBulkFeedback({
+        type: "danger",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Unable to delete selected students.",
+      });
+    } finally {
+      setDeletingSelected(false);
+    }
+  }, [deleteStudent, deletingSelected, fetchStudents, page, selectedStudentIdList, students.length]);
+
   return (
     <>
       <div className="breadcrumbs-area">
@@ -289,6 +421,11 @@ export default function AllStudentsPage() {
       {error ? (
         <div className="alert alert-danger" role="alert">
           {error}
+        </div>
+      ) : null}
+      {bulkFeedback ? (
+        <div className={`alert alert-${bulkFeedback.type}`} role="alert">
+          {bulkFeedback.message}
         </div>
       ) : null}
 
@@ -460,16 +597,39 @@ export default function AllStudentsPage() {
 
           <div className="d-flex justify-content-between align-items-center mb-3">
             <div>
-              <PermissionGate permission={PERMISSIONS.STUDENTS_CREATE}>
-                {!isTeacher ? (
+              <div className="d-flex flex-wrap align-items-center">
+                {isTeacher ? (
                   <Link
                     href="/v14/add-student"
-                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
                   >
                     Add Student
                   </Link>
+                ) : (
+                  <PermissionGate permission={PERMISSIONS.STUDENTS_CREATE}>
+                    <Link
+                      href="/v14/add-student"
+                      className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
+                    >
+                      Add Student
+                    </Link>
+                  </PermissionGate>
+                )}
+                {!isTeacher ? (
+                  <PermissionGate permission={PERMISSIONS.STUDENTS_DELETE}>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-lg"
+                      onClick={handleDeleteSelected}
+                      disabled={deletingSelected || !selectedStudentCount}
+                    >
+                      {deletingSelected
+                        ? "Deleting…"
+                        : `Delete Selected${selectedStudentCount ? ` (${selectedStudentCount})` : ""}`}
+                    </button>
+                  </PermissionGate>
                 ) : null}
-              </PermissionGate>
+              </div>
             </div>
             <div className="d-flex align-items-center">
               <span className="mr-2">Rows per page:</span>
@@ -494,6 +654,15 @@ export default function AllStudentsPage() {
             <table className="table display text-nowrap">
               <thead>
                 <tr>
+                  <th>
+                    <input
+                      type="checkbox"
+                      checked={allStudentsSelected}
+                      onChange={handleToggleAllStudents}
+                      disabled={!students.length}
+                      aria-label="Select all students"
+                    />
+                  </th>
                   <th onClick={() => toggleSort("admission_no")} className="sortable">
                     Admission No{renderSortIndicator("admission_no")}
                   </th>
@@ -513,13 +682,13 @@ export default function AllStudentsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="text-center">
+                    <td colSpan={9} className="text-center">
                       Loading students…
                     </td>
                   </tr>
                 ) : students.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center">
+                    <td colSpan={9} className="text-center">
                       No students found.
                     </td>
                   </tr>
@@ -544,6 +713,14 @@ export default function AllStudentsPage() {
                       : "/assets/img/figure/student.png";
                     return (
                       <tr key={student.id}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(selectedStudentIds[String(student.id)])}
+                            onChange={handleToggleStudent(student.id)}
+                            aria-label={`Select ${fullName || "student"}`}
+                          />
+                        </td>
                         <td>{student.admission_no ?? "N/A"}</td>
                         <td>
                           <Image
@@ -580,18 +757,12 @@ export default function AllStudentsPage() {
                             >
                               View
                             </Link>
-                            <Link
-                              href={buildStudentLink(
-                                "/v14/edit-student",
-                                student.id,
-                              )}
-                              className="btn btn-sm btn-outline-secondary"
-                            >
-                              Edit
-                            </Link>
                             <PermissionGate permission={PERMISSIONS.STUDENTS_UPDATE}>
                               <Link
-                                href={`/v14/edit-student?id=${student.id}`}
+                                href={buildStudentLink(
+                                  "/v14/edit-student",
+                                  student.id,
+                                )}
                                 className="btn btn-sm btn-outline-secondary"
                               >
                                 Edit

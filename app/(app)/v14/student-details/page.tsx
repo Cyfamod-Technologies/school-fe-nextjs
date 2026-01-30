@@ -5,7 +5,6 @@ import Image, { type ImageLoader } from "next/image";
 import {
   ChangeEvent,
   FormEvent,
-  MouseEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -28,7 +27,6 @@ import {
   listStudentSkillTypes,
   createStudentSkillRating,
   updateStudentSkillRating,
-  deleteStudentSkillRating,
   type StudentSkillRating,
   type StudentSkillType,
 } from "@/lib/studentSkillRatings";
@@ -118,21 +116,13 @@ export default function StudentDetailsPage() {
   const [skillFeedback, setSkillFeedback] = useState<string | null>(null);
   const [skillFeedbackType, setSkillFeedbackType] = useState<"success" | "warning">("success");
   const [skillError, setSkillError] = useState<string | null>(null);
+  const [skillValues, setSkillValues] = useState<Record<string, string>>({});
+  const [skillsModalOpen, setSkillsModalOpen] = useState(false);
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewHtml, setPreviewHtml] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [skillSubmitting, setSkillSubmitting] = useState(false);
-  const [skillForm, setSkillForm] = useState<{
-    id: string | null;
-    skill_type_id: string;
-    rating_value: string;
-  }>({
-    id: null,
-    skill_type_id: "",
-    rating_value: "3",
-  });
 
   const defaultTeacherComment = "This student is good.";
   const defaultPrincipalComment = "This student is hardworking.";
@@ -153,9 +143,11 @@ export default function StudentDetailsPage() {
   const [pinProcessing, setPinProcessing] = useState(false);
   const [printProcessing, setPrintProcessing] = useState(false);
 
-  const ratingOptions = ["1", "2", "3", "4", "5"];
-  const autoSaveTimerRef = useRef<number | null>(null);
-  const lastAutoSaveKeyRef = useRef<string>("");
+  const ratingOptions = ["0", "1", "2", "3", "4", "5"];
+  const skillAutoSaveTimersRef = useRef<Record<string, number>>({});
+  const lastSkillSaveKeyRef = useRef<Record<string, string>>({});
+  const skillsScrollRangeRef = useRef<HTMLInputElement | null>(null);
+  const skillsScrollBodyRef = useRef<HTMLDivElement | null>(null);
 
   const pinTableColspan = isTeacher ? 6 : 7;
 
@@ -166,14 +158,103 @@ export default function StudentDetailsPage() {
     return termsCache[selectedSession] ?? [];
   }, [selectedSession, termsCache]);
 
-  const resetSkillForm = useCallback(() => {
-    setSkillForm({
-      id: null,
-      skill_type_id: "",
-      rating_value: "3",
+  const skillRatingsMap = useMemo(() => {
+    const map = new Map<string, StudentSkillRating>();
+    skillRatings.forEach((rating) => {
+      if (rating?.skill_type_id) {
+        map.set(String(rating.skill_type_id), rating);
+      }
     });
-    lastAutoSaveKeyRef.current = "";
+    return map;
+  }, [skillRatings]);
+
+  const orderedSkillTypes = useMemo(() => {
+    return [...skillTypes].sort((a, b) => {
+      const categoryA = (a.category ?? "").toLowerCase();
+      const categoryB = (b.category ?? "").toLowerCase();
+      if (categoryA !== categoryB) {
+        return categoryA.localeCompare(categoryB);
+      }
+      return String(a.name ?? "").localeCompare(String(b.name ?? ""));
+    });
+  }, [skillTypes]);
+
+  useEffect(() => {
+    if (!selectedSession || !selectedTerm || !orderedSkillTypes.length) {
+      setSkillValues({});
+      return;
+    }
+    const nextValues: Record<string, string> = {};
+    orderedSkillTypes.forEach((type) => {
+      const rating = skillRatingsMap.get(String(type.id));
+      nextValues[String(type.id)] =
+        rating?.rating_value != null ? String(rating.rating_value) : "0";
+    });
+    setSkillValues(nextValues);
+  }, [selectedSession, selectedTerm, orderedSkillTypes, skillRatingsMap]);
+
+  useEffect(() => {
+    Object.values(skillAutoSaveTimersRef.current).forEach((timer) => {
+      window.clearTimeout(timer);
+    });
+    skillAutoSaveTimersRef.current = {};
+    lastSkillSaveKeyRef.current = {};
+  }, [selectedSession, selectedTerm, student?.id]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(skillAutoSaveTimersRef.current).forEach((timer) => {
+        window.clearTimeout(timer);
+      });
+    };
   }, []);
+
+  useEffect(() => {
+    if (!skillsModalOpen) {
+      return;
+    }
+    const bodyScroller = skillsScrollBodyRef.current;
+    const rangeScroller = skillsScrollRangeRef.current;
+    if (!bodyScroller || !rangeScroller) {
+      return;
+    }
+
+    const updateRange = () => {
+      const max = Math.max(0, bodyScroller.scrollWidth - bodyScroller.clientWidth);
+      rangeScroller.max = String(max);
+      rangeScroller.value = String(bodyScroller.scrollLeft);
+      rangeScroller.disabled = max <= 0;
+    };
+
+    const scheduleUpdate = () => {
+      window.requestAnimationFrame(() => {
+        updateRange();
+        window.requestAnimationFrame(updateRange);
+      });
+    };
+
+    const syncFromRange = () => {
+      bodyScroller.scrollLeft = Number(rangeScroller.value);
+    };
+
+    const syncFromBody = () => {
+      const nextValue = String(bodyScroller.scrollLeft);
+      if (rangeScroller.value !== nextValue) {
+        rangeScroller.value = nextValue;
+      }
+    };
+
+    scheduleUpdate();
+    rangeScroller.addEventListener("input", syncFromRange);
+    bodyScroller.addEventListener("scroll", syncFromBody);
+    window.addEventListener("resize", scheduleUpdate);
+
+    return () => {
+      rangeScroller.removeEventListener("input", syncFromRange);
+      bodyScroller.removeEventListener("scroll", syncFromBody);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
+  }, [skillsModalOpen, orderedSkillTypes.length, skillLoading]);
 
   const loadSkillRatings = useCallback(async () => {
     if (!student?.id || !selectedSession || !selectedTerm) {
@@ -279,257 +360,99 @@ export default function StudentDetailsPage() {
     const newSession = event.target.value;
     setSelectedSession(newSession);
     setSelectedTerm("");
-    lastAutoSaveKeyRef.current = "";
+    setSkillValues({});
+    setSkillFeedback(null);
+    setSkillError(null);
   };
 
   const handleTermChange = (event: ChangeEvent<HTMLSelectElement>) => {
     setSelectedTerm(event.target.value);
-    lastAutoSaveKeyRef.current = "";
+    setSkillValues({});
+    setSkillFeedback(null);
+    setSkillError(null);
   };
 
-  const handleSkillTypeChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const value = event.target.value;
-    if (!value) {
-      setSkillForm((prev) => ({
-        ...prev,
-        id: null,
-        skill_type_id: "",
-      }));
-      lastAutoSaveKeyRef.current = "";
-      return;
-    }
-    const existing = skillRatings.find(
-      (rating) => String(rating.skill_type_id) === value,
-    );
-    if (existing) {
-      const ratingValue = String(existing.rating_value ?? "3");
-      const key = `${selectedSession}|${selectedTerm}|${value}|${ratingValue}`;
-      lastAutoSaveKeyRef.current = key;
-      setSkillForm({
-        id: String(existing.id ?? ""),
-        skill_type_id: value,
-        rating_value: ratingValue,
-      });
-      setSkillFeedback(null);
-      setSkillError(null);
-      return;
-    }
-    setSkillForm((prev) => ({
-      ...prev,
-      id: null,
-      skill_type_id: value,
-    }));
-  };
-
-  const handleSkillRatingChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const value = event.target.value;
-    setSkillForm((prev) => ({
-      ...prev,
-      rating_value: value,
-    }));
-  };
-
-  const beginEditSkillRating = useCallback(
-    (rating: StudentSkillRating) => {
-      const ratingValue = String(rating?.rating_value ?? "3");
-      const key = `${selectedSession}|${selectedTerm}|${rating?.skill_type_id ?? ""}|${ratingValue}`;
-      lastAutoSaveKeyRef.current = key;
-      setSkillForm({
-        id: rating?.id != null ? String(rating.id) : null,
-        skill_type_id:
-          rating?.skill_type_id != null ? String(rating.skill_type_id) : "",
-        rating_value: ratingValue,
-      });
-      setSkillFeedback(null);
-      setSkillError(null);
-    },
-    [selectedSession, selectedTerm],
-  );
-
-  const handleCancelSkillEdit = (event: MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    resetSkillForm();
-  };
-
-  const handleDeleteSkillRating = useCallback(
-    async (rating: StudentSkillRating) => {
-      if (!student?.id || rating?.id == null) {
+  const saveSkillRating = useCallback(
+    async (skillTypeId: string, value: string) => {
+      if (!student?.id || !selectedSession || !selectedTerm) {
         return;
       }
-      if (
-        !window.confirm(
-          "Delete this skill rating? This action cannot be undone.",
-        )
-      ) {
+      const trimmedValue = value.trim();
+      const ratingValue = Number(trimmedValue);
+      if (!Number.isFinite(ratingValue) || ratingValue < 0 || ratingValue > 5) {
         return;
       }
+
+      const key = `${selectedSession}|${selectedTerm}|${skillTypeId}|${ratingValue}`;
+      if (lastSkillSaveKeyRef.current[skillTypeId] === key) {
+        return;
+      }
+      lastSkillSaveKeyRef.current[skillTypeId] = key;
+
       setSkillError(null);
-      setSkillFeedback(null);
       try {
-        await deleteStudentSkillRating(student.id, rating.id);
-        if (skillForm.id && String(rating.id) === skillForm.id) {
-          resetSkillForm();
-        }
-        setSkillFeedback("Skill rating deleted.");
+        const existing = skillRatings.find(
+          (rating) => String(rating.skill_type_id) === String(skillTypeId),
+        );
+        const payload = {
+          session_id: selectedSession,
+          term_id: selectedTerm,
+          skill_type_id: skillTypeId,
+          rating_value: ratingValue,
+        };
+        const saved = existing?.id
+          ? await updateStudentSkillRating(student.id, existing.id, payload)
+          : await createStudentSkillRating(student.id, payload);
+        setSkillRatings((prev) => {
+          const next = prev.filter(
+            (rating) => String(rating.skill_type_id) !== String(skillTypeId),
+          );
+          return [...next, saved];
+        });
+        setSkillFeedback("Skill rating saved.");
         setSkillFeedbackType("success");
-        await loadSkillRatings();
       } catch (err) {
-        console.error("Unable to delete skill rating", err);
+        console.error("Unable to save skill rating", err);
         setSkillError(
           err instanceof Error
             ? err.message
-            : "Unable to delete skill rating.",
+            : "Unable to save skill rating.",
         );
       }
     },
-    [student?.id, skillForm.id, loadSkillRatings, resetSkillForm],
+    [student?.id, selectedSession, selectedTerm, skillRatings],
   );
 
-  const handleSkillFormSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!student?.id) {
-      return;
-    }
-    if (!selectedSession || !selectedTerm) {
-      setSkillFeedback("Select a session and term before saving a rating.");
-      setSkillFeedbackType("warning");
-      return;
-    }
-    if (!skillForm.skill_type_id || !skillForm.rating_value) {
-      setSkillError("Skill and rating are required.");
-      return;
-    }
-
-    const ratingValue = Number(skillForm.rating_value);
-    if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
-      setSkillError("Select a valid rating between 1 and 5.");
-      return;
-    }
-
-    setSkillSubmitting(true);
-    setSkillError(null);
-    try {
-      const payload = {
-        session_id: selectedSession,
-        term_id: selectedTerm,
-        skill_type_id: skillForm.skill_type_id,
-        rating_value: ratingValue,
-      };
-      if (skillForm.id) {
-        await updateStudentSkillRating(student.id, skillForm.id, payload);
-        setSkillFeedback("Skill rating updated successfully.");
-      } else {
-        const saved = await createStudentSkillRating(student.id, payload);
-        if (saved?.id) {
-          setSkillForm((prev) => ({
-            ...prev,
-            id: String(saved.id),
-          }));
-        }
-        setSkillFeedback("Skill rating saved successfully.");
+  const scheduleSkillSave = useCallback(
+    (skillTypeId: string, value: string) => {
+      if (!selectedSession || !selectedTerm) {
+        return;
       }
-      setSkillFeedbackType("success");
-      resetSkillForm();
-      await loadSkillRatings();
-    } catch (err) {
-      console.error("Unable to save skill rating", err);
-      setSkillError(
-        err instanceof Error
-          ? err.message
-          : "Unable to save skill rating at this time.",
-      );
-    } finally {
-      setSkillSubmitting(false);
-    }
-  };
-
-  const autoSaveSkillRating = useCallback(async () => {
-    if (!student?.id || !selectedSession || !selectedTerm) {
-      return;
-    }
-    if (!skillForm.skill_type_id || !skillForm.rating_value) {
-      return;
-    }
-    const ratingValue = Number(skillForm.rating_value);
-    if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
-      return;
-    }
-
-    const key = `${selectedSession}|${selectedTerm}|${skillForm.skill_type_id}|${ratingValue}`;
-    if (key === lastAutoSaveKeyRef.current) {
-      return;
-    }
-    lastAutoSaveKeyRef.current = key;
-
-    setSkillSubmitting(true);
-    setSkillError(null);
-    try {
-      const payload = {
-        session_id: selectedSession,
-        term_id: selectedTerm,
-        skill_type_id: skillForm.skill_type_id,
-        rating_value: ratingValue,
-      };
-      if (skillForm.id) {
-        await updateStudentSkillRating(student.id, skillForm.id, payload);
-        setSkillFeedback("Skill rating updated.");
-      } else {
-        const saved = await createStudentSkillRating(student.id, payload);
-        if (saved?.id) {
-          setSkillForm((prev) => ({
-            ...prev,
-            id: String(saved.id),
-          }));
-        }
-        setSkillFeedback("Skill rating saved.");
+      const trimmedValue = value.trim();
+      if (!trimmedValue) {
+        return;
       }
-      setSkillFeedbackType("success");
-      await loadSkillRatings();
-    } catch (err) {
-      console.error("Unable to auto-save skill rating", err);
-      setSkillError(
-        err instanceof Error
-          ? err.message
-          : "Unable to auto-save skill rating.",
-      );
-    } finally {
-      setSkillSubmitting(false);
-    }
-  }, [
-    student?.id,
-    selectedSession,
-    selectedTerm,
-    skillForm.id,
-    skillForm.rating_value,
-    skillForm.skill_type_id,
-    loadSkillRatings,
-  ]);
-
-  useEffect(() => {
-    if (!selectedSession || !selectedTerm) {
-      return;
-    }
-    if (!skillForm.skill_type_id || !skillForm.rating_value) {
-      return;
-    }
-    if (autoSaveTimerRef.current) {
-      window.clearTimeout(autoSaveTimerRef.current);
-    }
-    autoSaveTimerRef.current = window.setTimeout(() => {
-      void autoSaveSkillRating();
-    }, 500);
-    return () => {
-      if (autoSaveTimerRef.current) {
-        window.clearTimeout(autoSaveTimerRef.current);
+      if (skillAutoSaveTimersRef.current[skillTypeId]) {
+        window.clearTimeout(skillAutoSaveTimersRef.current[skillTypeId]);
       }
-    };
-  }, [
-    skillForm.skill_type_id,
-    skillForm.rating_value,
-    selectedSession,
-    selectedTerm,
-    autoSaveSkillRating,
-  ]);
+      skillAutoSaveTimersRef.current[skillTypeId] = window.setTimeout(() => {
+        void saveSkillRating(skillTypeId, trimmedValue);
+      }, 400);
+    },
+    [saveSkillRating, selectedSession, selectedTerm],
+  );
+
+  const handleSkillValueChange = useCallback(
+    (skillTypeId: string) => (event: ChangeEvent<HTMLSelectElement>) => {
+      const value = event.target.value;
+      setSkillValues((prev) => ({
+        ...prev,
+        [skillTypeId]: value,
+      }));
+      scheduleSkillSave(skillTypeId, value);
+    },
+    [scheduleSkillSave, skillRatingsMap],
+  );
 
   const handleTermSummaryChange = (
     field: "class_teacher_comment" | "principal_comment",
@@ -946,8 +869,7 @@ export default function StudentDetailsPage() {
   useEffect(() => {
     setSkillFeedback(null);
     setSkillError(null);
-    resetSkillForm();
-  }, [selectedSession, selectedTerm, resetSkillForm]);
+  }, [selectedSession, selectedTerm]);
 
   useEffect(() => {
     setTermSummaryFeedback(null);
@@ -1209,160 +1131,151 @@ export default function StudentDetailsPage() {
             <div className="item-title">
               <h3>Skills &amp; Behaviour Tracker</h3>
               <p className="mb-0 text-muted small">
-                Select a session and term to manage this student&rsquo;s soft-skill ratings.
+                Select a session and term, then choose ratings for each skill.
               </p>
             </div>
           </div>
-          <form className="mb-3" onSubmit={handleSkillFormSubmit}>
-            <div className="row">
-              <div className="col-xl-3 col-lg-6 col-12 form-group">
-                <label>Session</label>
-                <select
-                  className="form-control"
-                  value={selectedSession}
-                  onChange={handleSessionChange}
-                >
-                  <option value="">Select session</option>
-                  {sessions.map((session) => (
-                    <option key={session.id} value={session.id}>
-                      {session.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-xl-3 col-lg-6 col-12 form-group">
-                <label>Term</label>
-                <select
-                  className="form-control"
-                  value={selectedTerm}
-                  onChange={handleTermChange}
-                  disabled={!selectedSession}
-                >
-                  <option value="">Select term</option>
-                  {terms.map((term) => (
-                    <option key={term.id} value={term.id}>
-                      {term.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-xl-3 col-lg-6 col-12 form-group">
-                <label>Skill</label>
-                <select
-                  className="form-control"
-                  value={skillForm.skill_type_id}
-                  onChange={handleSkillTypeChange}
-                  disabled={!selectedSession || !selectedTerm}
-                  required
-                >
-                  <option value="">Select skill</option>
-                  {skillTypes.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.category ? `${type.category} - ${type.name}` : type.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-xl-3 col-lg-6 col-12 form-group">
-                <label>Rating (1 - 5)</label>
-                <select
-                  className="form-control"
-                  value={skillForm.rating_value}
-                  onChange={handleSkillRatingChange}
-                  disabled={!selectedSession || !selectedTerm}
-                  required
-                >
-                  <option value="">Select rating</option>
-                  {ratingOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
+          <div className="row mb-3">
+            <div className="col-xl-3 col-lg-6 col-12 form-group">
+              <label>Session</label>
+              <select
+                className="form-control"
+                value={selectedSession}
+                onChange={handleSessionChange}
+              >
+                <option value="">Select session</option>
+                {sessions.map((session) => (
+                  <option key={session.id} value={session.id}>
+                    {session.name}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="d-flex align-items-center">
-              {skillForm.id ? (
-                <button
-                  type="button"
-                  className="btn-fill-lg btn-light"
-                  onClick={handleCancelSkillEdit}
-                  disabled={skillSubmitting}
-                >
-                  Cancel
-                </button>
-              ) : null}
+            <div className="col-xl-3 col-lg-6 col-12 form-group">
+              <label>Term</label>
+              <select
+                className="form-control"
+                value={selectedTerm}
+                onChange={handleTermChange}
+                disabled={!selectedSession}
+              >
+                <option value="">Select term</option>
+                {terms.map((term) => (
+                  <option key={term.id} value={term.id}>
+                    {term.name}
+                  </option>
+                ))}
+              </select>
             </div>
-          </form>
-          {skillFeedback ? (
-            <div className={`alert alert-${skillFeedbackType}`} role="alert">
-              {skillFeedback}
-            </div>
-          ) : null}
-          {skillError ? (
-            <div className="alert alert-danger" role="alert">
-              {skillError}
-            </div>
-          ) : null}
-          <div className="table-responsive">
-            <table className="table display text-nowrap">
-              <thead>
-                <tr>
-                  <th>Skill</th>
-                  <th>Rating</th>
-                  <th>Updated</th>
-                  {!isTeacher ? <th>Actions</th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {skillLoading ? (
-                  <tr>
-                    <td colSpan={4}>Loading skill ratings…</td>
-                  </tr>
-                ) : skillRatings.length === 0 ? (
-                  <tr>
-                    <td colSpan={4}>
-                      {selectedSession && selectedTerm
-                        ? "No skill ratings recorded for this term."
-                        : "Select a session and term to view recorded skill ratings."}
-                    </td>
-                  </tr>
-                ) : (
-                  skillRatings.map((rating) => (
-                    <tr key={String(rating.id ?? rating.skill_type_id)}>
-                      <td>
-                        {rating.skill_type?.name ??
-                          rating.skill_type_id ??
-                          "—"}
-                      </td>
-                      <td>{rating.rating_value ?? "—"}</td>
-                      <td>{formatDateTime(rating.updated_at)}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn btn-link p-0 mr-3"
-                          onClick={() => beginEditSkillRating(rating)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-link text-danger p-0"
-                          onClick={() => {
-                            void handleDeleteSkillRating(rating);
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          </div>
+          <div className="d-flex justify-content-end">
+            <button
+              type="button"
+              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+              onClick={() => setSkillsModalOpen(true)}
+            >
+              Open Skill Ratings
+            </button>
           </div>
         </div>
       </div>
+
+      {skillsModalOpen ? (
+        <div className="skills-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="skills-modal">
+            <div className="skills-modal-header">
+              <div>
+                <h4 className="mb-0">Skill Ratings</h4>
+                <p className="mb-0 text-muted small">
+                  {selectedSession && selectedTerm
+                    ? "Select ratings for each skill."
+                    : "Select a session and term to begin."}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => setSkillsModalOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            {skillFeedback ? (
+              <div className={`alert alert-${skillFeedbackType} m-3`} role="alert">
+                {skillFeedback}
+              </div>
+            ) : null}
+            {skillError ? (
+              <div className="alert alert-danger m-3" role="alert">
+                {skillError}
+              </div>
+            ) : null}
+            <div className="skills-modal-body">
+              <input
+                ref={skillsScrollRangeRef}
+                type="range"
+                className="skills-scrollbar-range"
+                min="0"
+                defaultValue="0"
+                aria-label="Scroll skills table horizontally"
+              />
+              <div className="skills-table-scroll" ref={skillsScrollBodyRef}>
+                <table className="table display text-nowrap skills-table">
+                  <thead>
+                    <tr>
+                      <th>Category</th>
+                      <th>Skill</th>
+                      <th>Rating</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {!selectedSession || !selectedTerm ? (
+                      <tr>
+                        <td colSpan={3}>
+                          Select a session and term to rate this student&rsquo;s skills.
+                        </td>
+                      </tr>
+                    ) : skillLoading ? (
+                      <tr>
+                        <td colSpan={3}>Loading skills…</td>
+                      </tr>
+                    ) : orderedSkillTypes.length === 0 ? (
+                      <tr>
+                        <td colSpan={3}>No skills configured for this school.</td>
+                      </tr>
+                    ) : (
+                      orderedSkillTypes.map((type) => {
+                        const skillId = String(type.id);
+                        const ratingValue = skillValues[skillId] ?? "";
+                        return (
+                          <tr key={skillId}>
+                            <td data-label="Category">{type.category ?? "—"}</td>
+                            <td data-label="Skill">{type.name ?? "—"}</td>
+                            <td data-label="Rating">
+                              <select
+                                className="form-control form-control-sm"
+                                value={ratingValue}
+                                onChange={handleSkillValueChange(skillId)}
+                                disabled={!selectedSession || !selectedTerm}
+                              >
+                                {ratingOptions.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option === "0" ? "-----" : option}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="card height-auto mt-4">
         <div className="card-body">
@@ -1521,7 +1434,120 @@ export default function StudentDetailsPage() {
           border: 0;
         }
 
+        .skills-modal-backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          z-index: 1050;
+        }
+
+        .skills-modal {
+          background: #ffffff;
+          width: 100%;
+          max-width: none;
+          max-height: none;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          border-radius: 0;
+          overflow: hidden;
+        }
+
+        .skills-modal-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 1rem 1.25rem;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        .skills-modal-body {
+          padding: 0 1.25rem 1.25rem;
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          min-height: 0;
+        }
+
+        .skills-scrollbar-range {
+          width: 100%;
+          margin: 0 0 0.75rem;
+          height: 16px;
+          accent-color: #94a3b8;
+        }
+
+        .skills-table-scroll {
+          flex: 1;
+          min-height: 0;
+          width: 100%;
+          overflow-x: auto;
+          overflow-y: scroll;
+          scrollbar-gutter: stable;
+        }
+
+        .skills-table th,
+        .skills-table td {
+          white-space: nowrap;
+        }
+
         @media (max-width: 768px) {
+          .skills-scrollbar-range {
+            display: none;
+          }
+
+          .skills-table-scroll {
+            overflow-x: hidden;
+          }
+
+          .skills-table {
+            width: 100%;
+          }
+
+          .skills-table thead {
+            display: none;
+          }
+
+          .skills-table,
+          .skills-table tbody,
+          .skills-table tr,
+          .skills-table td {
+            display: block;
+            width: 100%;
+          }
+
+          .skills-table tr {
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.75rem;
+          }
+
+          .skills-table td {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.35rem 0;
+            border: 0;
+            white-space: normal;
+            word-break: break-word;
+          }
+
+          .skills-table td::before {
+            content: attr(data-label);
+            font-weight: 600;
+            color: #64748b;
+            flex: 0 0 90px;
+          }
+
+          .skills-table td select {
+            width: 100%;
+            max-width: 160px;
+          }
+
           .result-preview-frame {
             min-width: 1100px;
           }

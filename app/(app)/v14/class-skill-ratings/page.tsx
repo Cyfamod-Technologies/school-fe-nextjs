@@ -55,7 +55,7 @@ const emptyFilters: FiltersState = {
   skillTypeId: "",
 };
 
-const ratingOptions = ["1", "2", "3", "4", "5"];
+const ratingOptions = ["0", "1", "2", "3", "4", "5"];
 
 type RatingCell = {
   ratingId?: string;
@@ -97,6 +97,7 @@ export default function ClassSkillRatingsPage() {
 
   const [students, setStudents] = useState<StudentSummary[]>([]);
   const [skillTypes, setSkillTypes] = useState<StudentSkillType[]>([]);
+  const [skillSearchTerm, setSkillSearchTerm] = useState("");
   const [ratingsGrid, setRatingsGrid] = useState<RatingsGrid>({});
 
   const [loadingFilters, setLoadingFilters] = useState(false);
@@ -184,6 +185,27 @@ export default function ClassSkillRatingsPage() {
     const key = `${selectedClass}:${selectedArm}`;
     return sectionsCache[key] ?? [];
   }, [selectedClass, selectedArm, sectionsCache]);
+
+  const skillTypeOptions = useMemo(() => {
+    return skillTypes
+      .map((type) => ({
+        id: String(type.id),
+        label: type.category ? `${type.category} - ${type.name}` : `${type.name ?? ""}`,
+      }))
+      .filter((option) => option.label.trim().length > 0);
+  }, [skillTypes]);
+
+  useEffect(() => {
+    if (!selectedSkillTypeId) {
+      return;
+    }
+    const selected = skillTypeOptions.find(
+      (option) => option.id === String(selectedSkillTypeId),
+    );
+    if (selected) {
+      setSkillSearchTerm(selected.label);
+    }
+  }, [selectedSkillTypeId, skillTypeOptions]);
 
   const visibleSkillTypes = useMemo(() => {
     if (!selectedSkillTypeId) {
@@ -373,6 +395,24 @@ export default function ClassSkillRatingsPage() {
     [ensureArms, ensureSections, ensureTerms, selectedClass],
   );
 
+  const handleSkillSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setSkillSearchTerm(value);
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setFilters((prev) => ({ ...prev, skillTypeId: "" }));
+      return;
+    }
+    const match = skillTypeOptions.find(
+      (option) => option.label.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (match) {
+      setFilters((prev) => ({ ...prev, skillTypeId: match.id }));
+    } else if (selectedSkillTypeId) {
+      setFilters((prev) => ({ ...prev, skillTypeId: "" }));
+    }
+  };
+
   const handleLoadGrid = useCallback(async () => {
     setFeedback(null);
     setError(null);
@@ -486,7 +526,7 @@ export default function ClassSkillRatingsPage() {
         return;
       }
       const ratingValue = Number(trimmedValue);
-      if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+      if (!Number.isFinite(ratingValue) || ratingValue < 0 || ratingValue > 5) {
         return;
       }
 
@@ -663,7 +703,7 @@ export default function ClassSkillRatingsPage() {
           return;
         }
         const ratingValue = Number(value);
-        if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+        if (!Number.isFinite(ratingValue) || ratingValue < 0 || ratingValue > 5) {
           return;
         }
 
@@ -814,22 +854,21 @@ export default function ClassSkillRatingsPage() {
             </div>
             <div className="col-xl-3 col-lg-6 col-12 form-group">
               <label htmlFor="skill-filter-skill">Skill</label>
-              <select
+              <input
                 id="skill-filter-skill"
+                type="text"
                 className="form-control"
-                value={selectedSkillTypeId}
-                onChange={handleFilterChange("skillTypeId")}
+                list="class-skill-options"
+                placeholder="Search and select skill..."
+                value={skillSearchTerm}
+                onChange={handleSkillSearchChange}
                 disabled={!skillTypes.length}
-              >
-                <option value="">Select skill</option>
-                {skillTypes.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.category
-                      ? `${type.category} – ${type.name}`
-                      : type.name}
-                  </option>
+              />
+              <datalist id="class-skill-options">
+                {skillTypeOptions.map((option) => (
+                  <option key={option.id} value={option.label} />
                 ))}
-              </select>
+              </datalist>
             </div>
             {/* Class Section filter intentionally hidden for now */}
             <div className="col-xl-3 col-lg-6 col-12 form-group d-flex align-items-end">
@@ -904,18 +943,18 @@ export default function ClassSkillRatingsPage() {
                         {visibleSkillTypes.map((type) => {
                           const cell = studentRow[String(type.id)] ?? { value: "" };
                           const badge = ratingStatusBadge(cell.status);
+                          const currentValue = cell.value ? cell.value : "0";
                           return (
                             <td key={type.id}>
                               <select
                                 className="form-control form-control-sm"
-                                value={cell.value}
+                                value={currentValue}
                                 onChange={handleRatingChange(student.id, String(type.id))}
                                 style={{ maxWidth: "100px" }}
                               >
-                                <option value="">—</option>
                                 {ratingOptions.map((option) => (
                                   <option key={option} value={option}>
-                                    {option}
+                                    {option === "0" ? "-----" : option}
                                   </option>
                                 ))}
                               </select>
