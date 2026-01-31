@@ -139,4 +139,6 @@ export const API_ROUTES = {
   permissionHierarchy: "/api/v1/permissions/hierarchy",
   roles: "/api/v1/roles",
   users: "/api/v1/users",
+  aiChat: "/api/v1/ai/chat",
+  aiChatHistory: "/api/v1/ai/chats",
 } as const;

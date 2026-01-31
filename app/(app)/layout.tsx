@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Menubar } from "@/components/layout/Menubar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { OnboardingVideo } from "@/components/layout/OnboardingVideo";
+import { AiChatWidget } from "@/components/ai/AiChatWidget";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMemo } from "react";
 
@@ -81,6 +82,7 @@ export default function AppLayout({
         </div>
       </div>
       <OnboardingVideo />
+      <AiChatWidget />
     </div>
   );
 }
