@@ -8,6 +8,9 @@ import {
   type GradeRange,
   type GradeScale,
   type GradeRangePayload,
+  type PositionRange,
+  type PositionRangePayload,
+  updatePositionRanges,
 } from "@/lib/gradeScales";
 import {
   fetchResultPageSettings,
@@ -23,6 +26,15 @@ interface EditableRange {
   max_score: string;
   description: string;
   grade_point: string;
+  locked?: boolean;
+}
+
+interface EditablePositionRange {
+  key: string;
+  id: number | string | null;
+  min_score: string;
+  max_score: string;
+  position: string;
   locked?: boolean;
 }
 
@@ -55,6 +67,29 @@ function toEditable(range: GradeRange, index: number): EditableRange {
   };
 }
 
+function toEditablePositionRange(
+  range: PositionRange,
+  index: number,
+): EditablePositionRange {
+  return {
+    key: `position-${range.id ?? index}`,
+    id: range.id ?? null,
+    min_score:
+      range.min_score === null || range.min_score === undefined
+        ? ""
+        : `${range.min_score}`,
+    max_score:
+      range.max_score === null || range.max_score === undefined
+        ? ""
+        : `${range.max_score}`,
+    position:
+      range.position === null || range.position === undefined
+        ? ""
+        : `${range.position}`,
+    locked: range.locked,
+  };
+}
+
 function createEmptyRange(): EditableRange {
   return {
     key: `new-${generateTempKey()}`,
@@ -67,8 +102,24 @@ function createEmptyRange(): EditableRange {
   };
 }
 
+function createEmptyPositionRange(): EditablePositionRange {
+  return {
+    key: `position-new-${generateTempKey()}`,
+    id: null,
+    min_score: "",
+    max_score: "",
+    position: "",
+  };
+}
+
 interface ValidationResult {
   payload: GradeRangePayload[];
+  error: string | null;
+  invalidKeys: Set<string>;
+}
+
+interface PositionValidationResult {
+  payload: PositionRangePayload[];
   error: string | null;
   invalidKeys: Set<string>;
 }
@@ -146,6 +197,77 @@ function validateRanges(ranges: EditableRange[]): ValidationResult {
   };
 }
 
+function validatePositionRanges(
+  ranges: EditablePositionRange[],
+): PositionValidationResult {
+  const invalidKeys = new Set<string>();
+  const payload: PositionRangePayload[] = [];
+
+  if (!ranges.length) {
+    return {
+      payload: [],
+      invalidKeys,
+      error: null,
+    };
+  }
+
+  const seenPositions = new Set<number>();
+
+  ranges.forEach((range, index) => {
+    const minRaw = range.min_score.trim();
+    const maxRaw = range.max_score.trim();
+    const positionRaw = range.position.trim();
+
+    const min = Number(minRaw);
+    const max = Number(maxRaw);
+    const position = Number(positionRaw);
+
+    const isInvalid =
+      minRaw === "" ||
+      maxRaw === "" ||
+      positionRaw === "" ||
+      Number.isNaN(min) ||
+      Number.isNaN(max) ||
+      Number.isNaN(position) ||
+      min < 0 ||
+      max < 0 ||
+      min > 100 ||
+      max > 100 ||
+      min > max ||
+      !Number.isInteger(position) ||
+      position < 1 ||
+      seenPositions.has(position);
+
+    if (isInvalid) {
+      invalidKeys.add(range.key);
+      return;
+    }
+
+    seenPositions.add(position);
+
+    payload.push({
+      id: range.id,
+      min_score: min,
+      max_score: max,
+      position,
+    });
+  });
+
+  if (invalidKeys.size > 0) {
+    return {
+      payload: [],
+      invalidKeys,
+      error: "Fix the highlighted rows before saving.",
+    };
+  }
+
+  return {
+    payload,
+    invalidKeys,
+    error: null,
+  };
+}
+
 const defaultResultSettings: ResultPageSettings = {
   show_grade: true,
   show_position: true,
@@ -165,6 +287,20 @@ export default function GradeScalesPage() {
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [positionRanges, setPositionRanges] = useState<EditablePositionRange[]>([]);
+  const [positionDeletedIds, setPositionDeletedIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [positionInvalidKeys, setPositionInvalidKeys] = useState<Set<string>>(
+    new Set(),
+  );
+  const [positionInfoMessage, setPositionInfoMessage] = useState<string | null>(
+    null,
+  );
+  const [positionErrorMessage, setPositionErrorMessage] = useState<string | null>(
+    null,
+  );
+  const [positionSaving, setPositionSaving] = useState(false);
   const [resultSettings, setResultSettings] = useState<ResultPageSettings>(
     defaultResultSettings,
   );
@@ -251,6 +387,9 @@ export default function GradeScalesPage() {
       setRanges([]);
       setDeletedIds(new Set());
       setInvalidKeys(new Set());
+      setPositionRanges([]);
+      setPositionDeletedIds(new Set());
+      setPositionInvalidKeys(new Set());
       return;
     }
 
@@ -262,6 +401,15 @@ export default function GradeScalesPage() {
     setInvalidKeys(new Set());
     setInfoMessage(null);
     setErrorMessage(null);
+
+    const positionSorted = [...(selectedScale.position_ranges ?? [])].sort(
+      (a, b) => (a.position ?? 0) - (b.position ?? 0),
+    );
+    setPositionRanges(positionSorted.map(toEditablePositionRange));
+    setPositionDeletedIds(new Set());
+    setPositionInvalidKeys(new Set());
+    setPositionInfoMessage(null);
+    setPositionErrorMessage(null);
   }, [selectedScale]);
 
   const resultSettingOptions = useMemo(
@@ -302,6 +450,10 @@ export default function GradeScalesPage() {
 
   const handleAddRange = () => {
     setRanges((prev) => [...prev, createEmptyRange()]);
+  };
+
+  const handleAddPositionRange = () => {
+    setPositionRanges((prev) => [...prev, createEmptyPositionRange()]);
   };
 
   const handleRangeChange = (
@@ -348,6 +500,61 @@ export default function GradeScalesPage() {
     setRanges((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
 
     setInvalidKeys((prev) => {
+      if (!prev.size || !target.key || !prev.has(target.key)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.delete(target.key);
+      return next;
+    });
+  };
+
+  const handlePositionRangeChange = (
+    index: number,
+    field: keyof EditablePositionRange,
+    value: string,
+  ) => {
+    const targetKey = positionRanges[index]?.key;
+    setPositionRanges((prev) => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        [field]: value,
+      };
+      return next;
+    });
+    setPositionInvalidKeys((prev) => {
+      if (!prev.size) {
+        return prev;
+      }
+      if (!targetKey || !prev.has(targetKey)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.delete(targetKey);
+      return next;
+    });
+  };
+
+  const handleDeletePositionRange = (index: number) => {
+    const target = positionRanges[index];
+    if (!target) {
+      return;
+    }
+
+    if (target.id) {
+      setPositionDeletedIds((existing) => {
+        const next = new Set(existing);
+        next.add(String(target.id));
+        return next;
+      });
+    }
+
+    setPositionRanges((prev) =>
+      prev.filter((_, itemIndex) => itemIndex !== index),
+    );
+
+    setPositionInvalidKeys((prev) => {
       if (!prev.size || !target.key || !prev.has(target.key)) {
         return prev;
       }
@@ -428,6 +635,47 @@ export default function GradeScalesPage() {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePositionSave = async () => {
+    if (!selectedScaleId) {
+      setPositionErrorMessage("Select a grading scale before saving.");
+      return;
+    }
+    setPositionInfoMessage(null);
+    setPositionErrorMessage(null);
+
+    const validation = validatePositionRanges(positionRanges);
+    setPositionInvalidKeys(validation.invalidKeys);
+
+    if (validation.error) {
+      setPositionErrorMessage(validation.error);
+      return;
+    }
+
+    try {
+      setPositionSaving(true);
+      const { scale, message } = await updatePositionRanges(selectedScaleId, {
+        ranges: validation.payload,
+        deleted_ids: Array.from(positionDeletedIds),
+      });
+      setScales((prev) =>
+        prev.map((item) => (String(item.id) === String(scale.id) ? scale : item)),
+      );
+      setPositionInfoMessage(
+        message ?? "Position ranges updated successfully.",
+      );
+      setPositionDeletedIds(new Set());
+    } catch (error) {
+      console.error("Unable to save position ranges", error);
+      setPositionErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to save position ranges.",
+      );
+    } finally {
+      setPositionSaving(false);
     }
   };
 
@@ -524,6 +772,87 @@ export default function GradeScalesPage() {
               type="button"
               className="btn btn-sm btn-outline-danger"
               onClick={() => handleDeleteRange(index)}
+              disabled={range.locked}
+            >
+              <i className="fas fa-trash" />
+            </button>
+          </td>
+        </tr>
+      );
+    });
+  };
+
+  const renderPositionTableBody = () => {
+    if (!selectedScaleId) {
+      return (
+        <tr>
+          <td colSpan={4} className="text-center text-muted">
+            Select a grading scale to view position ranges.
+          </td>
+        </tr>
+      );
+    }
+
+    if (!positionRanges.length) {
+      return (
+        <tr>
+          <td colSpan={4} className="text-center text-muted">
+            No position ranges defined.
+          </td>
+        </tr>
+      );
+    }
+
+    return positionRanges.map((range, index) => {
+      const rowInvalid = positionInvalidKeys.has(range.key);
+      return (
+        <tr key={range.key} className={rowInvalid ? "table-danger" : undefined}>
+          <td>
+            <input
+              type="number"
+              className="form-control"
+              min={1}
+              step={1}
+              value={range.position}
+              onChange={(event) =>
+                handlePositionRangeChange(index, "position", event.target.value)
+              }
+              required
+            />
+          </td>
+          <td>
+            <input
+              type="number"
+              className="form-control"
+              min={0}
+              max={100}
+              step={1}
+              value={range.min_score}
+              onChange={(event) =>
+                handlePositionRangeChange(index, "min_score", event.target.value)
+              }
+              required
+            />
+          </td>
+          <td>
+            <input
+              type="number"
+              className="form-control"
+              min={0}
+              max={100}
+              step={1}
+              value={range.max_score}
+              onChange={(event) =>
+                handlePositionRangeChange(index, "max_score", event.target.value)
+              }
+              required
+            />
+          </td>
+          <td className="text-center">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-danger"
+              onClick={() => handleDeletePositionRange(index)}
               disabled={range.locked}
             >
               <i className="fas fa-trash" />
@@ -682,6 +1011,58 @@ export default function GradeScalesPage() {
                 </tr>
               </thead>
               <tbody id="grade-range-table">{renderTableBody()}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div className="card height-auto mt-4">
+        <div className="card-body">
+          <div className="heading-layout1">
+            <div className="item-title">
+              <h3>Position Ranges (Optional)</h3>
+            </div>
+            <div className="d-flex align-items-center">
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-primary mr-2"
+                onClick={handleAddPositionRange}
+                disabled={!selectedScaleId || positionSaving}
+              >
+                <i className="fas fa-plus" /> Add Position
+              </button>
+              <button
+                type="button"
+                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                onClick={handlePositionSave}
+                disabled={positionSaving || !selectedScaleId}
+              >
+                {positionSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+          <p className="text-muted mb-3">
+            Define score bands that receive fixed positions (subject and overall).
+            Scores outside these ranges are ranked below the highest configured
+            position.
+          </p>
+          {positionInfoMessage ? (
+            <div className="alert alert-info">{positionInfoMessage}</div>
+          ) : null}
+          {positionErrorMessage ? (
+            <div className="alert alert-danger">{positionErrorMessage}</div>
+          ) : null}
+          <div className="table-responsive">
+            <table className="table table-bordered table-striped">
+              <thead>
+                <tr>
+                  <th>Position</th>
+                  <th>Minimum Score</th>
+                  <th>Maximum Score</th>
+                  <th className="text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody>{renderPositionTableBody()}</tbody>
             </table>
           </div>
         </div>
