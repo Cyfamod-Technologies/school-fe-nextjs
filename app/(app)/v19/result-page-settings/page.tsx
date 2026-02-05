@@ -15,6 +15,7 @@ const defaultSettings: ResultPageSettings = {
   show_lowest: true,
   show_highest: true,
   show_remarks: true,
+  comment_mode: "manual",
 };
 
 export default function ResultPageSettingsPage() {
