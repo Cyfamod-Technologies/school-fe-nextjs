@@ -10,6 +10,8 @@ import { isTeacherUser } from "@/lib/roleChecks";
 
 const DEFAULT_LOGO = "/assets/img/logo1.png";
 const passthroughLoader: ImageLoader = ({ src }) => src;
+const showEarlyYearsReport =
+  process.env.NEXT_PUBLIC_EARLY_YEARS_REPORT === "1";
 
 export interface MenuLink {
   id?: string;
@@ -110,7 +112,16 @@ export const menuSections: MenuSection[] = [
       { label: "Add Student", href: "/v14/add-student", requiredPermissions: "students.create" },
       { label: "Bulk Result Print", href: "/v14/bulk-results", requiredPermissions: "results.bulk.view", excludeRoles: "teacher" },
       { label: "Check Student Result", href: "/v14/check-result", requiredPermissions: "results.check", excludeRoles: "teacher" },
-      { label: "Early Years Report", href: "/v14/early-years-report", requiredPermissions: "results.early-years.view", excludeRoles: "teacher" },
+      ...(showEarlyYearsReport
+        ? [
+            {
+              label: "Early Years Report",
+              href: "/v14/early-years-report",
+              requiredPermissions: "results.early-years.view",
+              excludeRoles: "teacher",
+            },
+          ]
+        : []),
       { label: "Result Entry", href: "/v19/results-entry", requiredPermissions: "results.entry.view" },
       {
         label: "Class Skill Ratings",
