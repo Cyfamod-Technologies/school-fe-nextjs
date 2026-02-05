@@ -2135,6 +2135,17 @@ ul {
   z-index: 10;
   --sidebar-menu-top-padding: 10px;
 }
+.sidebar-main.sidebar-menu-one,
+.sidebar-main.sidebar-menu-one .sidebar-menu-content,
+.sidebar-main.sidebar-menu-one .mobile-sidebar-header {
+  background-color: #042C54;
+}
+.sidebar-main.sidebar-menu-one {
+  min-height: 100vh;
+}
+.sidebar-main.sidebar-menu-one .sidebar-menu-content {
+  min-height: calc(100vh - 68px);
+}
 .sidebar-menu-one .sidebar-menu-content {
   border: none;
   border-radius: 0;
