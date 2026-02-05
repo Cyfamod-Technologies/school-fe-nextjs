@@ -205,6 +205,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { schoolContext, user, hasPermission } = useAuth();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const isTeacher = isTeacherUser(user);
 
   const logoSrc = useMemo(() => {
     const customLogo = schoolContext.school?.logo_url;
@@ -307,12 +308,13 @@ export function Sidebar() {
 
   const filteredSections = useMemo(() => {
     return menuSections
+      .filter((section) => !(isTeacher && section.label === "Management"))
       .map((section) => ({
         ...section,
         links: section.links.filter(linkVisible),
       }))
       .filter((section) => section.links.length > 0);
-  }, [linkVisible]);
+  }, [linkVisible, isTeacher]);
 
   const isSectionActive = (section: MenuSection) =>
     section.links.some((link) => isLinkActive(link.href));
