@@ -125,7 +125,11 @@ export const menuSections: MenuSection[] = [
       {
         label: "Result Entry",
         href: "/v19/results-entry",
-        requiredPermissions: ["results.entry.view", "results.entry.enter"],
+        requiredPermissions: [
+          "results.entry.view",
+          "results.entry.enter",
+          "results.enter",
+        ],
       },
       {
         label: "Class Skill Ratings",
@@ -308,7 +312,12 @@ export function Sidebar() {
 
   const filteredSections = useMemo(() => {
     return menuSections
-      .filter((section) => !(isTeacher && section.label === "Management"))
+      .filter((section) => {
+        if (!isTeacher) {
+          return true;
+        }
+        return section.label !== "Management" && section.label !== "Assign";
+      })
       .map((section) => ({
         ...section,
         links: section.links.filter(linkVisible),
