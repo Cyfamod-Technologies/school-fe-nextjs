@@ -122,7 +122,11 @@ export const menuSections: MenuSection[] = [
             },
           ]
         : []),
-      { label: "Result Entry", href: "/v19/results-entry", requiredPermissions: "results.entry.view" },
+      {
+        label: "Result Entry",
+        href: "/v19/results-entry",
+        requiredPermissions: ["results.entry.view", "results.entry.enter"],
+      },
       {
         label: "Class Skill Ratings",
         href: "/v14/class-skill-ratings",
