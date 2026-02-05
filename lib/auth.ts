@@ -64,6 +64,7 @@ export interface School {
   current_term_id?: number | null;
   current_session?: Session | null;
   current_term?: Term | null;
+  result_comment_mode?: "manual" | "range" | null;
   [key: string]: unknown;
 }
 

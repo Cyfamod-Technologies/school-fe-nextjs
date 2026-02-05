@@ -22,12 +22,23 @@ export interface PositionRange {
   [key: string]: unknown;
 }
 
+export interface CommentRange {
+  id: number | string | null;
+  min_score: number;
+  max_score: number;
+  teacher_comment: string;
+  principal_comment: string;
+  locked?: boolean;
+  [key: string]: unknown;
+}
+
 export interface GradeScale {
   id: number | string;
   name: string;
   description?: string | null;
   grade_ranges: GradeRange[];
   position_ranges?: PositionRange[];
+  comment_ranges?: CommentRange[];
   [key: string]: unknown;
 }
 
@@ -70,6 +81,14 @@ export interface PositionRangePayload {
   position: number;
 }
 
+export interface CommentRangePayload {
+  id?: number | string | null;
+  min_score: number;
+  max_score: number;
+  teacher_comment: string;
+  principal_comment: string;
+}
+
 export interface UpdateGradeScaleRangesPayload {
   ranges: GradeRangePayload[];
   deleted_ids?: Array<number | string>;
@@ -77,6 +96,11 @@ export interface UpdateGradeScaleRangesPayload {
 
 export interface UpdatePositionRangesPayload {
   ranges: PositionRangePayload[];
+  deleted_ids?: Array<number | string>;
+}
+
+export interface UpdateCommentRangesPayload {
+  ranges: CommentRangePayload[];
   deleted_ids?: Array<number | string>;
 }
 
@@ -144,6 +168,37 @@ export async function updatePositionRanges(
   const wrapper = raw as GradeScaleUpdateResponse;
   if (!wrapper || !wrapper.data) {
     throw new Error("Server returned no data while updating position ranges.");
+  }
+
+  return {
+    scale: wrapper.data,
+    message:
+      typeof wrapper.message === "string" ? wrapper.message : undefined,
+  };
+}
+
+export async function updateCommentRanges(
+  scaleId: number | string,
+  payload: UpdateCommentRangesPayload,
+): Promise<GradeScaleUpdateResult> {
+  const raw = await apiFetch<GradeScale | GradeScaleUpdateResponse>(
+    `${API_ROUTES.gradeScales}/${scaleId}/comment-ranges`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (raw && typeof raw === "object" && "grade_ranges" in raw) {
+    return {
+      scale: raw as GradeScale,
+      message: undefined,
+    };
+  }
+
+  const wrapper = raw as GradeScaleUpdateResponse;
+  if (!wrapper || !wrapper.data) {
+    throw new Error("Server returned no data while updating comment ranges.");
   }
 
   return {
