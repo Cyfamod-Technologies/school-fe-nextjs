@@ -3,6 +3,8 @@ import { apiFetch } from "@/lib/apiClient";
 export interface StudentTermSummary {
   class_teacher_comment?: string | null;
   principal_comment?: string | null;
+  days_present?: number | null;
+  days_absent?: number | null;
   [key: string]: unknown;
 }
 
@@ -15,6 +17,8 @@ export interface UpdateStudentTermSummaryPayload
   extends StudentTermSummaryFilters {
   class_teacher_comment?: string | null;
   principal_comment?: string | null;
+  days_present?: number | null;
+  days_absent?: number | null;
 }
 
 interface TermSummaryResponse {
@@ -25,6 +29,8 @@ interface TermSummaryResponse {
 const EMPTY_SUMMARY: StudentTermSummary = {
   class_teacher_comment: "",
   principal_comment: "",
+  days_present: null,
+  days_absent: null,
 };
 
 function buildQuery(params: Record<string, string | number | undefined>) {
@@ -44,12 +50,19 @@ function extractSummary(
   if (!payload) {
     return { ...EMPTY_SUMMARY };
   }
-  if ("class_teacher_comment" in payload || "principal_comment" in payload) {
+  if (
+    "class_teacher_comment" in payload ||
+    "principal_comment" in payload ||
+    "days_present" in payload ||
+    "days_absent" in payload
+  ) {
     return {
       class_teacher_comment:
         (payload as StudentTermSummary).class_teacher_comment ?? "",
       principal_comment:
         (payload as StudentTermSummary).principal_comment ?? "",
+      days_present: (payload as StudentTermSummary).days_present ?? null,
+      days_absent: (payload as StudentTermSummary).days_absent ?? null,
     };
   }
   const wrapper = payload as TermSummaryResponse;
@@ -57,6 +70,8 @@ function extractSummary(
     return {
       class_teacher_comment: wrapper.data.class_teacher_comment ?? "",
       principal_comment: wrapper.data.principal_comment ?? "",
+      days_present: wrapper.data.days_present ?? null,
+      days_absent: wrapper.data.days_absent ?? null,
     };
   }
   return { ...EMPTY_SUMMARY };

@@ -359,6 +359,9 @@ export interface AttendanceReportFilters {
   to?: string;
   school_class_id?: string | number | null;
   department?: string | null;
+  session_id?: string | number | null;
+  term_id?: string | number | null;
+  student_id?: string | number | null;
 }
 
 export async function fetchStudentAttendanceReport(
@@ -368,6 +371,9 @@ export async function fetchStudentAttendanceReport(
     from: filters.from,
     to: filters.to,
     school_class_id: filters.school_class_id,
+    session_id: filters.session_id,
+    term_id: filters.term_id,
+    student_id: filters.student_id,
   });
   return apiFetch<StudentAttendanceReport>(
     `${API_ROUTES.studentAttendance}/report${query}`,
