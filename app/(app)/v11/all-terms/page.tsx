@@ -8,6 +8,8 @@ import {
   listTermsBySession,
   type Term,
 } from "@/lib/terms";
+import { useAuth } from "@/contexts/AuthContext";
+import { PERMISSIONS } from "@/lib/permissionKeys";
 
 function formatDate(value?: string | null) {
   if (!value) {
@@ -22,6 +24,25 @@ function formatDate(value?: string | null) {
 }
 
 export default function AllTermsPage() {
+  const { hasPermission, user } = useAuth();
+  
+  // Check if user is admin (admins bypass permission checks)
+  const isAdmin = useMemo(() => {
+    const directRole = String((user as { role?: string | null })?.role ?? "").toLowerCase();
+    if (directRole === "admin") {
+      return true;
+    }
+    const roles = (user as { roles?: Array<{ name?: string | null }> })?.roles;
+    if (Array.isArray(roles)) {
+      return roles.some((role) => String(role?.name ?? "").toLowerCase() === "admin");
+    }
+    return false;
+  }, [user]);
+
+  const canCreateTerm = isAdmin || hasPermission(PERMISSIONS.TERMS_CREATE);
+  const canUpdateTerm = isAdmin || hasPermission(PERMISSIONS.TERMS_UPDATE);
+  const canDeleteTerm = isAdmin || hasPermission(PERMISSIONS.TERMS_DELETE);
+
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
   const [terms, setTerms] = useState<Term[]>([]);
@@ -182,12 +203,14 @@ export default function AllTermsPage() {
               </select>
             </div>
             <div className="col-lg-6 col-12 d-flex align-items-end justify-content-end">
-              <Link
-                href="/v11/add-term"
-                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-              >
-                Add New Term
-              </Link>
+              {canCreateTerm && (
+                <Link
+                  href="/v11/add-term"
+                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                >
+                  Add New Term
+                </Link>
+              )}
             </div>
           </div>
 
@@ -232,19 +255,26 @@ export default function AllTermsPage() {
                       <td>{formatDate(term.end_date)}</td>
                       <td>
                         <div className="d-flex gap-2">
-                          <Link
-                            className="btn btn-sm btn-outline-primary"
-                            href={`/v11/edit-term?id=${term.id}`}
-                          >
-                            Edit
-                          </Link>
-                          <button
-                            className="btn btn-sm btn-outline-danger"
-                            type="button"
-                            onClick={() => handleDelete(term)}
-                          >
-                            Delete
-                          </button>
+                          {canUpdateTerm && (
+                            <Link
+                              className="btn btn-sm btn-outline-primary"
+                              href={`/v11/edit-term?id=${term.id}`}
+                            >
+                              Edit
+                            </Link>
+                          )}
+                          {canDeleteTerm && (
+                            <button
+                              className="btn btn-sm btn-outline-danger"
+                              type="button"
+                              onClick={() => handleDelete(term)}
+                            >
+                              Delete
+                            </button>
+                          )}
+                          {!canUpdateTerm && !canDeleteTerm && (
+                            <span className="text-muted">No actions</span>
+                          )}
                         </div>
                       </td>
                     </tr>

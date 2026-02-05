@@ -1,14 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   deleteClass,
   listClasses,
   type SchoolClass,
 } from "@/lib/classes";
+import { useAuth } from "@/contexts/AuthContext";
+import { PERMISSIONS } from "@/lib/permissionKeys";
 
 export default function AllClassesPage() {
+  const { hasPermission, user } = useAuth();
+  
+  // Check if user is admin (admins bypass permission checks)
+  const isAdmin = useMemo(() => {
+    const directRole = String((user as { role?: string | null })?.role ?? "").toLowerCase();
+    if (directRole === "admin") {
+      return true;
+    }
+    const roles = (user as { roles?: Array<{ name?: string | null }> })?.roles;
+    if (Array.isArray(roles)) {
+      return roles.some((role) => String(role?.name ?? "").toLowerCase() === "admin");
+    }
+    return false;
+  }, [user]);
+
+  const canCreateClass = isAdmin || hasPermission(PERMISSIONS.CLASSES_CREATE);
+  const canUpdateClass = isAdmin || hasPermission(PERMISSIONS.CLASSES_UPDATE);
+  const canDeleteClass = isAdmin || hasPermission(PERMISSIONS.CLASSES_DELETE);
+
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,12 +125,14 @@ export default function AllClassesPage() {
           </div>
 
           <div className="text-right mb-3">
-            <Link
-              href="/v12/add-class"
-              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-            >
-              Add New Class
-            </Link>
+            {canCreateClass && (
+              <Link
+                href="/v12/add-class"
+                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+              >
+                Add New Class
+              </Link>
+            )}
           </div>
 
           <div className="table-responsive">
@@ -141,19 +164,26 @@ export default function AllClassesPage() {
                       <td>{item.name}</td>
                       <td>
                         <div className="d-flex gap-2">
-                          <Link
-                            className="btn btn-sm btn-outline-primary"
-                            href={`/v12/edit-class?id=${item.id}`}
-                          >
-                            Edit
-                          </Link>
-                          <button
-                            className="btn btn-sm btn-outline-danger"
-                            type="button"
-                            onClick={() => handleDelete(item)}
-                          >
-                            Delete
-                          </button>
+                          {canUpdateClass && (
+                            <Link
+                              className="btn btn-sm btn-outline-primary"
+                              href={`/v12/edit-class?id=${item.id}`}
+                            >
+                              Edit
+                            </Link>
+                          )}
+                          {canDeleteClass && (
+                            <button
+                              className="btn btn-sm btn-outline-danger"
+                              type="button"
+                              onClick={() => handleDelete(item)}
+                            >
+                              Delete
+                            </button>
+                          )}
+                          {!canUpdateClass && !canDeleteClass && (
+                            <span className="text-muted">No actions</span>
+                          )}
                         </div>
                       </td>
                     </tr>

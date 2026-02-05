@@ -1,4 +1,4 @@
-/* AUTO-GENERATED FROM permission.md. DO NOT EDIT BY HAND. */
+/* Permission catalog - one entry per permission key */
 export interface PermissionActionEntry {
   function: string;
   description: string;
@@ -6,234 +6,273 @@ export interface PermissionActionEntry {
 }
 
 export const PERMISSION_ACTIONS: PermissionActionEntry[] = [
+  // Dashboard
   { function: "View Dashboard", description: "Access dashboard page", permission: "dashboard.view" },
-  { function: "View Student Count", description: "See student statistics", permission: "dashboard.stats.students" },
-  { function: "View Teacher Count", description: "See teacher statistics", permission: "dashboard.stats.teachers" },
-  { function: "View Parent Count", description: "See parent statistics", permission: "dashboard.stats.parents" },
+  { function: "View Student Stats", description: "See student statistics", permission: "dashboard.stats.students" },
+  { function: "View Teacher Stats", description: "See teacher statistics", permission: "dashboard.stats.teachers" },
+  { function: "View Parent Stats", description: "See parent statistics", permission: "dashboard.stats.parents" },
+  
+  // Profile
   { function: "View Profile", description: "View own profile", permission: "profile.view" },
   { function: "Edit Admin Profile", description: "Update admin profile", permission: "admin.profile.update" },
-  { function: "View School Profile", description: "View school settings", permission: "settings.school.view" },
-  { function: "Update School Name", description: "Change school name", permission: "settings.school.update" },
-  { function: "Update School Logo", description: "Upload/change logo", permission: "settings.school.update" },
-  { function: "Update School Signature", description: "Upload principal signature", permission: "settings.school.update" },
+  
+  // School Settings
+  { function: "View School Settings", description: "View school settings", permission: "settings.school.view" },
+  { function: "Edit School Settings", description: "Update school name, logo, signature", permission: "settings.school.update" },
   { function: "Set Current Session", description: "Set active session", permission: "settings.school.session.update" },
   { function: "Set Current Term", description: "Set active term", permission: "settings.school.term.update" },
+  
+  // Sessions
   { function: "View Sessions", description: "List all sessions", permission: "sessions.view" },
-  { function: "Add Session", description: "Navigate to add session", permission: "sessions.create" },
-  { function: "Edit Session", description: "Navigate to edit session", permission: "sessions.update" },
+  { function: "Create Session", description: "Create new session", permission: "sessions.create" },
+  { function: "Edit Session", description: "Modify session details", permission: "sessions.update" },
   { function: "Delete Session", description: "Remove a session", permission: "sessions.delete" },
-  { function: "Refresh List", description: "Reload sessions list", permission: "sessions.view" },
-  { function: "Create Session", description: "Submit new session form", permission: "sessions.create" },
-  { function: "Update Session", description: "Submit session updates", permission: "sessions.update" },
+  
+  // Terms
   { function: "View Terms", description: "List all terms", permission: "terms.view" },
-  { function: "Add Term", description: "Navigate to add term", permission: "terms.create" },
-  { function: "Edit Term", description: "Navigate to edit term", permission: "terms.update" },
+  { function: "Create Term", description: "Create new term", permission: "terms.create" },
+  { function: "Edit Term", description: "Modify term details", permission: "terms.update" },
   { function: "Delete Term", description: "Remove a term", permission: "terms.delete" },
-  { function: "Create Term", description: "Submit new term form", permission: "terms.create" },
-  { function: "Update Term", description: "Submit term updates", permission: "terms.update" },
+  
+  // Classes
   { function: "View Classes", description: "List all classes", permission: "classes.view" },
-  { function: "Add Class", description: "Navigate to add class", permission: "classes.create" },
-  { function: "Edit Class", description: "Navigate to edit class", permission: "classes.update" },
+  { function: "Create Class", description: "Create new class", permission: "classes.create" },
+  { function: "Edit Class", description: "Modify class details", permission: "classes.update" },
   { function: "Delete Class", description: "Remove a class", permission: "classes.delete" },
-  { function: "Refresh List", description: "Reload classes list", permission: "classes.view" },
-  { function: "Create Class", description: "Submit new class form", permission: "classes.create" },
-  { function: "Update Class", description: "Submit class updates", permission: "classes.update" },
+  
+  // Class Arms
   { function: "View Class Arms", description: "List all class arms", permission: "class-arms.view" },
-  { function: "Add Class Arm", description: "Navigate to add arm", permission: "class-arms.create" },
-  { function: "Edit Class Arm", description: "Navigate to edit arm", permission: "class-arms.update" },
+  { function: "Create Class Arm", description: "Create new class arm", permission: "class-arms.create" },
+  { function: "Edit Class Arm", description: "Modify class arm", permission: "class-arms.update" },
   { function: "Delete Class Arm", description: "Remove a class arm", permission: "class-arms.delete" },
-  { function: "Create Class Arm", description: "Submit new class arm", permission: "class-arms.create" },
-  { function: "Update Class Arm", description: "Submit arm updates", permission: "class-arms.update" },
+  
+  // Class Sections
   { function: "View Sections", description: "List all sections", permission: "class-sections.view" },
-  { function: "Add Section", description: "Navigate to add section", permission: "class-sections.create" },
-  { function: "Edit Section", description: "Navigate to edit", permission: "class-sections.update" },
+  { function: "Create Section", description: "Create new section", permission: "class-sections.create" },
+  { function: "Edit Section", description: "Modify section", permission: "class-sections.update" },
   { function: "Delete Section", description: "Remove a section", permission: "class-sections.delete" },
-  { function: "Create Section", description: "Submit new section", permission: "class-sections.create" },
-  { function: "Update Section", description: "Submit section updates", permission: "class-sections.update" },
-  { function: "View Parents", description: "List all parents", permission: "parents.view" },
-  { function: "Search Parents", description: "Search parent records", permission: "parents.view" },
-  { function: "Add Parent", description: "Navigate to add parent", permission: "parents.create" },
-  { function: "Edit Parent", description: "Navigate to edit parent", permission: "parents.update" },
+  
+  // Parents
+  { function: "View Parents", description: "List and search parents", permission: "parents.view" },
+  { function: "Create Parent", description: "Create new parent record", permission: "parents.create" },
+  { function: "Edit Parent", description: "Modify parent details", permission: "parents.update" },
   { function: "Delete Parent", description: "Remove a parent", permission: "parents.delete" },
-  { function: "Refresh List", description: "Reload parents list", permission: "parents.view" },
-  { function: "Create Parent", description: "Submit new parent form", permission: "parents.create" },
-  { function: "Update Parent", description: "Submit parent updates", permission: "parents.update" },
-  { function: "View Students", description: "List all students", permission: "students.view" },
-  { function: "Search Students", description: "Search student records", permission: "students.view" },
-  { function: "Filter by Session", description: "Filter students list", permission: "students.view" },
-  { function: "Filter by Class", description: "Filter students list", permission: "students.view" },
-  { function: "Add Student", description: "Navigate to add student", permission: "students.create" },
-  { function: "View Student Details", description: "Navigate to details", permission: "students.view" },
-  { function: "Edit Student", description: "Navigate to edit", permission: "students.update" },
+  
+  // Students
+  { function: "View Students", description: "List, search, and filter students", permission: "students.view" },
+  { function: "Create Student", description: "Create new student record", permission: "students.create" },
+  { function: "Edit Student", description: "Modify student details", permission: "students.update" },
   { function: "Delete Student", description: "Remove a student", permission: "students.delete" },
-  { function: "Sort Students", description: "Sort by columns", permission: "students.view" },
   { function: "Export Students", description: "Export to CSV/Excel", permission: "students.export" },
-  { function: "Create Student", description: "Submit new student", permission: "students.create" },
-  { function: "Upload Photo", description: "Upload student photo", permission: "students.create" },
-  { function: "Update Student", description: "Submit student updates", permission: "students.update" },
-  { function: "Upload Photo", description: "Update student photo", permission: "students.update" },
-  { function: "View Details", description: "View full student info", permission: "students.view" },
+  
+  // Bulk Results
   { function: "View Bulk Results", description: "Access bulk results page", permission: "results.bulk.view" },
   { function: "Generate Results", description: "Generate bulk result sheets", permission: "results.bulk.generate" },
   { function: "Download Results", description: "Download result PDFs", permission: "results.bulk.download" },
   { function: "Print Results", description: "Print result sheets", permission: "results.bulk.print" },
   { function: "Check Result", description: "View individual result", permission: "results.check" },
+  
+  // Skills & Ratings
   { function: "View Skill Ratings", description: "View class skills", permission: "skills.ratings.view" },
   { function: "Enter Skill Ratings", description: "Enter/update ratings", permission: "skills.ratings.enter" },
   { function: "Save Ratings", description: "Save skill ratings", permission: "skills.ratings.update" },
+  
+  // Early Years Results
   { function: "View Early Years", description: "Access early years page", permission: "results.early-years.view" },
-  { function: "Generate Report", description: "Generate EY reports", permission: "results.early-years.generate" },
-  { function: "View Staff", description: "List all staff", permission: "staff.view" },
-  { function: "Search Staff", description: "Search staff records", permission: "staff.view" },
-  { function: "Filter by Role", description: "Filter staff list", permission: "staff.view" },
-  { function: "Add Staff", description: "Navigate to add staff", permission: "staff.create" },
-  { function: "Edit Staff", description: "Navigate to edit staff", permission: "staff.update" },
+  { function: "Generate EY Report", description: "Generate early years reports", permission: "results.early-years.generate" },
+  
+  // Staff
+  { function: "View Staff", description: "List and search staff", permission: "staff.view" },
+  { function: "Create Staff", description: "Create new staff record", permission: "staff.create" },
+  { function: "Edit Staff", description: "Modify staff details", permission: "staff.update" },
   { function: "Delete Staff", description: "Remove a staff member", permission: "staff.delete" },
-  { function: "Refresh List", description: "Reload staff list", permission: "staff.view" },
-  { function: "Create Staff", description: "Submit new staff form", permission: "staff.create" },
-  { function: "Assign Roles", description: "Assign roles to staff", permission: "staff.roles.assign" },
-  { function: "Update Staff", description: "Submit staff updates", permission: "staff.update" },
-  { function: "Update Roles", description: "Change staff roles", permission: "staff.roles.update" },
+  { function: "Assign Staff Roles", description: "Assign roles to staff", permission: "staff.roles.assign" },
+  { function: "Edit Staff Roles", description: "Change staff roles", permission: "staff.roles.update" },
+  
+  // Subjects
   { function: "View Subjects", description: "List all subjects", permission: "subjects.view" },
-  { function: "Add Subject", description: "Navigate to add subject", permission: "subjects.create" },
-  { function: "Edit Subject", description: "Navigate to edit", permission: "subjects.update" },
+  { function: "Create Subject", description: "Create new subject", permission: "subjects.create" },
+  { function: "Edit Subject", description: "Modify subject details", permission: "subjects.update" },
   { function: "Delete Subject", description: "Remove a subject", permission: "subjects.delete" },
-  { function: "Create Subject", description: "Submit new subject", permission: "subjects.create" },
-  { function: "Update Subject", description: "Submit subject updates", permission: "subjects.update" },
-  { function: "View Assignments", description: "List subject assignments", permission: "subject.assignments.view" },
-  { function: "Create Assignment", description: "Assign subject to class", permission: "subject.assignments.create" },
-  { function: "Update Assignment", description: "Modify assignment", permission: "subject.assignments.update" },
-  { function: "Delete Assignment", description: "Remove assignment", permission: "subject.assignments.delete" },
-  { function: "Filter Assignments", description: "Filter by class/arm", permission: "subject.assignments.view" },
+  
+  // Subject Assignments
+  { function: "View Subject Assignments", description: "List subject assignments", permission: "subject.assignments.view" },
+  { function: "Create Subject Assignment", description: "Assign subject to class", permission: "subject.assignments.create" },
+  { function: "Edit Subject Assignment", description: "Modify assignment", permission: "subject.assignments.update" },
+  { function: "Delete Subject Assignment", description: "Remove assignment", permission: "subject.assignments.delete" },
+  
+  // Teacher Assignments
   { function: "View Teacher Assignments", description: "List teacher assignments", permission: "teacher.assignments.view" },
-  { function: "Assign Teacher", description: "Assign teacher to subject", permission: "teacher.assignments.create" },
-  { function: "Update Assignment", description: "Modify assignment", permission: "teacher.assignments.update" },
-  { function: "Delete Assignment", description: "Remove assignment", permission: "teacher.assignments.delete" },
+  { function: "Create Teacher Assignment", description: "Assign teacher to subject", permission: "teacher.assignments.create" },
+  { function: "Edit Teacher Assignment", description: "Modify assignment", permission: "teacher.assignments.update" },
+  { function: "Delete Teacher Assignment", description: "Remove assignment", permission: "teacher.assignments.delete" },
+  
+  // Class Teachers
   { function: "View Class Teachers", description: "List class teacher assignments", permission: "class-teachers.view" },
   { function: "Assign Class Teacher", description: "Assign teacher to class", permission: "class-teachers.create" },
-  { function: "Update Assignment", description: "Modify assignment", permission: "class-teachers.update" },
-  { function: "Delete Assignment", description: "Remove assignment", permission: "class-teachers.delete" },
+  { function: "Edit Class Teacher", description: "Modify assignment", permission: "class-teachers.update" },
+  { function: "Remove Class Teacher", description: "Remove assignment", permission: "class-teachers.delete" },
+  
+  // Assessment Components
   { function: "View Components", description: "List assessment components", permission: "assessment.components.view" },
-  { function: "Create Component", description: "Add new component", permission: "assessment.components.create" },
-  { function: "Update Component", description: "Modify component", permission: "assessment.components.update" },
+  { function: "Create Component", description: "Create new component", permission: "assessment.components.create" },
+  { function: "Edit Component", description: "Modify component", permission: "assessment.components.update" },
   { function: "Delete Component", description: "Remove component", permission: "assessment.components.delete" },
-  { function: "Manage Structures", description: "Link to structures page", permission: "assessment.structures.view" },
-  { function: "Link to CBT", description: "Link component to CBT", permission: "assessment.components.cbt-link" },
+  { function: "Link to CBT", description: "Link component to CBT quiz", permission: "assessment.components.cbt-link" },
+  
+  // Assessment Structures
   { function: "View Structures", description: "List component structures", permission: "assessment.structures.view" },
-  { function: "Create Structure", description: "Add structure", permission: "assessment.structures.create" },
-  { function: "Update Structure", description: "Modify structure", permission: "assessment.structures.update" },
+  { function: "Create Structure", description: "Create new structure", permission: "assessment.structures.create" },
+  { function: "Edit Structure", description: "Modify structure", permission: "assessment.structures.update" },
   { function: "Delete Structure", description: "Remove structure", permission: "assessment.structures.delete" },
-  { function: "View CBT Link", description: "View linked CBT quizzes", permission: "assessment.cbt-link.view" },
-  { function: "Create Link", description: "Link component to quiz", permission: "assessment.cbt-link.create" },
-  { function: "Delete Link", description: "Remove CBT link", permission: "assessment.cbt-link.delete" },
-  { function: "View Structures", description: "View all structures", permission: "assessment.structures.view" },
+  
+  // CBT Assessment Links
+  { function: "View CBT Links", description: "View linked CBT quizzes", permission: "assessment.cbt-link.view" },
+  { function: "Create CBT Link", description: "Link component to quiz", permission: "assessment.cbt-link.create" },
+  { function: "Delete CBT Link", description: "Remove CBT link", permission: "assessment.cbt-link.delete" },
+  
+  // Grade Scales
   { function: "View Grade Scales", description: "List grade scales", permission: "assessment.grade-scales.view" },
-  { function: "Add Grade Range", description: "Add new grade range", permission: "assessment.grade-scales.create" },
-  { function: "Update Grade Range", description: "Modify grade range", permission: "assessment.grade-scales.update" },
-  { function: "Delete Grade Range", description: "Remove grade range", permission: "assessment.grade-scales.delete" },
+  { function: "Create Grade Scale", description: "Create new grade range", permission: "assessment.grade-scales.create" },
+  { function: "Edit Grade Scale", description: "Modify grade range", permission: "assessment.grade-scales.update" },
+  { function: "Delete Grade Scale", description: "Remove grade range", permission: "assessment.grade-scales.delete" },
   { function: "Set Active Scale", description: "Set school's active scale", permission: "assessment.grade-scales.set-active" },
+  
+  // Result PINs
   { function: "View PINs", description: "List result PINs", permission: "result.pin.view" },
-  { function: "Generate Single PIN", description: "Generate PIN for student", permission: "result.pin.create" },
-  { function: "Bulk Generate PINs", description: "Generate PINs for class", permission: "result.pin.bulk-create" },
+  { function: "Create PIN", description: "Generate PIN for student", permission: "result.pin.create" },
+  { function: "Bulk Create PINs", description: "Generate PINs for class", permission: "result.pin.bulk-create" },
   { function: "Invalidate PIN", description: "Revoke a PIN", permission: "result.pin.invalidate" },
   { function: "Export PINs", description: "Export PINs to file", permission: "result.pin.export" },
-  { function: "View Settings", description: "View result page settings", permission: "settings.result-page.view" },
-  { function: "Update Settings", description: "Modify result settings", permission: "settings.result-page.update" },
+  
+  // Result Page Settings
+  { function: "View Result Settings", description: "View result page settings", permission: "settings.result-page.view" },
+  { function: "Edit Result Settings", description: "Modify result settings", permission: "settings.result-page.update" },
+  
+  // Results Entry
   { function: "View Results Entry", description: "Access results entry page", permission: "results.entry.view" },
   { function: "Enter Scores", description: "Input student scores", permission: "results.entry.enter" },
   { function: "Save Results", description: "Save entered results", permission: "results.entry.save" },
-  { function: "Auto-Save Results", description: "Auto-save feature", permission: "results.entry.save" },
+  
+  // Skill Categories
   { function: "View Skill Categories", description: "List categories", permission: "skills.categories.view" },
-  { function: "Create Category", description: "Add skill category", permission: "skills.categories.create" },
-  { function: "Update Category", description: "Modify category", permission: "skills.categories.update" },
-  { function: "Delete Category", description: "Remove category", permission: "skills.categories.delete" },
+  { function: "Create Skill Category", description: "Create skill category", permission: "skills.categories.create" },
+  { function: "Edit Skill Category", description: "Modify category", permission: "skills.categories.update" },
+  { function: "Delete Skill Category", description: "Remove category", permission: "skills.categories.delete" },
+  
+  // Skill Types
   { function: "View Skill Types", description: "List skill types", permission: "skills.types.view" },
-  { function: "Create Skill Type", description: "Add skill type", permission: "skills.types.create" },
-  { function: "Update Skill Type", description: "Modify skill type", permission: "skills.types.update" },
+  { function: "Create Skill Type", description: "Create skill type", permission: "skills.types.create" },
+  { function: "Edit Skill Type", description: "Modify skill type", permission: "skills.types.update" },
   { function: "Delete Skill Type", description: "Remove skill type", permission: "skills.types.delete" },
+  
+  // Student Promotion
   { function: "View Promotion", description: "Access promotion page", permission: "students.promotion.view" },
-  { function: "Select Students", description: "Select students to promote", permission: "students.promotion.view" },
-  { function: "Promote Students", description: "Execute promotion", permission: "students.promotion.execute" },
+  { function: "Execute Promotion", description: "Promote students", permission: "students.promotion.execute" },
   { function: "Bulk Promote", description: "Promote multiple students", permission: "students.promotion.bulk" },
-  { function: "View Reports", description: "View promotion reports", permission: "students.promotion.reports.view" },
-  { function: "Export Reports", description: "Export promotion data", permission: "students.promotion.reports.export" },
+  { function: "View Promotion Reports", description: "View promotion reports", permission: "students.promotion.reports.view" },
+  { function: "Export Promotion Reports", description: "Export promotion data", permission: "students.promotion.reports.export" },
+  
+  // Academic Rollover
   { function: "View Rollover", description: "Access rollover page", permission: "academic.rollover.view" },
   { function: "Execute Rollover", description: "Perform academic rollover", permission: "academic.rollover.execute" },
-  { function: "View Dashboard", description: "Access attendance overview", permission: "attendance.dashboard.view" },
-  { function: "View Statistics", description: "See attendance stats", permission: "attendance.stats.view" },
-  { function: "View Attendance", description: "View student attendance", permission: "attendance.student.view" },
-  { function: "Mark Attendance", description: "Mark student attendance", permission: "attendance.student.mark" },
-  { function: "Update Attendance", description: "Modify attendance record", permission: "attendance.student.update" },
-  { function: "Delete Attendance", description: "Remove attendance record", permission: "attendance.student.delete" },
-  { function: "Export Attendance", description: "Export attendance data", permission: "attendance.student.export" },
-  { function: "View History", description: "View attendance history", permission: "attendance.student.history" },
+  
+  // Attendance Dashboard
+  { function: "View Attendance Dashboard", description: "Access attendance overview", permission: "attendance.dashboard.view" },
+  { function: "View Attendance Stats", description: "See attendance statistics", permission: "attendance.stats.view" },
+  
+  // Student Attendance
+  { function: "View Student Attendance", description: "View student attendance", permission: "attendance.student.view" },
+  { function: "Mark Student Attendance", description: "Mark student attendance", permission: "attendance.student.mark" },
+  { function: "Edit Student Attendance", description: "Modify attendance record", permission: "attendance.student.update" },
+  { function: "Delete Student Attendance", description: "Remove attendance record", permission: "attendance.student.delete" },
+  { function: "Export Student Attendance", description: "Export attendance data", permission: "attendance.student.export" },
+  { function: "View Attendance History", description: "View attendance history", permission: "attendance.student.history" },
+  
+  // Staff Attendance
   { function: "View Staff Attendance", description: "View staff attendance", permission: "attendance.staff.view" },
-  { function: "Mark Attendance", description: "Mark staff attendance", permission: "attendance.staff.mark" },
-  { function: "Update Attendance", description: "Modify attendance record", permission: "attendance.staff.update" },
-  { function: "Delete Attendance", description: "Remove attendance record", permission: "attendance.staff.delete" },
-  { function: "Export Attendance", description: "Export staff attendance", permission: "attendance.staff.export" },
+  { function: "Mark Staff Attendance", description: "Mark staff attendance", permission: "attendance.staff.mark" },
+  { function: "Edit Staff Attendance", description: "Modify attendance record", permission: "attendance.staff.update" },
+  { function: "Delete Staff Attendance", description: "Remove attendance record", permission: "attendance.staff.delete" },
+  { function: "Export Staff Attendance", description: "Export staff attendance", permission: "attendance.staff.export" },
+  
+  // Bulk Student Upload
   { function: "View Bulk Upload", description: "Access bulk upload page", permission: "students.bulk-upload.view" },
   { function: "Upload File", description: "Upload CSV/Excel file", permission: "students.bulk-upload.upload" },
   { function: "Preview Data", description: "Preview import data", permission: "students.bulk-upload.preview" },
   { function: "Execute Import", description: "Run bulk import", permission: "students.bulk-upload.execute" },
   { function: "Download Template", description: "Get import template", permission: "students.bulk-upload.template" },
+  
+  // Finance - Bank
   { function: "View Bank Details", description: "View school bank info", permission: "finance.bank.view" },
-  { function: "Update Bank Details", description: "Modify bank information", permission: "finance.bank.update" },
+  { function: "Edit Bank Details", description: "Modify bank information", permission: "finance.bank.update" },
+  
+  // Finance - Fee Items
   { function: "View Fee Items", description: "List fee items", permission: "finance.fee-items.view" },
-  { function: "Create Fee Item", description: "Add new fee item", permission: "finance.fee-items.create" },
-  { function: "Update Fee Item", description: "Modify fee item", permission: "finance.fee-items.update" },
+  { function: "Create Fee Item", description: "Create new fee item", permission: "finance.fee-items.create" },
+  { function: "Edit Fee Item", description: "Modify fee item", permission: "finance.fee-items.update" },
   { function: "Delete Fee Item", description: "Remove fee item", permission: "finance.fee-items.delete" },
+  
+  // Finance - Fee Structures
   { function: "View Fee Structures", description: "List fee structures", permission: "finance.fee-structures.view" },
-  { function: "Create Fee Structure", description: "Add fee structure", permission: "finance.fee-structures.create" },
-  { function: "Update Fee Structure", description: "Modify structure", permission: "finance.fee-structures.update" },
+  { function: "Create Fee Structure", description: "Create fee structure", permission: "finance.fee-structures.create" },
+  { function: "Edit Fee Structure", description: "Modify structure", permission: "finance.fee-structures.update" },
   { function: "Delete Fee Structure", description: "Remove structure", permission: "finance.fee-structures.delete" },
   { function: "Copy Fee Structure", description: "Duplicate structure", permission: "finance.fee-structures.copy" },
+  
+  // RBAC - Roles
   { function: "View Roles", description: "List all roles", permission: "roles.view" },
-  { function: "Create Role", description: "Add new role", permission: "roles.create" },
-  { function: "Update Role", description: "Modify role", permission: "roles.update" },
+  { function: "Create Role", description: "Create new role", permission: "roles.create" },
+  { function: "Edit Role", description: "Modify role", permission: "roles.update" },
   { function: "Delete Role", description: "Remove role", permission: "roles.delete" },
   { function: "Assign Permissions", description: "Set role permissions", permission: "roles.permissions.assign" },
+  
+  // RBAC - User Roles
   { function: "View User Roles", description: "List user role assignments", permission: "user-roles.view" },
-  { function: "Assign Role", description: "Assign role to user", permission: "user-roles.assign" },
-  { function: "Remove Role", description: "Remove role from user", permission: "user-roles.remove" },
-  { function: "View Dashboard", description: "Access staff dashboard", permission: "staff.dashboard.view" },
+  { function: "Assign User Role", description: "Assign role to user", permission: "user-roles.assign" },
+  { function: "Remove User Role", description: "Remove role from user", permission: "user-roles.remove" },
+  
+  // Staff Portal
+  { function: "View Staff Dashboard", description: "Access staff dashboard", permission: "staff.dashboard.view" },
   { function: "View Assigned Classes", description: "See teaching assignments", permission: "staff.classes.view" },
   { function: "View Assigned Subjects", description: "See subject assignments", permission: "staff.subjects.view" },
-  { function: "View Own Profile", description: "View staff profile", permission: "staff.profile.view" },
-  { function: "Update Own Profile", description: "Edit staff profile", permission: "staff.profile.update" },
-  { function: "View Dashboard", description: "Access student dashboard", permission: "student.dashboard.view" },
+  { function: "View Staff Profile", description: "View own staff profile", permission: "staff.profile.view" },
+  { function: "Edit Staff Profile", description: "Update own staff profile", permission: "staff.profile.update" },
+  
+  // Student Portal
+  { function: "View Student Dashboard", description: "Access student dashboard", permission: "student.dashboard.view" },
   { function: "View Bio Data", description: "View personal info", permission: "student.bio.view" },
-  { function: "View Bio Data", description: "View full bio data", permission: "student.bio.view" },
-  { function: "View My Result", description: "Access result page", permission: "student.result.view" },
-  { function: "Enter PIN", description: "Submit result PIN", permission: "student.result.view" },
-  { function: "Download Result", description: "Download result PDF", permission: "student.result.download" },
+  { function: "View My Result", description: "Access own result page", permission: "student.result.view" },
+  { function: "Download My Result", description: "Download result PDF", permission: "student.result.download" },
+  
+  // CBT - Student
   { function: "View Available Quizzes", description: "List available tests", permission: "cbt.quizzes.view" },
-  { function: "Start Quiz", description: "Begin a quiz", permission: "cbt.quizzes.take" },
-  { function: "Take Quiz", description: "Answer quiz questions", permission: "cbt.quizzes.take" },
+  { function: "Take Quiz", description: "Start and answer quiz", permission: "cbt.quizzes.take" },
   { function: "Submit Quiz", description: "Submit quiz answers", permission: "cbt.quizzes.submit" },
-  { function: "View History", description: "View quiz attempts", permission: "cbt.history.view" },
-  { function: "View Result", description: "View quiz result", permission: "cbt.results.view" },
+  { function: "View Quiz History", description: "View quiz attempts", permission: "cbt.history.view" },
+  { function: "View Quiz Result", description: "View quiz result", permission: "cbt.results.view" },
   { function: "Review Answers", description: "Review quiz answers", permission: "cbt.results.review" },
-  { function: "View All Quizzes", description: "List all quizzes", permission: "cbt.admin.view" },
-  { function: "Filter Quizzes", description: "Filter by status", permission: "cbt.admin.view" },
-  { function: "Create Quiz", description: "Navigate to create", permission: "cbt.admin.create" },
-  { function: "Edit Quiz", description: "Navigate to edit", permission: "cbt.admin.update" },
+  
+  // CBT - Admin
+  { function: "View All Quizzes", description: "List and filter all quizzes", permission: "cbt.admin.view" },
+  { function: "Create Quiz", description: "Create new quiz", permission: "cbt.admin.create" },
+  { function: "Edit Quiz", description: "Modify quiz details", permission: "cbt.admin.update" },
   { function: "Delete Quiz", description: "Remove quiz", permission: "cbt.admin.delete" },
   { function: "Publish Quiz", description: "Make quiz live", permission: "cbt.admin.publish" },
   { function: "Unpublish Quiz", description: "Take quiz offline", permission: "cbt.admin.unpublish" },
-  { function: "View Results", description: "View quiz results", permission: "cbt.admin.results.view" },
-  { function: "Create Quiz", description: "Submit new quiz", permission: "cbt.admin.create" },
-  { function: "Update Quiz", description: "Modify quiz details", permission: "cbt.admin.update" },
+  { function: "View Quiz Results", description: "View all quiz results", permission: "cbt.admin.results.view" },
+  { function: "Export Quiz Results", description: "Export results data", permission: "cbt.admin.results.export" },
+  { function: "Grade Quiz Attempt", description: "Manual grading", permission: "cbt.admin.results.grade" },
+  
+  // CBT - Questions
   { function: "View Questions", description: "List quiz questions", permission: "cbt.questions.view" },
-  { function: "Create Question", description: "Add new question", permission: "cbt.questions.create" },
-  { function: "Update Question", description: "Modify question", permission: "cbt.questions.update" },
+  { function: "Create Question", description: "Create new question", permission: "cbt.questions.create" },
+  { function: "Edit Question", description: "Modify question", permission: "cbt.questions.update" },
   { function: "Delete Question", description: "Remove question", permission: "cbt.questions.delete" },
   { function: "Reorder Questions", description: "Change question order", permission: "cbt.questions.reorder" },
-  { function: "View All Results", description: "View all quiz attempts", permission: "cbt.admin.results.view" },
-  { function: "Export Results", description: "Export results data", permission: "cbt.admin.results.export" },
-  { function: "View Attempt Detail", description: "View detailed attempt", permission: "cbt.admin.results.view" },
-  { function: "Grade Attempt", description: "Manual grading", permission: "cbt.admin.results.grade" },
+  
+  // CBT - Links
   { function: "View CBT Links", description: "View component links", permission: "cbt.links.view" },
-  { function: "Create Link", description: "Link quiz to component", permission: "cbt.links.create" },
-  { function: "Delete Link", description: "Remove link", permission: "cbt.links.delete" },
+  { function: "Create CBT Link", description: "Link quiz to component", permission: "cbt.links.create" },
+  { function: "Delete CBT Link", description: "Remove link", permission: "cbt.links.delete" },
 ];

@@ -36,11 +36,16 @@ import {
   type StudentTermSummary,
 } from "@/lib/studentTermSummaries";
 import {
+  fetchStudentAttendanceReport,
+  type StudentAttendanceReport,
+} from "@/lib/attendance";
+import {
   listStudentResultPins,
   generateResultPinForStudent,
   invalidateResultPin,
   type ResultPin,
 } from "@/lib/resultPins";
+import { isTeacherUser } from "@/lib/roleChecks";
 
 const passthroughLoader: ImageLoader = ({ src }) => src;
 
@@ -96,14 +101,7 @@ export default function StudentDetailsPage() {
   }, [filterQuery]);
   const { schoolContext, user } = useAuth();
 
-  const normalizedRole = String(user?.role ?? "").toLowerCase();
-  const isTeacher =
-    normalizedRole.includes("teacher") ||
-    (Array.isArray(user?.roles)
-      ? user?.roles?.some((role) =>
-          String(role?.name ?? "").toLowerCase().includes("teacher"),
-        )
-      : false);
+  const isTeacher = isTeacherUser(user);
   const hidePrintResult =
     studentId === "4cc05231-689a-4c36-9ba5-8fb4d8b6c51e";
 
@@ -135,11 +133,26 @@ export default function StudentDetailsPage() {
   const [termSummary, setTermSummary] = useState<StudentTermSummary>({
     class_teacher_comment: defaultTeacherComment,
     principal_comment: defaultPrincipalComment,
+    days_present: null,
+    days_absent: null,
   });
   const [termSummaryFeedback, setTermSummaryFeedback] = useState<string | null>(null);
   const [termSummaryFeedbackType, setTermSummaryFeedbackType] =
     useState<"success" | "warning" | "danger">("success");
   const [termSummarySaving, setTermSummarySaving] = useState(false);
+
+  const [attendanceReport, setAttendanceReport] =
+    useState<StudentAttendanceReport | null>(null);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceError, setAttendanceError] = useState<string | null>(null);
+  const [attendanceInput, setAttendanceInput] = useState({
+    daysPresent: "",
+    daysAbsent: "",
+  });
+  const [attendanceFeedback, setAttendanceFeedback] = useState<string | null>(null);
+  const [attendanceFeedbackType, setAttendanceFeedbackType] =
+    useState<"success" | "warning" | "danger">("success");
+  const [attendanceSaving, setAttendanceSaving] = useState(false);
 
   const [pins, setPins] = useState<ResultPin[]>([]);
   const [pinLoading, setPinLoading] = useState(false);
@@ -156,6 +169,18 @@ export default function StudentDetailsPage() {
   const skillsScrollBodyRef = useRef<HTMLDivElement | null>(null);
 
   const pinTableColspan = isTeacher ? 6 : 7;
+  const attendanceBreakdown = useMemo(() => {
+    const breakdown = attendanceReport?.status_breakdown ?? {};
+    return {
+      present: breakdown.present ?? 0,
+      absent: breakdown.absent ?? 0,
+      late: breakdown.late ?? 0,
+      excused: breakdown.excused ?? 0,
+      total: attendanceReport?.summary?.total_records ?? 0,
+    };
+  }, [attendanceReport]);
+  const hasManualAttendance =
+    termSummary.days_present != null || termSummary.days_absent != null;
 
   const terms = useMemo(() => {
     if (!selectedSession) {
@@ -293,6 +318,12 @@ export default function StudentDetailsPage() {
       setTermSummary({
         class_teacher_comment: "",
         principal_comment: "",
+        days_present: null,
+        days_absent: null,
+      });
+      setAttendanceInput({
+        daysPresent: "",
+        daysAbsent: "",
       });
       return;
     }
@@ -306,6 +337,14 @@ export default function StudentDetailsPage() {
           summary.class_teacher_comment?.trim() || defaultTeacherComment,
         principal_comment:
           summary.principal_comment?.trim() || defaultPrincipalComment,
+        days_present: summary.days_present ?? null,
+        days_absent: summary.days_absent ?? null,
+      });
+      setAttendanceInput({
+        daysPresent:
+          summary.days_present != null ? String(summary.days_present) : "",
+        daysAbsent:
+          summary.days_absent != null ? String(summary.days_absent) : "",
       });
       setTermSummaryFeedback(null);
       setTermSummaryFeedbackType("success");
@@ -314,6 +353,12 @@ export default function StudentDetailsPage() {
       setTermSummary({
         class_teacher_comment: "",
         principal_comment: "",
+        days_present: null,
+        days_absent: null,
+      });
+      setAttendanceInput({
+        daysPresent: "",
+        daysAbsent: "",
       });
       setTermSummaryFeedback(
         err instanceof Error
@@ -350,6 +395,33 @@ export default function StudentDetailsPage() {
     }
   }, [student?.id, selectedSession, selectedTerm]);
 
+  const loadAttendanceReport = useCallback(async () => {
+    if (!student?.id || !selectedSession || !selectedTerm) {
+      setAttendanceReport(null);
+      return;
+    }
+    setAttendanceLoading(true);
+    setAttendanceError(null);
+    try {
+      const report = await fetchStudentAttendanceReport({
+        student_id: student.id,
+        session_id: selectedSession,
+        term_id: selectedTerm,
+      });
+      setAttendanceReport(report);
+    } catch (err) {
+      console.error("Unable to load attendance report", err);
+      setAttendanceError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load attendance summary.",
+      );
+      setAttendanceReport(null);
+    } finally {
+      setAttendanceLoading(false);
+    }
+  }, [student?.id, selectedSession, selectedTerm]);
+
   useEffect(() => {
     void loadSkillRatings();
   }, [loadSkillRatings]);
@@ -362,6 +434,10 @@ export default function StudentDetailsPage() {
     void loadResultPins();
   }, [loadResultPins]);
 
+  useEffect(() => {
+    void loadAttendanceReport();
+  }, [loadAttendanceReport]);
+
   const handleSessionChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const newSession = event.target.value;
     setSelectedSession(newSession);
@@ -369,6 +445,10 @@ export default function StudentDetailsPage() {
     setSkillValues({});
     setSkillFeedback(null);
     setSkillError(null);
+    setAttendanceInput({
+      daysPresent: "",
+      daysAbsent: "",
+    });
   };
 
   const handleTermChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -376,6 +456,10 @@ export default function StudentDetailsPage() {
     setSkillValues({});
     setSkillFeedback(null);
     setSkillError(null);
+    setAttendanceInput({
+      daysPresent: "",
+      daysAbsent: "",
+    });
   };
 
   const saveSkillRating = useCallback(
@@ -496,6 +580,8 @@ export default function StudentDetailsPage() {
       setTermSummary({
         class_teacher_comment: updated.class_teacher_comment ?? "",
         principal_comment: updated.principal_comment ?? "",
+        days_present: updated.days_present ?? termSummary.days_present ?? null,
+        days_absent: updated.days_absent ?? termSummary.days_absent ?? null,
       });
       setTermSummaryFeedback("Comments saved successfully.");
       setTermSummaryFeedbackType("success");
@@ -509,6 +595,125 @@ export default function StudentDetailsPage() {
       setTermSummaryFeedbackType("danger");
     } finally {
       setTermSummarySaving(false);
+    }
+  };
+
+  const parseAttendanceNumber = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+      return null;
+    }
+    return parsed;
+  };
+
+  const handleAttendanceInputChange =
+    (field: "daysPresent" | "daysAbsent") =>
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setAttendanceInput((prev) => ({
+        ...prev,
+        [field]: event.target.value,
+      }));
+      setAttendanceFeedback(null);
+      setAttendanceFeedbackType("success");
+    };
+
+  const handleAttendanceSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!student?.id) {
+      return;
+    }
+    if (!selectedSession || !selectedTerm) {
+      setAttendanceFeedback("Select a session and term before saving attendance.");
+      setAttendanceFeedbackType("warning");
+      return;
+    }
+    const daysPresent = parseAttendanceNumber(attendanceInput.daysPresent);
+    const daysAbsent = parseAttendanceNumber(attendanceInput.daysAbsent);
+
+    if (daysPresent === null || daysAbsent === null) {
+      setAttendanceFeedback("Enter valid days present and days absent.");
+      setAttendanceFeedbackType("warning");
+      return;
+    }
+
+    setAttendanceSaving(true);
+    setAttendanceFeedback(null);
+    try {
+      const updated = await updateStudentTermSummary(student.id, {
+        session_id: selectedSession,
+        term_id: selectedTerm,
+        days_present: daysPresent,
+        days_absent: daysAbsent,
+      });
+      setTermSummary((prev) => ({
+        ...prev,
+        days_present: updated.days_present ?? daysPresent,
+        days_absent: updated.days_absent ?? daysAbsent,
+      }));
+      setAttendanceInput({
+        daysPresent: String(updated.days_present ?? daysPresent),
+        daysAbsent: String(updated.days_absent ?? daysAbsent),
+      });
+      setAttendanceFeedback("Manual attendance saved.");
+      setAttendanceFeedbackType("success");
+    } catch (err) {
+      console.error("Unable to save manual attendance", err);
+      setAttendanceFeedback(
+        err instanceof Error
+          ? err.message
+          : "Unable to save manual attendance.",
+      );
+      setAttendanceFeedbackType("danger");
+    } finally {
+      setAttendanceSaving(false);
+    }
+  };
+
+  const handleAttendanceClear = async () => {
+    if (!student?.id) {
+      return;
+    }
+    if (!selectedSession || !selectedTerm) {
+      setAttendanceFeedback("Select a session and term before clearing attendance.");
+      setAttendanceFeedbackType("warning");
+      return;
+    }
+    setAttendanceSaving(true);
+    setAttendanceFeedback(null);
+    try {
+      const updated = await updateStudentTermSummary(student.id, {
+        session_id: selectedSession,
+        term_id: selectedTerm,
+        days_present: null,
+        days_absent: null,
+      });
+      setTermSummary((prev) => ({
+        ...prev,
+        days_present: updated.days_present ?? null,
+        days_absent: updated.days_absent ?? null,
+      }));
+      setAttendanceInput({
+        daysPresent: "",
+        daysAbsent: "",
+      });
+      setAttendanceFeedback(
+        "Manual attendance cleared. Recorded attendance will be used.",
+      );
+      setAttendanceFeedbackType("success");
+    } catch (err) {
+      console.error("Unable to clear manual attendance", err);
+      setAttendanceFeedback(
+        err instanceof Error
+          ? err.message
+          : "Unable to clear manual attendance.",
+      );
+      setAttendanceFeedbackType("danger");
+    } finally {
+      setAttendanceSaving(false);
     }
   };
 
@@ -880,6 +1085,12 @@ export default function StudentDetailsPage() {
   useEffect(() => {
     setTermSummaryFeedback(null);
     setTermSummaryFeedbackType("success");
+  }, [selectedSession, selectedTerm]);
+
+  useEffect(() => {
+    setAttendanceFeedback(null);
+    setAttendanceFeedbackType("success");
+    setAttendanceError(null);
   }, [selectedSession, selectedTerm]);
 
   useEffect(() => {
@@ -1282,6 +1493,142 @@ export default function StudentDetailsPage() {
           </div>
         </div>
       ) : null}
+
+      <div className="card height-auto mt-4">
+        <div className="card-body">
+          <div className="heading-layout1">
+            <div className="item-title">
+              <h3>Attendance</h3>
+              <p className="mb-0 text-muted small">
+                Applies to the selected session and term above.
+              </p>
+            </div>
+          </div>
+          {attendanceError ? (
+            <div className="alert alert-danger" role="alert">
+              {attendanceError}
+            </div>
+          ) : null}
+          <div className="row">
+            <div className="col-lg-6 col-12">
+              <div className="mb-3">
+                <h5 className="mb-2">Recorded Attendance</h5>
+                <p className="text-muted small mb-3">
+                  Based on daily attendance entries.
+                </p>
+                {!selectedSession || !selectedTerm ? (
+                  <div className="text-muted">
+                    Select a session and term to view attendance.
+                  </div>
+                ) : attendanceLoading ? (
+                  <div>Loading attendance summary…</div>
+                ) : (
+                  <>
+                    {attendanceBreakdown.total === 0 ? (
+                      <div className="text-muted mb-2">
+                        No recorded attendance for this term.
+                      </div>
+                    ) : null}
+                    <div className="d-flex flex-wrap">
+                      <span className="badge badge-success mr-2 mb-2">
+                        Present: {attendanceBreakdown.present}
+                      </span>
+                      <span className="badge badge-danger mr-2 mb-2">
+                        Absent: {attendanceBreakdown.absent}
+                      </span>
+                      <span className="badge badge-warning mr-2 mb-2">
+                        Late: {attendanceBreakdown.late}
+                      </span>
+                      <span className="badge badge-info mr-2 mb-2">
+                        Excused: {attendanceBreakdown.excused}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="col-lg-6 col-12">
+              <div className="mb-3">
+                <h5 className="mb-2">Manual Attendance (Override)</h5>
+                <p className="text-muted small mb-3">
+                  Enter values to override recorded attendance on results.
+                </p>
+                {attendanceFeedback ? (
+                  <div
+                    className={`alert alert-${attendanceFeedbackType}`}
+                    role="alert"
+                  >
+                    {attendanceFeedback}
+                  </div>
+                ) : null}
+                <form onSubmit={handleAttendanceSubmit}>
+                  <div className="row">
+                    <div className="col-sm-6 col-12 form-group">
+                      <label>Days Present</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        className="form-control"
+                        value={attendanceInput.daysPresent}
+                        onChange={handleAttendanceInputChange("daysPresent")}
+                        disabled={
+                          attendanceSaving || !selectedSession || !selectedTerm
+                        }
+                      />
+                    </div>
+                    <div className="col-sm-6 col-12 form-group">
+                      <label>Days Absent</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        className="form-control"
+                        value={attendanceInput.daysAbsent}
+                        onChange={handleAttendanceInputChange("daysAbsent")}
+                        disabled={
+                          attendanceSaving || !selectedSession || !selectedTerm
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="d-flex flex-wrap align-items-center">
+                    <button
+                      type="submit"
+                      className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-3 mb-2"
+                      disabled={
+                        attendanceSaving || !selectedSession || !selectedTerm
+                      }
+                    >
+                      {attendanceSaving ? "Saving…" : "Save Manual Attendance"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary mb-2"
+                      onClick={() => void handleAttendanceClear()}
+                      disabled={
+                        attendanceSaving ||
+                        !selectedSession ||
+                        !selectedTerm ||
+                        (!hasManualAttendance &&
+                          !attendanceInput.daysPresent &&
+                          !attendanceInput.daysAbsent)
+                      }
+                    >
+                      Use Recorded Attendance
+                    </button>
+                    {hasManualAttendance ? (
+                      <span className="badge badge-warning ml-3 mb-2">
+                        Manual values active
+                      </span>
+                    ) : null}
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="card height-auto mt-4">
         <div className="card-body">

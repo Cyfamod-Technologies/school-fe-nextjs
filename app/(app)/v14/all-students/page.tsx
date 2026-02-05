@@ -24,6 +24,7 @@ import {
   type StudentSummary,
 } from "@/lib/students";
 import { resolveBackendUrl } from "@/lib/config";
+import { isTeacherUser } from "@/lib/roleChecks";
 
 const passthroughLoader: ImageLoader = ({ src }) => src;
 
@@ -47,14 +48,7 @@ export default function AllStudentsPage() {
   const { user, schoolContext } = useAuth();
   const searchParams = useSearchParams();
 
-  const normalizedRole = String(user?.role ?? "").toLowerCase();
-  const isTeacher =
-    normalizedRole.includes("teacher") ||
-    (Array.isArray(user?.roles)
-      ? user?.roles?.some((role) =>
-          String(role?.name ?? "").toLowerCase().includes("teacher"),
-        )
-      : false);
+  const isTeacher = isTeacherUser(user);
 
   const perPageOptions = [10, 25, 50, 100];
   const initialPage = (() => {

@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   deleteSubject,
   listSubjects,
   type Subject,
   type SubjectListResponse,
 } from "@/lib/subjects";
+import { useAuth } from "@/contexts/AuthContext";
+import { PERMISSIONS } from "@/lib/permissionKeys";
 
 interface FilterState {
   search: string;
@@ -18,6 +20,25 @@ const initialFilters: FilterState = {
 };
 
 export default function AllSubjectsPage() {
+  const { hasPermission, user } = useAuth();
+  
+  // Check if user is admin (admins bypass permission checks)
+  const isAdmin = useMemo(() => {
+    const directRole = String((user as { role?: string | null })?.role ?? "").toLowerCase();
+    if (directRole === "admin") {
+      return true;
+    }
+    const roles = (user as { roles?: Array<{ name?: string | null }> })?.roles;
+    if (Array.isArray(roles)) {
+      return roles.some((role) => String(role?.name ?? "").toLowerCase() === "admin");
+    }
+    return false;
+  }, [user]);
+
+  const canCreateSubject = isAdmin || hasPermission(PERMISSIONS.SUBJECTS_CREATE);
+  const canUpdateSubject = isAdmin || hasPermission(PERMISSIONS.SUBJECTS_UPDATE);
+  const canDeleteSubject = isAdmin || hasPermission(PERMISSIONS.SUBJECTS_DELETE);
+
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -146,24 +167,49 @@ export default function AllSubjectsPage() {
         </td>
         <td>
           <div className="d-flex gap-2">
-            <Link
-              className="btn btn-sm btn-outline-primary mr-2"
-              href={`/v16/edit-subject?id=${subject.id}`}
-            >
-              Edit
-            </Link>
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-danger"
-              onClick={() => handleDelete(subject)}
-            >
-              Delete
-            </button>
+            {canUpdateSubject && (
+              <Link
+                className="btn btn-sm btn-outline-primary mr-2"
+                href={`/v16/edit-subject?id=${subject.id}`}
+              >
+                Edit
+              </Link>
+            )}
+            {canDeleteSubject && (
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-danger"
+                onClick={() => handleDelete(subject)}
+              >
+                Delete
+              </button>
+            )}
+            {!canUpdateSubject && !canDeleteSubject && (
+              <span className="text-muted">No actions</span>
+            )}
           </div>
         </td>
       </tr>
     ));
   })();
+
+  // Permission check: must have at least one subject permission
+  const hasAnySubjectPermission = useMemo(() => {
+    if (isAdmin) return true;
+    return (
+      hasPermission(PERMISSIONS.SUBJECTS_VIEW) ||
+      hasPermission(PERMISSIONS.SUBJECTS_CREATE) ||
+      hasPermission(PERMISSIONS.SUBJECTS_UPDATE) ||
+      hasPermission(PERMISSIONS.SUBJECTS_DELETE)
+    );
+  }, [isAdmin, hasPermission]);
+  if (!hasAnySubjectPermission) {
+    return (
+      <div className="alert alert-warning mt-5 text-center">
+        You do not have permission to view this page.
+      </div>
+    );
+  }
 
   return (
     <>
@@ -261,12 +307,14 @@ export default function AllSubjectsPage() {
               </button>
             </div>
             <div className="col-lg-2 col-md-6 col-12 form-group">
-              <Link
-                href="/v16/add-subject"
-                className="fw-btn-fill btn-gradient-yellow w-100"
-              >
-                Add Subject
-              </Link>
+              {canCreateSubject && (
+                <Link
+                  href="/v16/add-subject"
+                  className="fw-btn-fill btn-gradient-yellow w-100"
+                >
+                  Add Subject
+                </Link>
+              )}
             </div>
           </form>
 
