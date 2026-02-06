@@ -128,6 +128,14 @@ export async function GET(request: NextRequest) {
     const rawToken = normalizeCookieValue(cookieStore.get("student_token")?.value ?? null);
     const token = resolveStudentToken(rawToken);
 
+    if (!token) {
+      console.error(
+        "Student print-result: no valid token resolved.",
+        "rawToken present:", !!rawToken,
+        "rawToken length:", rawToken?.length ?? 0,
+      );
+    }
+
     const proxyHeaders = new Headers({
       Accept: "text/html",
       "X-Requested-With": "XMLHttpRequest",
