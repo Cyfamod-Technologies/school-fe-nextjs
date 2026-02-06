@@ -95,6 +95,15 @@ export async function GET(request: NextRequest) {
       proxyHeaders.set("Authorization", `Bearer ${token}`);
     }
 
+    const cookieHeader = cookieStore
+      .getAll()
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join("; ");
+
+    if (cookieHeader) {
+      proxyHeaders.set("Cookie", cookieHeader);
+    }
+
     const response = await fetch(backendUrl.toString(), {
       headers: proxyHeaders,
       credentials: "include",
