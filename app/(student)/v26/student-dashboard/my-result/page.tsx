@@ -225,6 +225,21 @@ export default function StudentMyResultPage() {
                   const params = new URLSearchParams();
                   params.set("session_id", selectedSession);
                   params.set("term_id", selectedTerm);
+                  // Pass token directly so the proxy route doesn't depend on cookie decryption
+                  try {
+                    const target = `${encodeURIComponent("student_token")}=`;
+                    const parts = document.cookie.split(";");
+                    for (const part of parts) {
+                      const trimmed = part.trim();
+                      if (trimmed.startsWith(target)) {
+                        const raw = decodeURIComponent(trimmed.slice(target.length));
+                        params.set("_st", raw);
+                        break;
+                      }
+                    }
+                  } catch {
+                    // ignore — route will try cookie fallback
+                  }
                   const url = `/student/print-result?${params.toString()}`;
                   const printWindow = window.open(url, "_blank", "noopener,noreferrer");
                   if (!printWindow) {
