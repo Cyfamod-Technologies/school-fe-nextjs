@@ -4,6 +4,48 @@ import { BACKEND_URL } from "@/lib/config";
 import { decryptCookieValue } from "@/lib/cookieCipher";
 
 const REQUIRED_PARAMS = ["session_id", "term_id"] as const;
+const DEFAULT_COOKIE_SECRET = "lynx-cookie-secret";
+const SANCTUM_TOKEN_PATTERN = /^\d+\|/;
+
+const looksLikeSanctumToken = (value: string | null | undefined): value is string =>
+  Boolean(value && SANCTUM_TOKEN_PATTERN.test(value));
+
+const xorCipher = (value: string, secret: string): string => {
+  if (!secret) return value;
+  let output = "";
+  for (let i = 0; i < value.length; i++) {
+    output += String.fromCharCode(value.charCodeAt(i) ^ secret.charCodeAt(i % secret.length));
+  }
+  return output;
+};
+
+const decryptWithSecret = (value: string | null | undefined, secret: string): string | null => {
+  if (!value) return null;
+  try {
+    return xorCipher(Buffer.from(value, "base64").toString("utf-8"), secret);
+  } catch {
+    return null;
+  }
+};
+
+const normalizeCookieValue = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  try { return decodeURIComponent(value); } catch { return value; }
+};
+
+const resolveStudentToken = (rawValue: string | null | undefined): string | null => {
+  if (!rawValue) return null;
+
+  const decrypted = decryptCookieValue(rawValue);
+  if (looksLikeSanctumToken(decrypted)) return decrypted;
+
+  const fallback = decryptWithSecret(rawValue, DEFAULT_COOKIE_SECRET);
+  if (looksLikeSanctumToken(fallback)) return fallback;
+
+  if (looksLikeSanctumToken(rawValue)) return rawValue;
+
+  return null;
+};
 
 const normalizeErrorMessage = (message: string, status?: number) => {
   const trimmed = (message ?? "").trim();
@@ -83,8 +125,8 @@ export async function GET(request: NextRequest) {
     });
 
     const cookieStore = await cookies();
-    const rawToken = cookieStore.get("student_token")?.value ?? null;
-    const token = decryptCookieValue(rawToken) ?? rawToken;
+    const rawToken = normalizeCookieValue(cookieStore.get("student_token")?.value ?? null);
+    const token = resolveStudentToken(rawToken);
 
     const proxyHeaders = new Headers({
       Accept: "text/html",
