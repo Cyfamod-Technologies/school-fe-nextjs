@@ -28,23 +28,47 @@ const decryptWithSecret = (value: string | null | undefined, secret: string): st
   }
 };
 
-const normalizeCookieValue = (value: string | null | undefined): string | null => {
-  if (!value) return null;
-  try { return decodeURIComponent(value); } catch { return value; }
-};
+/**
+ * Try every possible way to turn a raw cookie value into a Sanctum token.
+ */
+const resolveTokenFromCookie = (raw: string | null | undefined): string | null => {
+  if (!raw) return null;
 
-const resolveStudentToken = (rawValue: string | null | undefined): string | null => {
-  if (!rawValue) return null;
+  // It might be URL-encoded
+  let value = raw;
+  try { value = decodeURIComponent(value); } catch { /* keep as-is */ }
 
-  const decrypted = decryptCookieValue(rawValue);
-  if (looksLikeSanctumToken(decrypted)) return decrypted;
+  // 1. Decrypt with the app's COOKIE_SECRET (from env)
+  const d1 = decryptCookieValue(value);
+  if (looksLikeSanctumToken(d1)) return d1;
 
-  const fallback = decryptWithSecret(rawValue, DEFAULT_COOKIE_SECRET);
-  if (looksLikeSanctumToken(fallback)) return fallback;
+  // 2. Decrypt with the hardcoded fallback secret
+  const d2 = decryptWithSecret(value, DEFAULT_COOKIE_SECRET);
+  if (looksLikeSanctumToken(d2)) return d2;
 
-  if (looksLikeSanctumToken(rawValue)) return rawValue;
+  // 3. Maybe it's already a plain token
+  if (looksLikeSanctumToken(value)) return value;
 
   return null;
+};
+
+/**
+ * Resolve the student bearer token from every available source.
+ * Priority: query-string _st  →  cookie  →  null
+ */
+const resolveStudentToken = (
+  searchParams: URLSearchParams,
+  cookieValue: string | null | undefined,
+): string | null => {
+  // 1. Token passed directly via query string (already decrypted client-side)
+  const queryToken = searchParams.get("_st");
+  if (queryToken) {
+    const fromQuery = resolveTokenFromCookie(queryToken);
+    if (fromQuery) return fromQuery;
+  }
+
+  // 2. Fall back to cookie
+  return resolveTokenFromCookie(cookieValue);
 };
 
 const normalizeErrorMessage = (message: string, status?: number) => {
@@ -125,15 +149,13 @@ export async function GET(request: NextRequest) {
     });
 
     const cookieStore = await cookies();
-    const rawToken = normalizeCookieValue(cookieStore.get("student_token")?.value ?? null);
-    const token = resolveStudentToken(rawToken);
+    const token = resolveStudentToken(
+      searchParams,
+      cookieStore.get("student_token")?.value ?? null,
+    );
 
     if (!token) {
-      console.error(
-        "Student print-result: no valid token resolved.",
-        "rawToken present:", !!rawToken,
-        "rawToken length:", rawToken?.length ?? 0,
-      );
+      console.error("Student print-result: no valid token resolved.");
     }
 
     const proxyHeaders = new Headers({
