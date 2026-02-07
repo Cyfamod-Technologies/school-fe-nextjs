@@ -200,6 +200,7 @@ export default function StudentMyResultPage() {
   }, [selectedSession, selectedTerm]);
 
   return (
+    <>
     <div className="card height-auto">
       <div className="card-body">
         <div className="heading-layout1 mb-4">
@@ -366,5 +367,13 @@ export default function StudentMyResultPage() {
         ) : null}
       </div>
     </div>
+
+    <footer className="footer-wrap-layout1" style={{ marginTop: "3rem" }}>
+      <div className="copyright">
+        © Copyrights <a href="#">Cyfamod Technologies</a> 2026. All rights
+        reserved.
+      </div>
+    </footer>
+    </>
   );
 }

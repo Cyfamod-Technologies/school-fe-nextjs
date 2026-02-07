@@ -283,6 +283,13 @@ export default function DashboardPage() {
       </div>
 
       {isParent ? parentDashboard : adminDashboard}
+
+      <footer className="footer-wrap-layout1" style={{ marginTop: "3rem" }}>
+        <div className="copyright">
+          © Copyrights <a href="#">Cyfamod Technologies</a> 2026. All rights
+          reserved.
+        </div>
+      </footer>
     </>
   );
 }

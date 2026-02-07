@@ -49,32 +49,55 @@ function normalizeCollection<T>(payload: CollectionResponse<T>): T[] {
   return [];
 }
 
-export async function listCountries(): Promise<Country[]> {
+type LocationFetchOptions = {
+  authScope?: "staff" | "student";
+  skipAuth?: boolean;
+};
+
+function locationPrefix(options: LocationFetchOptions): string {
+  return options.authScope === "student"
+    ? "/api/v1/student/locations"
+    : "/api/v1/locations";
+}
+
+export async function listCountries(
+  options: LocationFetchOptions = {},
+): Promise<Country[]> {
   const payload = await apiFetch<CollectionResponse<Country>>(
-    "/api/v1/locations/countries",
+    `${locationPrefix(options)}/countries`,
+    options,
   );
   return normalizeCollection(payload);
 }
 
 export async function listStates(
   countryId: string | number,
+  options: LocationFetchOptions = {},
 ): Promise<State[]> {
   const payload = await apiFetch<CollectionResponse<State>>(
-    `/api/v1/locations/states?country_id=${countryId}`,
+    `${locationPrefix(options)}/states?country_id=${countryId}`,
+    options,
   );
   return normalizeCollection(payload);
 }
 
-export async function listLgas(stateId: string | number): Promise<Lga[]> {
+export async function listLgas(
+  stateId: string | number,
+  options: LocationFetchOptions = {},
+): Promise<Lga[]> {
   const payload = await apiFetch<CollectionResponse<Lga>>(
-    `/api/v1/locations/states/${stateId}/lgas`,
+    `${locationPrefix(options)}/states/${stateId}/lgas`,
+    options,
   );
   return normalizeCollection(payload);
 }
 
-export async function listBloodGroups(): Promise<BloodGroup[]> {
+export async function listBloodGroups(
+  options: LocationFetchOptions = {},
+): Promise<BloodGroup[]> {
   const payload = await apiFetch<CollectionResponse<BloodGroup>>(
-    "/api/v1/locations/blood-groups",
+    `${locationPrefix(options)}/blood-groups`,
+    options,
   );
   return normalizeCollection(payload);
 }
