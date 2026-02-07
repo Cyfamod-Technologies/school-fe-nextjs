@@ -185,6 +185,17 @@ const styles = `
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
+.btn-submit-primary.btn-edit {
+  background: #f6e05e;
+  color: #1a202c;
+  box-shadow: 0 4px 12px rgba(246, 224, 94, 0.4);
+}
+
+.btn-submit-primary.btn-edit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(246, 224, 94, 0.55);
+}
+
 .btn-submit-primary:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 6px 18px rgba(102, 126, 234, 0.4);
@@ -686,7 +697,7 @@ export default function StudentBioDataPage() {
               <h3>Personal Information</h3>
               {!editing && (
                 <button
-                  className="btn-submit btn-submit-primary"
+                  className="btn-submit btn-submit-primary btn-edit"
                   onClick={() => setEditing(true)}
                   style={{ margin: 0 }}
                 >
@@ -991,7 +1002,7 @@ export default function StudentBioDataPage() {
               <h3>Parent/Guardian Information</h3>
               {!editing && student.parent && (
                 <button
-                  className="btn-submit btn-submit-primary"
+                  className="btn-submit btn-submit-primary btn-edit"
                   onClick={() => setEditing(true)}
                   style={{ margin: 0 }}
                 >
