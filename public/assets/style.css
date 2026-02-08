@@ -2274,7 +2274,7 @@ ul {
 }
 @media (max-width: 767.98px) {
   .sidebar-menu-one {
-    --sidebar-menu-top-padding: 48px;
+    --sidebar-menu-top-padding: 8px;
   }
 }
 .sidebar-menu-two {
