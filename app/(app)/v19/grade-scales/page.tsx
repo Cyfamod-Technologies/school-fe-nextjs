@@ -8,6 +8,12 @@ import {
   type GradeRange,
   type GradeScale,
   type GradeRangePayload,
+  type CommentRange,
+  type CommentRangePayload,
+  updateCommentRanges,
+  type PositionRange,
+  type PositionRangePayload,
+  updatePositionRanges,
 } from "@/lib/gradeScales";
 import {
   fetchResultPageSettings,
@@ -23,6 +29,25 @@ interface EditableRange {
   max_score: string;
   description: string;
   grade_point: string;
+  locked?: boolean;
+}
+
+interface EditablePositionRange {
+  key: string;
+  id: number | string | null;
+  min_score: string;
+  max_score: string;
+  position: string;
+  locked?: boolean;
+}
+
+interface EditableCommentRange {
+  key: string;
+  id: number | string | null;
+  min_score: string;
+  max_score: string;
+  teacher_comment: string;
+  principal_comment: string;
   locked?: boolean;
 }
 
@@ -55,6 +80,50 @@ function toEditable(range: GradeRange, index: number): EditableRange {
   };
 }
 
+function toEditablePositionRange(
+  range: PositionRange,
+  index: number,
+): EditablePositionRange {
+  return {
+    key: `position-${range.id ?? index}`,
+    id: range.id ?? null,
+    min_score:
+      range.min_score === null || range.min_score === undefined
+        ? ""
+        : `${range.min_score}`,
+    max_score:
+      range.max_score === null || range.max_score === undefined
+        ? ""
+        : `${range.max_score}`,
+    position:
+      range.position === null || range.position === undefined
+        ? ""
+        : `${range.position}`,
+    locked: range.locked,
+  };
+}
+
+function toEditableCommentRange(
+  range: CommentRange,
+  index: number,
+): EditableCommentRange {
+  return {
+    key: `comment-${range.id ?? index}`,
+    id: range.id ?? null,
+    min_score:
+      range.min_score === null || range.min_score === undefined
+        ? ""
+        : `${range.min_score}`,
+    max_score:
+      range.max_score === null || range.max_score === undefined
+        ? ""
+        : `${range.max_score}`,
+    teacher_comment: range.teacher_comment ?? "",
+    principal_comment: range.principal_comment ?? "",
+    locked: range.locked,
+  };
+}
+
 function createEmptyRange(): EditableRange {
   return {
     key: `new-${generateTempKey()}`,
@@ -67,8 +136,41 @@ function createEmptyRange(): EditableRange {
   };
 }
 
+function createEmptyPositionRange(): EditablePositionRange {
+  return {
+    key: `position-new-${generateTempKey()}`,
+    id: null,
+    min_score: "",
+    max_score: "",
+    position: "",
+  };
+}
+
+function createEmptyCommentRange(): EditableCommentRange {
+  return {
+    key: `comment-new-${generateTempKey()}`,
+    id: null,
+    min_score: "",
+    max_score: "",
+    teacher_comment: "",
+    principal_comment: "",
+  };
+}
+
 interface ValidationResult {
   payload: GradeRangePayload[];
+  error: string | null;
+  invalidKeys: Set<string>;
+}
+
+interface PositionValidationResult {
+  payload: PositionRangePayload[];
+  error: string | null;
+  invalidKeys: Set<string>;
+}
+
+interface CommentValidationResult {
+  payload: CommentRangePayload[];
   error: string | null;
   invalidKeys: Set<string>;
 }
@@ -146,6 +248,142 @@ function validateRanges(ranges: EditableRange[]): ValidationResult {
   };
 }
 
+function validatePositionRanges(
+  ranges: EditablePositionRange[],
+): PositionValidationResult {
+  const invalidKeys = new Set<string>();
+  const payload: PositionRangePayload[] = [];
+
+  if (!ranges.length) {
+    return {
+      payload: [],
+      invalidKeys,
+      error: null,
+    };
+  }
+
+  const seenPositions = new Set<number>();
+
+  ranges.forEach((range, index) => {
+    const minRaw = range.min_score.trim();
+    const maxRaw = range.max_score.trim();
+    const positionRaw = range.position.trim();
+
+    const min = Number(minRaw);
+    const max = Number(maxRaw);
+    const position = Number(positionRaw);
+
+    const isInvalid =
+      minRaw === "" ||
+      maxRaw === "" ||
+      positionRaw === "" ||
+      Number.isNaN(min) ||
+      Number.isNaN(max) ||
+      Number.isNaN(position) ||
+      min < 0 ||
+      max < 0 ||
+      min > 100 ||
+      max > 100 ||
+      min > max ||
+      !Number.isInteger(position) ||
+      position < 1 ||
+      seenPositions.has(position);
+
+    if (isInvalid) {
+      invalidKeys.add(range.key);
+      return;
+    }
+
+    seenPositions.add(position);
+
+    payload.push({
+      id: range.id,
+      min_score: min,
+      max_score: max,
+      position,
+    });
+  });
+
+  if (invalidKeys.size > 0) {
+    return {
+      payload: [],
+      invalidKeys,
+      error: "Fix the highlighted rows before saving.",
+    };
+  }
+
+  return {
+    payload,
+    invalidKeys,
+    error: null,
+  };
+}
+
+function validateCommentRanges(
+  ranges: EditableCommentRange[],
+): CommentValidationResult {
+  const invalidKeys = new Set<string>();
+  const payload: CommentRangePayload[] = [];
+
+  if (!ranges.length) {
+    return {
+      payload: [],
+      invalidKeys,
+      error: null,
+    };
+  }
+
+  ranges.forEach((range) => {
+    const minRaw = range.min_score.trim();
+    const maxRaw = range.max_score.trim();
+    const teacher = range.teacher_comment.trim();
+    const principal = range.principal_comment.trim();
+
+    const min = Number(minRaw);
+    const max = Number(maxRaw);
+
+    const isInvalid =
+      minRaw === "" ||
+      maxRaw === "" ||
+      Number.isNaN(min) ||
+      Number.isNaN(max) ||
+      min < 0 ||
+      max < 0 ||
+      min > 100 ||
+      max > 100 ||
+      min > max ||
+      teacher.length === 0 ||
+      principal.length === 0;
+
+    if (isInvalid) {
+      invalidKeys.add(range.key);
+      return;
+    }
+
+    payload.push({
+      id: range.id,
+      min_score: min,
+      max_score: max,
+      teacher_comment: teacher,
+      principal_comment: principal,
+    });
+  });
+
+  if (invalidKeys.size > 0) {
+    return {
+      payload: [],
+      invalidKeys,
+      error: "Fix the highlighted rows before saving.",
+    };
+  }
+
+  return {
+    payload,
+    invalidKeys,
+    error: null,
+  };
+}
+
 const defaultResultSettings: ResultPageSettings = {
   show_grade: true,
   show_position: true,
@@ -153,6 +391,7 @@ const defaultResultSettings: ResultPageSettings = {
   show_lowest: true,
   show_highest: true,
   show_remarks: true,
+  comment_mode: "manual",
 };
 
 export default function GradeScalesPage() {
@@ -165,6 +404,34 @@ export default function GradeScalesPage() {
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [positionRanges, setPositionRanges] = useState<EditablePositionRange[]>([]);
+  const [positionDeletedIds, setPositionDeletedIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [positionInvalidKeys, setPositionInvalidKeys] = useState<Set<string>>(
+    new Set(),
+  );
+  const [positionInfoMessage, setPositionInfoMessage] = useState<string | null>(
+    null,
+  );
+  const [positionErrorMessage, setPositionErrorMessage] = useState<string | null>(
+    null,
+  );
+  const [positionSaving, setPositionSaving] = useState(false);
+  const [commentRanges, setCommentRanges] = useState<EditableCommentRange[]>([]);
+  const [commentDeletedIds, setCommentDeletedIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [commentInvalidKeys, setCommentInvalidKeys] = useState<Set<string>>(
+    new Set(),
+  );
+  const [commentInfoMessage, setCommentInfoMessage] = useState<string | null>(
+    null,
+  );
+  const [commentErrorMessage, setCommentErrorMessage] = useState<string | null>(
+    null,
+  );
+  const [commentSaving, setCommentSaving] = useState(false);
   const [resultSettings, setResultSettings] = useState<ResultPageSettings>(
     defaultResultSettings,
   );
@@ -251,6 +518,12 @@ export default function GradeScalesPage() {
       setRanges([]);
       setDeletedIds(new Set());
       setInvalidKeys(new Set());
+      setPositionRanges([]);
+      setPositionDeletedIds(new Set());
+      setPositionInvalidKeys(new Set());
+      setCommentRanges([]);
+      setCommentDeletedIds(new Set());
+      setCommentInvalidKeys(new Set());
       return;
     }
 
@@ -262,6 +535,24 @@ export default function GradeScalesPage() {
     setInvalidKeys(new Set());
     setInfoMessage(null);
     setErrorMessage(null);
+
+    const positionSorted = [...(selectedScale.position_ranges ?? [])].sort(
+      (a, b) => (a.position ?? 0) - (b.position ?? 0),
+    );
+    setPositionRanges(positionSorted.map(toEditablePositionRange));
+    setPositionDeletedIds(new Set());
+    setPositionInvalidKeys(new Set());
+    setPositionInfoMessage(null);
+    setPositionErrorMessage(null);
+
+    const commentSorted = [...(selectedScale.comment_ranges ?? [])].sort(
+      (a, b) => (a.min_score ?? 0) - (b.min_score ?? 0),
+    );
+    setCommentRanges(commentSorted.map(toEditableCommentRange));
+    setCommentDeletedIds(new Set());
+    setCommentInvalidKeys(new Set());
+    setCommentInfoMessage(null);
+    setCommentErrorMessage(null);
   }, [selectedScale]);
 
   const resultSettingOptions = useMemo(
@@ -302,6 +593,14 @@ export default function GradeScalesPage() {
 
   const handleAddRange = () => {
     setRanges((prev) => [...prev, createEmptyRange()]);
+  };
+
+  const handleAddPositionRange = () => {
+    setPositionRanges((prev) => [...prev, createEmptyPositionRange()]);
+  };
+
+  const handleAddCommentRange = () => {
+    setCommentRanges((prev) => [...prev, createEmptyCommentRange()]);
   };
 
   const handleRangeChange = (
@@ -357,15 +656,153 @@ export default function GradeScalesPage() {
     });
   };
 
+  const handlePositionRangeChange = (
+    index: number,
+    field: keyof EditablePositionRange,
+    value: string,
+  ) => {
+    const targetKey = positionRanges[index]?.key;
+    setPositionRanges((prev) => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        [field]: value,
+      };
+      return next;
+    });
+    setPositionInvalidKeys((prev) => {
+      if (!prev.size) {
+        return prev;
+      }
+      if (!targetKey || !prev.has(targetKey)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.delete(targetKey);
+      return next;
+    });
+  };
+
+  const handleDeletePositionRange = (index: number) => {
+    const target = positionRanges[index];
+    if (!target) {
+      return;
+    }
+
+    if (target.id) {
+      setPositionDeletedIds((existing) => {
+        const next = new Set(existing);
+        next.add(String(target.id));
+        return next;
+      });
+    }
+
+    setPositionRanges((prev) =>
+      prev.filter((_, itemIndex) => itemIndex !== index),
+    );
+
+    setPositionInvalidKeys((prev) => {
+      if (!prev.size || !target.key || !prev.has(target.key)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.delete(target.key);
+      return next;
+    });
+  };
+
+  const handleCommentRangeChange = (
+    index: number,
+    field: keyof EditableCommentRange,
+    value: string,
+  ) => {
+    const targetKey = commentRanges[index]?.key;
+    setCommentRanges((prev) => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        [field]: value,
+      };
+      return next;
+    });
+    setCommentInvalidKeys((prev) => {
+      if (!prev.size) {
+        return prev;
+      }
+      if (!targetKey || !prev.has(targetKey)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.delete(targetKey);
+      return next;
+    });
+  };
+
+  const handleDeleteCommentRange = (index: number) => {
+    const target = commentRanges[index];
+    if (!target) {
+      return;
+    }
+
+    if (target.id) {
+      setCommentDeletedIds((existing) => {
+        const next = new Set(existing);
+        next.add(String(target.id));
+        return next;
+      });
+    }
+
+    setCommentRanges((prev) =>
+      prev.filter((_, itemIndex) => itemIndex !== index),
+    );
+
+    setCommentInvalidKeys((prev) => {
+      if (!prev.size || !target.key || !prev.has(target.key)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.delete(target.key);
+      return next;
+    });
+  };
+
   const handleScaleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedScaleId(event.target.value);
   };
 
-  const handleResultSettingToggle = (key: keyof ResultPageSettings) => {
+  const handleResultSettingToggle = (
+    key: Exclude<keyof ResultPageSettings, "comment_mode">,
+  ) => {
     setResultSettings((prev) => ({
       ...prev,
       [key]: !prev[key],
     }));
+  };
+
+  const handleCommentModeChange = async (
+    mode: ResultPageSettings["comment_mode"],
+  ) => {
+    setResultSettings((prev) => ({
+      ...prev,
+      comment_mode: mode,
+    }));
+    setResultSettingsError(null);
+    setResultSettingsInfo(null);
+    try {
+      setResultSettingsSaving(true);
+      const saved = await updateResultPageSettings({ comment_mode: mode });
+      setResultSettings(saved);
+      setResultSettingsInfo("Result comment mode updated.");
+    } catch (error) {
+      console.error("Unable to update comment mode", error);
+      setResultSettingsError(
+        error instanceof Error
+          ? error.message
+          : "Unable to update comment mode.",
+      );
+    } finally {
+      setResultSettingsSaving(false);
+    }
   };
 
   const handleResultSettingsSave = async () => {
@@ -428,6 +865,88 @@ export default function GradeScalesPage() {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePositionSave = async () => {
+    if (!selectedScaleId) {
+      setPositionErrorMessage("Select a grading scale before saving.");
+      return;
+    }
+    setPositionInfoMessage(null);
+    setPositionErrorMessage(null);
+
+    const validation = validatePositionRanges(positionRanges);
+    setPositionInvalidKeys(validation.invalidKeys);
+
+    if (validation.error) {
+      setPositionErrorMessage(validation.error);
+      return;
+    }
+
+    try {
+      setPositionSaving(true);
+      const { scale, message } = await updatePositionRanges(selectedScaleId, {
+        ranges: validation.payload,
+        deleted_ids: Array.from(positionDeletedIds),
+      });
+      setScales((prev) =>
+        prev.map((item) => (String(item.id) === String(scale.id) ? scale : item)),
+      );
+      setPositionInfoMessage(
+        message ?? "Position ranges updated successfully.",
+      );
+      setPositionDeletedIds(new Set());
+    } catch (error) {
+      console.error("Unable to save position ranges", error);
+      setPositionErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to save position ranges.",
+      );
+    } finally {
+      setPositionSaving(false);
+    }
+  };
+
+  const handleCommentSave = async () => {
+    if (!selectedScaleId) {
+      setCommentErrorMessage("Select a grading scale before saving.");
+      return;
+    }
+    setCommentInfoMessage(null);
+    setCommentErrorMessage(null);
+
+    const validation = validateCommentRanges(commentRanges);
+    setCommentInvalidKeys(validation.invalidKeys);
+
+    if (validation.error) {
+      setCommentErrorMessage(validation.error);
+      return;
+    }
+
+    try {
+      setCommentSaving(true);
+      const { scale, message } = await updateCommentRanges(selectedScaleId, {
+        ranges: validation.payload,
+        deleted_ids: Array.from(commentDeletedIds),
+      });
+      setScales((prev) =>
+        prev.map((item) => (String(item.id) === String(scale.id) ? scale : item)),
+      );
+      setCommentInfoMessage(
+        message ?? "Comment ranges updated successfully.",
+      );
+      setCommentDeletedIds(new Set());
+    } catch (error) {
+      console.error("Unable to save comment ranges", error);
+      setCommentErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to save comment ranges.",
+      );
+    } finally {
+      setCommentSaving(false);
     }
   };
 
@@ -524,6 +1043,183 @@ export default function GradeScalesPage() {
               type="button"
               className="btn btn-sm btn-outline-danger"
               onClick={() => handleDeleteRange(index)}
+              disabled={range.locked}
+            >
+              <i className="fas fa-trash" />
+            </button>
+          </td>
+        </tr>
+      );
+    });
+  };
+
+  const renderPositionTableBody = () => {
+    if (!selectedScaleId) {
+      return (
+        <tr>
+          <td colSpan={4} className="text-center text-muted">
+            Select a grading scale to view position ranges.
+          </td>
+        </tr>
+      );
+    }
+
+    if (!positionRanges.length) {
+      return (
+        <tr>
+          <td colSpan={4} className="text-center text-muted">
+            No position ranges defined.
+          </td>
+        </tr>
+      );
+    }
+
+    return positionRanges.map((range, index) => {
+      const rowInvalid = positionInvalidKeys.has(range.key);
+      return (
+        <tr key={range.key} className={rowInvalid ? "table-danger" : undefined}>
+          <td>
+            <input
+              type="number"
+              className="form-control"
+              min={1}
+              step={1}
+              value={range.position}
+              onChange={(event) =>
+                handlePositionRangeChange(index, "position", event.target.value)
+              }
+              required
+            />
+          </td>
+          <td>
+            <input
+              type="number"
+              className="form-control"
+              min={0}
+              max={100}
+              step={1}
+              value={range.min_score}
+              onChange={(event) =>
+                handlePositionRangeChange(index, "min_score", event.target.value)
+              }
+              required
+            />
+          </td>
+          <td>
+            <input
+              type="number"
+              className="form-control"
+              min={0}
+              max={100}
+              step={1}
+              value={range.max_score}
+              onChange={(event) =>
+                handlePositionRangeChange(index, "max_score", event.target.value)
+              }
+              required
+            />
+          </td>
+          <td className="text-center">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-danger"
+              onClick={() => handleDeletePositionRange(index)}
+              disabled={range.locked}
+            >
+              <i className="fas fa-trash" />
+            </button>
+          </td>
+        </tr>
+      );
+    });
+  };
+
+  const renderCommentTableBody = () => {
+    if (!selectedScaleId) {
+      return (
+        <tr>
+          <td colSpan={5} className="text-center text-muted">
+            Select a grading scale to view comment ranges.
+          </td>
+        </tr>
+      );
+    }
+
+    if (!commentRanges.length) {
+      return (
+        <tr>
+          <td colSpan={5} className="text-center text-muted">
+            No comment ranges defined.
+          </td>
+        </tr>
+      );
+    }
+
+    return commentRanges.map((range, index) => {
+      const rowInvalid = commentInvalidKeys.has(range.key);
+      return (
+        <tr key={range.key} className={rowInvalid ? "table-danger" : undefined}>
+          <td>
+            <input
+              type="number"
+              className="form-control"
+              min={0}
+              max={100}
+              step={1}
+              value={range.min_score}
+              onChange={(event) =>
+                handleCommentRangeChange(index, "min_score", event.target.value)
+              }
+              required
+            />
+          </td>
+          <td>
+            <input
+              type="number"
+              className="form-control"
+              min={0}
+              max={100}
+              step={1}
+              value={range.max_score}
+              onChange={(event) =>
+                handleCommentRangeChange(index, "max_score", event.target.value)
+              }
+              required
+            />
+          </td>
+          <td>
+            <textarea
+              className="form-control"
+              value={range.teacher_comment}
+              maxLength={2000}
+              onChange={(event) =>
+                handleCommentRangeChange(
+                  index,
+                  "teacher_comment",
+                  event.target.value,
+                )
+              }
+            />
+          </td>
+          <td>
+            <textarea
+              className="form-control"
+              value={range.principal_comment}
+              maxLength={2000}
+              onChange={(event) =>
+                handleCommentRangeChange(
+                  index,
+                  "principal_comment",
+                  event.target.value,
+                )
+              }
+            />
+          </td>
+          <td className="text-center">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-danger"
+              onClick={() => handleDeleteCommentRange(index)}
               disabled={range.locked}
             >
               <i className="fas fa-trash" />
@@ -684,6 +1380,160 @@ export default function GradeScalesPage() {
               <tbody id="grade-range-table">{renderTableBody()}</tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      <div className="card height-auto mt-4">
+        <div className="card-body">
+          <div className="heading-layout1">
+            <div className="item-title">
+              <h3>Position Ranges (Optional)</h3>
+            </div>
+            <div className="d-flex align-items-center">
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-primary mr-2"
+                onClick={handleAddPositionRange}
+                disabled={!selectedScaleId || positionSaving}
+              >
+                <i className="fas fa-plus" /> Add Position
+              </button>
+              <button
+                type="button"
+                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                onClick={handlePositionSave}
+                disabled={positionSaving || !selectedScaleId}
+              >
+                {positionSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+          <p className="text-muted mb-3">
+            Define score bands that receive fixed positions (subject and overall).
+            Scores outside these ranges are ranked below the highest configured
+            position.
+          </p>
+          {positionInfoMessage ? (
+            <div className="alert alert-info">{positionInfoMessage}</div>
+          ) : null}
+          {positionErrorMessage ? (
+            <div className="alert alert-danger">{positionErrorMessage}</div>
+          ) : null}
+          <div className="table-responsive">
+            <table className="table table-bordered table-striped">
+              <thead>
+                <tr>
+                  <th>Position</th>
+                  <th>Minimum Score</th>
+                  <th>Maximum Score</th>
+                  <th className="text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody>{renderPositionTableBody()}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div className="card height-auto mt-4">
+        <div className="card-body">
+          <div className="heading-layout1">
+            <div className="item-title">
+              <h3>Result Comments (Optional)</h3>
+            </div>
+            {resultSettings.comment_mode === "range" ? (
+              <div className="d-flex align-items-center">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-primary mr-2"
+                  onClick={handleAddCommentRange}
+                  disabled={!selectedScaleId || commentSaving}
+                >
+                  <i className="fas fa-plus" /> Add Comment Range
+                </button>
+                <button
+                  type="button"
+                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                  onClick={handleCommentSave}
+                  disabled={commentSaving || !selectedScaleId}
+                >
+                  {commentSaving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            ) : (
+              <span className="text-muted small">
+                Range configuration disabled in manual mode.
+              </span>
+            )}
+          </div>
+          <p className="text-muted mb-3">
+            Add score bands with default teacher and principal comments for the
+            result summary.
+          </p>
+          <div className="mb-3">
+            <label className="text-dark-medium d-block mb-2">
+              Result Comment Mode
+            </label>
+            <div className="btn-group" role="group" aria-label="Comment mode">
+              <button
+                type="button"
+                className={`btn btn-sm ${
+                  resultSettings.comment_mode === "manual"
+                    ? "btn-primary"
+                    : "btn-outline-primary"
+                }`}
+                onClick={() => handleCommentModeChange("manual")}
+                disabled={resultSettingsLoading || resultSettingsSaving}
+                style={{ borderRadius: 999, padding: "0.35rem 0.9rem" }}
+              >
+                Manual Comments
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${
+                  resultSettings.comment_mode === "range"
+                    ? "btn-primary"
+                    : "btn-outline-primary"
+                }`}
+                onClick={() => handleCommentModeChange("range")}
+                disabled={resultSettingsLoading || resultSettingsSaving}
+                style={{ borderRadius: 999, padding: "0.35rem 0.9rem" }}
+              >
+                Range Comments
+              </button>
+            </div>
+            <small className="form-text text-muted">
+              Manual shows the comment boxes on student details. Range uses the
+              comment bands below.
+            </small>
+          </div>
+          {commentInfoMessage ? (
+            <div className="alert alert-info">{commentInfoMessage}</div>
+          ) : null}
+          {commentErrorMessage ? (
+            <div className="alert alert-danger">{commentErrorMessage}</div>
+          ) : null}
+          {resultSettings.comment_mode === "range" ? (
+            <div className="table-responsive">
+              <table className="table table-bordered table-striped">
+                <thead>
+                  <tr>
+                    <th>Minimum Score</th>
+                    <th>Maximum Score</th>
+                    <th>Teacher Comment</th>
+                    <th>Principal Comment</th>
+                    <th className="text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody>{renderCommentTableBody()}</tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="alert alert-secondary mb-0">
+              Manual comment mode is active. Switch to range mode to configure
+              comment bands.
+            </div>
+          )}
         </div>
       </div>
     </>

@@ -8,6 +8,7 @@ export interface ResultPageSettings {
   show_lowest: boolean;
   show_highest: boolean;
   show_remarks: boolean;
+  comment_mode: "manual" | "range";
 }
 
 const defaultSettings: ResultPageSettings = {
@@ -17,6 +18,7 @@ const defaultSettings: ResultPageSettings = {
   show_lowest: true,
   show_highest: true,
   show_remarks: true,
+  comment_mode: "manual",
 };
 
 type ResultPageSettingsResponse =
@@ -56,6 +58,10 @@ function normalizeSettings(payload: ResultPageSettingsResponse): ResultPageSetti
   }
 
   const settings = raw as Partial<ResultPageSettings>;
+  const commentMode =
+    settings.comment_mode === "range" || settings.comment_mode === "manual"
+      ? settings.comment_mode
+      : defaultSettings.comment_mode;
 
   return {
     show_grade: parseBoolean(settings.show_grade, defaultSettings.show_grade),
@@ -79,6 +85,7 @@ function normalizeSettings(payload: ResultPageSettingsResponse): ResultPageSetti
       settings.show_remarks,
       defaultSettings.show_remarks,
     ),
+    comment_mode: commentMode,
   };
 }
 

@@ -10,6 +10,8 @@ import { isTeacherUser } from "@/lib/roleChecks";
 
 const DEFAULT_LOGO = "/assets/img/logo1.png";
 const passthroughLoader: ImageLoader = ({ src }) => src;
+const showEarlyYearsReport =
+  process.env.NEXT_PUBLIC_EARLY_YEARS_REPORT === "1";
 
 export interface MenuLink {
   id?: string;
@@ -130,6 +132,44 @@ export const menuSections: MenuSection[] = [
     ],
   },
   {
+    label: "Student",
+    icon: "flaticon-classmates",
+    links: [
+      { label: "View Student", href: "/v14/all-students", requiredPermissions: "students.view" },
+      { label: "Add Student", href: "/v14/add-student", requiredPermissions: "students.create" },
+      { label: "Bulk Result Print", href: "/v14/bulk-results", requiredPermissions: "results.bulk.view", excludeRoles: "teacher" },
+      { label: "Check Student Result", href: "/v14/check-result", requiredPermissions: "results.check", excludeRoles: "teacher" },
+      ...(showEarlyYearsReport
+        ? [
+            {
+              label: "Early Years Report",
+              href: "/v14/early-years-report",
+              requiredPermissions: "results.early-years.view",
+              excludeRoles: "teacher",
+            },
+          ]
+        : []),
+      {
+        label: "Result Entry",
+        href: "/v19/results-entry",
+        requiredPermissions: [
+          "results.entry.view",
+          "results.entry.enter",
+          "results.enter",
+        ],
+      },
+      {
+        label: "Class Skill Ratings",
+        href: "/v14/class-skill-ratings",
+        // Allow either skills.ratings.view (admins) or results.entry.enter (teachers) to see it
+        requiredPermissions: ["skills.ratings.view", "results.entry.enter"],
+      },
+      { label: "Student Bulk Upload", href: "/v22/bulk-student-upload", requiredPermissions: "students.import" },
+      { label: "Student Promotion", href: "/v20/student-promotion", requiredPermissions: "students.promote" },
+      { label: "Promotion Reports", href: "/v20/promotion-reports", requiredPermissions: "promotions.history" },
+    ],
+  },
+  {
     label: "Attendance",
     icon: "flaticon-checklist",
     links: [
@@ -196,7 +236,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { schoolContext, user, hasPermission } = useAuth();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const isTeacher = isTeacherUser(user);
 
   const logoSrc = useMemo(() => {
     const customLogo = schoolContext.school?.logo_url;
@@ -213,26 +253,7 @@ export function Sidebar() {
       .split(/<br\s*\/?>/i)
       .map((part) => part.trim())
       .filter((part) => part.length > 0);
-
-    const maxLines = 2;
-    const maxChars = 18;
-    const truncateLine = (line: string) => {
-      if (line.length <= maxChars) {
-        return line;
-      }
-      return `${line.slice(0, Math.max(0, maxChars - 3)).trim()}...`;
-    };
-
-    let trimmed = lines.map(truncateLine);
-    if (trimmed.length > maxLines) {
-      trimmed = trimmed.slice(0, maxLines);
-      const lastIndex = maxLines - 1;
-      if (!trimmed[lastIndex].endsWith("...")) {
-        trimmed[lastIndex] = `${trimmed[lastIndex]}...`;
-      }
-    }
-
-    return trimmed.length ? trimmed : ["SMS"];
+    return lines.length ? lines : ["SMS"];
   }, [schoolContext.school?.short_name, schoolContext.school?.name]);
 
   const roleSet = useMemo(() => {
@@ -320,12 +341,18 @@ export function Sidebar() {
 
   const filteredSections = useMemo(() => {
     return menuSections
+      .filter((section) => {
+        if (!isTeacher) {
+          return true;
+        }
+        return section.label !== "Management" && section.label !== "Assign";
+      })
       .map((section) => ({
         ...section,
         links: filterLinks(section.links),
       }))
       .filter((section) => section.links.length > 0);
-  }, [filterLinks]);
+  }, [linkVisible, isTeacher]);
 
   const isSectionActive = (section: MenuSection) =>
     section.links.some((link) => isLinkActive(link.href));
@@ -356,39 +383,20 @@ export function Sidebar() {
       className="sidebar-main sidebar-menu-one sidebar-expand-md sidebar-color"
       style={{ backgroundColor: "#042C54" }}
     >
-      <div
-        className="mobile-sidebar-header d-md-none"
-        style={{ borderBottom: "none", paddingBottom: 8 }}
-      >
+      <div className="mobile-sidebar-header d-md-none">
         <div className="header-logo d-flex align-items-center">
-          <Link href={dashboardPath} className="d-flex align-items-center">
+          <Link href={dashboardPath} className="sidebar-brand-link d-flex align-items-center">
             <Image
+              className="sidebar-school-logo"
               id="sidebar-school-logo"
               src={logoSrc}
               alt="Sidebar logo"
               width={64}
               height={20}
               unoptimized
-              style={{
-                height: "auto",
-                maxWidth: 64,
-                width: "auto",
-                marginRight: 10,
-              }}
               loader={passthroughLoader}
             />
-            <span
-              className="sidebar-brand-text font-weight-bold text-primary"
-              style={{
-                marginLeft: 6,
-                fontSize: "1rem",
-                lineHeight: "1.1",
-                maxWidth: 140,
-                display: "inline-block",
-                whiteSpace: "normal",
-                wordBreak: "break-word",
-              }}
-            >
+            <span className="sidebar-brand-text">
               {brandLines.map((line, index) => (
                 <span key={index}>
                   {index > 0 && <br />}

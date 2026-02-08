@@ -26,6 +26,7 @@ export interface StudentProfile {
   house?: string | null;
   club?: string | null;
   medical_information?: string | null;
+  photo_url?: string | null;
   blood_group?: {
     id: string;
     name: string;
@@ -42,6 +43,10 @@ export interface StudentProfile {
     id: string;
     name: string;
     phone?: string | null;
+    email?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    middle_name?: string | null;
   } | null;
   current_session?: {
     id: string;
@@ -128,4 +133,22 @@ export async function getStudentProfile(): Promise<StudentProfile | null> {
     console.error("Unable to fetch student profile", error);
     return null;
   }
+}
+
+/**
+ * Update the currently-authenticated student's own bio-data / profile.
+ * Sends a multipart FormData so passport photos can be included.
+ */
+export async function updateStudentProfile(
+  formData: FormData,
+): Promise<StudentProfile> {
+  const response = await apiFetch<{ student: StudentProfile }>(
+    "/api/v1/student/profile/update",
+    {
+      method: "POST",
+      body: formData,
+      authScope: "student",
+    },
+  );
+  return response.student;
 }

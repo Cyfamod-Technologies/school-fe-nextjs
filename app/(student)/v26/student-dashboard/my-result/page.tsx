@@ -2,13 +2,15 @@
 
 import { useStudentAuth } from "@/contexts/StudentAuthContext";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   StudentResultEntry,
   StudentSessionOption,
   listStudentSessions,
   previewStudentResult,
 } from "@/lib/studentResults";
+import { resolveBackendUrl } from "@/lib/config";
+import { getCookie } from "@/lib/cookies";
 
 export default function StudentMyResultPage() {
   const { student, loading } = useStudentAuth();
@@ -18,6 +20,7 @@ export default function StudentMyResultPage() {
   const [selectedTerm, setSelectedTerm] = useState("");
   const [pin, setPin] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [printProcessing, setPrintProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<StudentResultEntry[] | null>(null);
 
@@ -119,7 +122,85 @@ export default function StudentMyResultPage() {
     }
   };
 
+  const handlePrintResult = useCallback(async () => {
+    if (!selectedSession || !selectedTerm) {
+      setError("Select session and term before printing.");
+      return;
+    }
+
+    setPrintProcessing(true);
+    setError(null);
+
+    try {
+      const token = getCookie("student_token");
+      if (!token) {
+        setError("Your session has expired. Please log in again.");
+        return;
+      }
+
+      const params = new URLSearchParams();
+      params.set("session_id", selectedSession);
+      params.set("term_id", selectedTerm);
+
+      const endpoint = resolveBackendUrl(
+        `/api/v1/student/results/download?${params.toString()}`,
+      );
+
+      const response = await fetch(endpoint, {
+        headers: {
+          Accept: "text/html",
+          "X-Requested-With": "XMLHttpRequest",
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        let errorMessage = "Unable to load printable result.";
+        const contentType = response.headers.get("content-type") || "";
+
+        if (contentType.includes("application/json")) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorMessage;
+          } catch {
+            // fall back
+          }
+        } else if (response.status === 401) {
+          errorMessage = "Your session has expired. Please log in again.";
+        } else if (response.status === 404) {
+          errorMessage = "No results found for the selected session and term.";
+        } else {
+          const text = await response.text().catch(() => "");
+          if (text.trim().length > 0 && !/^<\s*(!DOCTYPE|html)/i.test(text.trim())) {
+            errorMessage = text.trim();
+          }
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      const html = await response.text();
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) {
+        setError("Unable to open print window. Please allow pop-ups for this site.");
+        return;
+      }
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+    } catch (err) {
+      console.error("Unable to print result", err);
+      setError(
+        err instanceof Error ? err.message : "Unable to load printable result.",
+      );
+    } finally {
+      setPrintProcessing(false);
+    }
+  }, [selectedSession, selectedTerm]);
+
   return (
+    <>
     <div className="card height-auto">
       <div className="card-body">
         <div className="heading-layout1 mb-4">
@@ -217,22 +298,10 @@ export default function StudentMyResultPage() {
               <button
                 type="button"
                 className="btn btn-outline-primary"
-                onClick={() => {
-                  if (!selectedSession || !selectedTerm) {
-                    setError("Select session and term before printing.");
-                    return;
-                  }
-                  const params = new URLSearchParams();
-                  params.set("session_id", selectedSession);
-                  params.set("term_id", selectedTerm);
-                  const url = `/student/print-result?${params.toString()}`;
-                  const printWindow = window.open(url, "_blank", "noopener,noreferrer");
-                  if (!printWindow) {
-                    setError("Unable to open print window. Please allow pop-ups.");
-                  }
-                }}
+                disabled={printProcessing}
+                onClick={handlePrintResult}
               >
-                Print Result
+                {printProcessing ? "Loading…" : "Print Result"}
               </button>
             </div>
             {results.length === 0 ? (
@@ -298,5 +367,13 @@ export default function StudentMyResultPage() {
         ) : null}
       </div>
     </div>
+
+    <footer className="footer-wrap-layout1" style={{ marginTop: "3rem" }}>
+      <div className="copyright">
+        © Copyrights <a href="#">Cyfamod Technologies</a> 2026. All rights
+        reserved.
+      </div>
+    </footer>
+    </>
   );
 }
