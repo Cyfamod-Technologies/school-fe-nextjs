@@ -226,26 +226,7 @@ export function Sidebar() {
       .split(/<br\s*\/?>/i)
       .map((part) => part.trim())
       .filter((part) => part.length > 0);
-
-    const maxLines = 2;
-    const maxChars = 18;
-    const truncateLine = (line: string) => {
-      if (line.length <= maxChars) {
-        return line;
-      }
-      return `${line.slice(0, Math.max(0, maxChars - 3)).trim()}...`;
-    };
-
-    let trimmed = lines.map(truncateLine);
-    if (trimmed.length > maxLines) {
-      trimmed = trimmed.slice(0, maxLines);
-      const lastIndex = maxLines - 1;
-      if (!trimmed[lastIndex].endsWith("...")) {
-        trimmed[lastIndex] = `${trimmed[lastIndex]}...`;
-      }
-    }
-
-    return trimmed.length ? trimmed : ["SMS"];
+    return lines.length ? lines : ["SMS"];
   }, [schoolContext.school?.short_name, schoolContext.school?.name]);
 
   const roleSet = useMemo(() => {
@@ -351,39 +332,20 @@ export function Sidebar() {
       className="sidebar-main sidebar-menu-one sidebar-expand-md sidebar-color"
       style={{ backgroundColor: "#042C54" }}
     >
-      <div
-        className="mobile-sidebar-header d-md-none"
-        style={{ borderBottom: "none", paddingBottom: 8 }}
-      >
+      <div className="mobile-sidebar-header d-md-none">
         <div className="header-logo d-flex align-items-center">
-          <Link href={dashboardPath} className="d-flex align-items-center">
+          <Link href={dashboardPath} className="sidebar-brand-link d-flex align-items-center">
             <Image
+              className="sidebar-school-logo"
               id="sidebar-school-logo"
               src={logoSrc}
               alt="Sidebar logo"
               width={64}
               height={20}
               unoptimized
-              style={{
-                height: "auto",
-                maxWidth: 64,
-                width: "auto",
-                marginRight: 10,
-              }}
               loader={passthroughLoader}
             />
-            <span
-              className="sidebar-brand-text font-weight-bold text-primary"
-              style={{
-                marginLeft: 6,
-                fontSize: "1rem",
-                lineHeight: "1.1",
-                maxWidth: 140,
-                display: "inline-block",
-                whiteSpace: "normal",
-                wordBreak: "break-word",
-              }}
-            >
+            <span className="sidebar-brand-text">
               {brandLines.map((line, index) => (
                 <span key={index}>
                   {index > 0 && <br />}

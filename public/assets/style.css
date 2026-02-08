@@ -2234,13 +2234,43 @@ ul {
 }
 .sidebar-menu-one .mobile-sidebar-header {
   border-bottom: 1px solid #021933;
+  position: relative;
+  z-index: 2;
+  background-color: #042c54;
 }
 .sidebar-menu-one .mobile-sidebar-header .header-logo {
-  text-align: center;
+  text-align: left;
 }
 .sidebar-menu-one .mobile-sidebar-header .header-logo a {
   display: block;
   padding: 18px;
+}
+.sidebar-menu-one .mobile-sidebar-header .header-logo .sidebar-brand-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+}
+.sidebar-menu-one .mobile-sidebar-header .header-logo .sidebar-school-logo {
+  width: auto;
+  height: auto;
+  max-width: 64px;
+  flex-shrink: 0;
+}
+.sidebar-menu-one .mobile-sidebar-header .header-logo .sidebar-brand-text {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.sidebar-menu-one .mobile-sidebar-header .header-logo .sidebar-brand-text span {
+  display: block;
 }
 @media (max-width: 767.98px) {
   .sidebar-menu-one {
@@ -2441,7 +2471,10 @@ ul {
     width: min(84vw, 22rem);
     max-width: 22rem;
     left: 0;
+    height: 100dvh;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
     transform: translateX(-110%);
     transition: transform 0.25s ease-out;
     z-index: 1000;
@@ -2451,12 +2484,14 @@ ul {
     box-shadow: 0 14px 28px rgba(4, 41, 84, 0.32);
   }
   .sidebar-main.sidebar-menu-one .sidebar-menu-content {
-    position: absolute;
-    top: 60px;
-    bottom: 0;
+    position: relative;
+    top: 0;
+    bottom: auto;
+    flex: 1 1 auto;
     width: 100%;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    z-index: 1;
   }
 }
 /*=======================================================================
