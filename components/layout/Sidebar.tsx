@@ -236,6 +236,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { schoolContext, user, hasPermission } = useAuth();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const isTeacher = isTeacherUser(user);
 
   const logoSrc = useMemo(() => {
@@ -314,12 +315,16 @@ export function Sidebar() {
     [hasPermission, roleSet],
   );
 
-  const filterLinks = useCallback(
-    (links: MenuLink[]): MenuLink[] => {
+  const filteredQuickLinks = useMemo(() => {
+    return sidebarQuickLinks.filter(linkVisible);
+  }, [linkVisible]);
+
+  const filteredSections = useMemo(() => {
+    const filterLinksRecursively = (links: MenuLink[]): MenuLink[] => {
       return links
         .map((link) => {
           if (link.children && link.children.length > 0) {
-            const visibleChildren = filterLinks(link.children);
+            const visibleChildren = filterLinksRecursively(link.children);
             if (visibleChildren.length === 0) {
               return null;
             }
@@ -331,15 +336,8 @@ export function Sidebar() {
           return linkVisible(link) ? link : null;
         })
         .filter(Boolean) as MenuLink[];
-    },
-    [linkVisible],
-  );
+    };
 
-  const filteredQuickLinks = useMemo(() => {
-    return sidebarQuickLinks.filter(linkVisible);
-  }, [linkVisible]);
-
-  const filteredSections = useMemo(() => {
     return menuSections
       .filter((section) => {
         if (!isTeacher) {
@@ -349,13 +347,15 @@ export function Sidebar() {
       })
       .map((section) => ({
         ...section,
-        links: filterLinks(section.links),
+        links: filterLinksRecursively(section.links),
       }))
       .filter((section) => section.links.length > 0);
-  }, [linkVisible, isTeacher]);
+  }, [isTeacher, linkVisible]);
 
-  const isSectionActive = (section: MenuSection) =>
-    section.links.some((link) => isLinkActive(link.href));
+  const isSectionActive = useCallback(
+    (section: MenuSection) => section.links.some((link) => isLinkActive(link.href)),
+    [isLinkActive],
+  );
 
   const isGroupActive = (group: MenuLink) =>
     (group.children ?? []).some((link) => isLinkActive(link.href));
