@@ -44,8 +44,6 @@ interface EditablePositionRange {
 interface EditableCommentRange {
   key: string;
   id: number | string | null;
-  min_score: string;
-  max_score: string;
   teacher_comment: string;
   principal_comment: string;
   locked?: boolean;
@@ -110,14 +108,6 @@ function toEditableCommentRange(
   return {
     key: `comment-${range.id ?? index}`,
     id: range.id ?? null,
-    min_score:
-      range.min_score === null || range.min_score === undefined
-        ? ""
-        : `${range.min_score}`,
-    max_score:
-      range.max_score === null || range.max_score === undefined
-        ? ""
-        : `${range.max_score}`,
     teacher_comment: range.teacher_comment ?? "",
     principal_comment: range.principal_comment ?? "",
     locked: range.locked,
@@ -150,8 +140,6 @@ function createEmptyCommentRange(): EditableCommentRange {
   return {
     key: `comment-new-${generateTempKey()}`,
     id: null,
-    min_score: "",
-    max_score: "",
     teacher_comment: "",
     principal_comment: "",
   };
@@ -264,7 +252,7 @@ function validatePositionRanges(
 
   const seenPositions = new Set<number>();
 
-  ranges.forEach((range, index) => {
+  ranges.forEach((range) => {
     const minRaw = range.min_score.trim();
     const maxRaw = range.max_score.trim();
     const positionRaw = range.position.trim();
@@ -334,24 +322,10 @@ function validateCommentRanges(
   }
 
   ranges.forEach((range) => {
-    const minRaw = range.min_score.trim();
-    const maxRaw = range.max_score.trim();
     const teacher = range.teacher_comment.trim();
     const principal = range.principal_comment.trim();
 
-    const min = Number(minRaw);
-    const max = Number(maxRaw);
-
     const isInvalid =
-      minRaw === "" ||
-      maxRaw === "" ||
-      Number.isNaN(min) ||
-      Number.isNaN(max) ||
-      min < 0 ||
-      max < 0 ||
-      min > 100 ||
-      max > 100 ||
-      min > max ||
       teacher.length === 0 ||
       principal.length === 0;
 
@@ -362,8 +336,6 @@ function validateCommentRanges(
 
     payload.push({
       id: range.id,
-      min_score: min,
-      max_score: max,
       teacher_comment: teacher,
       principal_comment: principal,
     });
@@ -481,7 +453,10 @@ export default function GradeScalesPage() {
     fetchResultPageSettings()
       .then((data) => {
         if (!active) return;
-        setResultSettings(data);
+        setResultSettings({
+          ...data,
+          comment_mode: "manual",
+        });
       })
       .catch((error) => {
         console.error("Unable to load result page settings", error);
@@ -545,10 +520,7 @@ export default function GradeScalesPage() {
     setPositionInfoMessage(null);
     setPositionErrorMessage(null);
 
-    const commentSorted = [...(selectedScale.comment_ranges ?? [])].sort(
-      (a, b) => (a.min_score ?? 0) - (b.min_score ?? 0),
-    );
-    setCommentRanges(commentSorted.map(toEditableCommentRange));
+    setCommentRanges((selectedScale.comment_ranges ?? []).map(toEditableCommentRange));
     setCommentDeletedIds(new Set());
     setCommentInvalidKeys(new Set());
     setCommentInfoMessage(null);
@@ -779,40 +751,20 @@ export default function GradeScalesPage() {
     }));
   };
 
-  const handleCommentModeChange = async (
-    mode: ResultPageSettings["comment_mode"],
-  ) => {
-    setResultSettings((prev) => ({
-      ...prev,
-      comment_mode: mode,
-    }));
-    setResultSettingsError(null);
-    setResultSettingsInfo(null);
-    try {
-      setResultSettingsSaving(true);
-      const saved = await updateResultPageSettings({ comment_mode: mode });
-      setResultSettings(saved);
-      setResultSettingsInfo("Result comment mode updated.");
-    } catch (error) {
-      console.error("Unable to update comment mode", error);
-      setResultSettingsError(
-        error instanceof Error
-          ? error.message
-          : "Unable to update comment mode.",
-      );
-    } finally {
-      setResultSettingsSaving(false);
-    }
-  };
-
   const handleResultSettingsSave = async () => {
     setResultSettingsError(null);
     setResultSettingsInfo(null);
 
     try {
       setResultSettingsSaving(true);
-      const saved = await updateResultPageSettings(resultSettings);
-      setResultSettings(saved);
+      const saved = await updateResultPageSettings({
+        ...resultSettings,
+        comment_mode: "manual",
+      });
+      setResultSettings({
+        ...saved,
+        comment_mode: "manual",
+      });
       setResultSettingsInfo("Result page settings updated successfully.");
     } catch (error) {
       console.error("Unable to save result page settings", error);
@@ -935,15 +887,15 @@ export default function GradeScalesPage() {
         prev.map((item) => (String(item.id) === String(scale.id) ? scale : item)),
       );
       setCommentInfoMessage(
-        message ?? "Comment ranges updated successfully.",
+        message ?? "Comment templates updated successfully.",
       );
       setCommentDeletedIds(new Set());
     } catch (error) {
-      console.error("Unable to save comment ranges", error);
+      console.error("Unable to save comment templates", error);
       setCommentErrorMessage(
         error instanceof Error
           ? error.message
-          : "Unable to save comment ranges.",
+          : "Unable to save comment templates.",
       );
     } finally {
       setCommentSaving(false);
@@ -1138,8 +1090,8 @@ export default function GradeScalesPage() {
     if (!selectedScaleId) {
       return (
         <tr>
-          <td colSpan={5} className="text-center text-muted">
-            Select a grading scale to view comment ranges.
+          <td colSpan={3} className="text-center text-muted">
+            Select a grading scale to view comment templates.
           </td>
         </tr>
       );
@@ -1148,8 +1100,8 @@ export default function GradeScalesPage() {
     if (!commentRanges.length) {
       return (
         <tr>
-          <td colSpan={5} className="text-center text-muted">
-            No comment ranges defined.
+          <td colSpan={3} className="text-center text-muted">
+            No comment templates defined.
           </td>
         </tr>
       );
@@ -1159,34 +1111,6 @@ export default function GradeScalesPage() {
       const rowInvalid = commentInvalidKeys.has(range.key);
       return (
         <tr key={range.key} className={rowInvalid ? "table-danger" : undefined}>
-          <td>
-            <input
-              type="number"
-              className="form-control"
-              min={0}
-              max={100}
-              step={1}
-              value={range.min_score}
-              onChange={(event) =>
-                handleCommentRangeChange(index, "min_score", event.target.value)
-              }
-              required
-            />
-          </td>
-          <td>
-            <input
-              type="number"
-              className="form-control"
-              min={0}
-              max={100}
-              step={1}
-              value={range.max_score}
-              onChange={(event) =>
-                handleCommentRangeChange(index, "max_score", event.target.value)
-              }
-              required
-            />
-          </td>
           <td>
             <textarea
               className="form-control"
@@ -1439,101 +1363,49 @@ export default function GradeScalesPage() {
         <div className="card-body">
           <div className="heading-layout1">
             <div className="item-title">
-              <h3>Result Comments (Optional)</h3>
+              <h3>Result Comment Templates (Optional)</h3>
             </div>
-            {resultSettings.comment_mode === "range" ? (
-              <div className="d-flex align-items-center">
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-primary mr-2"
-                  onClick={handleAddCommentRange}
-                  disabled={!selectedScaleId || commentSaving}
-                >
-                  <i className="fas fa-plus" /> Add Comment Range
-                </button>
-                <button
-                  type="button"
-                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                  onClick={handleCommentSave}
-                  disabled={commentSaving || !selectedScaleId}
-                >
-                  {commentSaving ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            ) : (
-              <span className="text-muted small">
-                Range configuration disabled in manual mode.
-              </span>
-            )}
+            <div className="d-flex align-items-center">
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-primary mr-2"
+                onClick={handleAddCommentRange}
+                disabled={!selectedScaleId || commentSaving}
+              >
+                <i className="fas fa-plus" /> Add Comment
+              </button>
+              <button
+                type="button"
+                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                onClick={handleCommentSave}
+                disabled={commentSaving || !selectedScaleId}
+              >
+                {commentSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
           </div>
           <p className="text-muted mb-3">
-            Add score bands with default teacher and principal comments for the
-            result summary.
+            Add reusable teacher and principal comments that staff can pick and
+            still edit as custom text when needed.
           </p>
-          <div className="mb-3">
-            <label className="text-dark-medium d-block mb-2">
-              Result Comment Mode
-            </label>
-            <div className="btn-group" role="group" aria-label="Comment mode">
-              <button
-                type="button"
-                className={`btn btn-sm ${
-                  resultSettings.comment_mode === "manual"
-                    ? "btn-primary"
-                    : "btn-outline-primary"
-                }`}
-                onClick={() => handleCommentModeChange("manual")}
-                disabled={resultSettingsLoading || resultSettingsSaving}
-                style={{ borderRadius: 999, padding: "0.35rem 0.9rem" }}
-              >
-                Manual Comments
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm ${
-                  resultSettings.comment_mode === "range"
-                    ? "btn-primary"
-                    : "btn-outline-primary"
-                }`}
-                onClick={() => handleCommentModeChange("range")}
-                disabled={resultSettingsLoading || resultSettingsSaving}
-                style={{ borderRadius: 999, padding: "0.35rem 0.9rem" }}
-              >
-                Range Comments
-              </button>
-            </div>
-            <small className="form-text text-muted">
-              Manual shows the comment boxes on student details. Range uses the
-              comment bands below.
-            </small>
-          </div>
           {commentInfoMessage ? (
             <div className="alert alert-info">{commentInfoMessage}</div>
           ) : null}
           {commentErrorMessage ? (
             <div className="alert alert-danger">{commentErrorMessage}</div>
           ) : null}
-          {resultSettings.comment_mode === "range" ? (
-            <div className="table-responsive">
-              <table className="table table-bordered table-striped">
-                <thead>
-                  <tr>
-                    <th>Minimum Score</th>
-                    <th>Maximum Score</th>
-                    <th>Teacher Comment</th>
-                    <th>Principal Comment</th>
-                    <th className="text-center">Action</th>
-                  </tr>
-                </thead>
-                <tbody>{renderCommentTableBody()}</tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="alert alert-secondary mb-0">
-              Manual comment mode is active. Switch to range mode to configure
-              comment bands.
-            </div>
-          )}
+          <div className="table-responsive">
+            <table className="table table-bordered table-striped">
+              <thead>
+                <tr>
+                  <th>Teacher Comment</th>
+                  <th>Principal Comment</th>
+                  <th className="text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody>{renderCommentTableBody()}</tbody>
+            </table>
+          </div>
         </div>
       </div>
     </>

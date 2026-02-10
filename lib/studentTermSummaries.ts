@@ -3,6 +3,8 @@ import { apiFetch } from "@/lib/apiClient";
 export interface StudentTermSummary {
   class_teacher_comment?: string | null;
   principal_comment?: string | null;
+  class_teacher_comment_options?: string[];
+  principal_comment_options?: string[];
   days_present?: number | null;
   days_absent?: number | null;
   [key: string]: unknown;
@@ -29,6 +31,8 @@ interface TermSummaryResponse {
 const EMPTY_SUMMARY: StudentTermSummary = {
   class_teacher_comment: "",
   principal_comment: "",
+  class_teacher_comment_options: [],
+  principal_comment_options: [],
   days_present: null,
   days_absent: null,
 };
@@ -53,6 +57,8 @@ function extractSummary(
   if (
     "class_teacher_comment" in payload ||
     "principal_comment" in payload ||
+    "class_teacher_comment_options" in payload ||
+    "principal_comment_options" in payload ||
     "days_present" in payload ||
     "days_absent" in payload
   ) {
@@ -61,6 +67,16 @@ function extractSummary(
         (payload as StudentTermSummary).class_teacher_comment ?? "",
       principal_comment:
         (payload as StudentTermSummary).principal_comment ?? "",
+      class_teacher_comment_options: Array.isArray(
+        (payload as StudentTermSummary).class_teacher_comment_options,
+      )
+        ? ((payload as StudentTermSummary).class_teacher_comment_options as string[])
+        : [],
+      principal_comment_options: Array.isArray(
+        (payload as StudentTermSummary).principal_comment_options,
+      )
+        ? ((payload as StudentTermSummary).principal_comment_options as string[])
+        : [],
       days_present: (payload as StudentTermSummary).days_present ?? null,
       days_absent: (payload as StudentTermSummary).days_absent ?? null,
     };
@@ -70,6 +86,16 @@ function extractSummary(
     return {
       class_teacher_comment: wrapper.data.class_teacher_comment ?? "",
       principal_comment: wrapper.data.principal_comment ?? "",
+      class_teacher_comment_options: Array.isArray(
+        wrapper.data.class_teacher_comment_options,
+      )
+        ? (wrapper.data.class_teacher_comment_options as string[])
+        : [],
+      principal_comment_options: Array.isArray(
+        wrapper.data.principal_comment_options,
+      )
+        ? (wrapper.data.principal_comment_options as string[])
+        : [],
       days_present: wrapper.data.days_present ?? null,
       days_absent: wrapper.data.days_absent ?? null,
     };
