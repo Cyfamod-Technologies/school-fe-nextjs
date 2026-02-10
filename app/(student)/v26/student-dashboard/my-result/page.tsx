@@ -63,24 +63,6 @@ export default function StudentMyResultPage() {
     return session?.terms ?? [];
   }, [sessions, selectedSession]);
 
-  const componentHeaders = useMemo(() => {
-    if (!results) {
-      return [] as string[];
-    }
-    const labels: string[] = [];
-    const seen = new Set<string>();
-    results.forEach((row) => {
-      row.components?.forEach((component) => {
-        const label = (component.label ?? "").trim();
-        if (label && !seen.has(label)) {
-          seen.add(label);
-          labels.push(label);
-        }
-      });
-    });
-    return labels;
-  }, [results]);
-
   if (loading || !student) {
     return (
       <div className="card">
@@ -293,76 +275,25 @@ export default function StudentMyResultPage() {
 
         {results ? (
           <div className="mt-4">
-            <h4 className="mb-3">Result Summary</h4>
+            {/* <h4 className="mb-3">Result Summary</h4> */}
             <div className="d-flex justify-content-end mb-3">
               <button
                 type="button"
-                className="btn btn-outline-primary"
+                className="btn btn-outline-primary d-inline-flex align-items-center justify-content-center"
                 disabled={printProcessing}
                 onClick={handlePrintResult}
+                style={{
+                  minWidth: 240,
+                  padding: "0.95rem 2rem",
+                  fontSize: "1.1rem",
+                  fontWeight: 700,
+                  borderRadius: "0.5rem",
+                }}
               >
                 {printProcessing ? "Loading…" : "Print Result"}
               </button>
             </div>
-            {results.length === 0 ? (
-              <p className="text-muted mb-0">
-                No results found for the selected session and term.
-              </p>
-            ) : (
-              <div className="table-responsive">
-                <table className="table display text-nowrap">
-                  <thead>
-                    <tr>
-                      <th>Subject</th>
-                      {componentHeaders.map((label) => (
-                        <th key={label}>{label}</th>
-                      ))}
-                      <th>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {results.map((result, index) => {
-                      const componentMap = new Map(
-                        (result.components ?? []).map((component) => [
-                          component.label ?? "",
-                          component.score,
-                        ]),
-                      );
-                      const componentScores = (result.components ?? [])
-                        .map((component) =>
-                          typeof component.score === "number"
-                            ? component.score
-                            : null,
-                        )
-                        .filter((score): score is number => score !== null);
-                      const derivedTotal =
-                        typeof result.total === "number"
-                          ? result.total
-                          : componentScores.length > 0
-                          ? componentScores.reduce((sum, score) => sum + score, 0)
-                          : null;
-
-                      return (
-                        <tr key={`${result.subject}-${index}`}>
-                          <td>{result.subject ?? "—"}</td>
-                          {componentHeaders.map((label) => {
-                            const value = componentMap.has(label)
-                              ? componentMap.get(label)
-                              : null;
-                            return (
-                              <td key={`${result.subject}-${label}`}>
-                                {value ?? "—"}
-                              </td>
-                            );
-                          })}
-                          <td>{derivedTotal ?? "—"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            {/* Results content intentionally hidden; print-only view requested. */}
           </div>
         ) : null}
       </div>
