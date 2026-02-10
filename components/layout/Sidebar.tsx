@@ -236,6 +236,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { schoolContext, user, hasPermission } = useAuth();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const isTeacher = isTeacherUser(user);
 
   const logoSrc = useMemo(() => {
