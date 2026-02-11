@@ -10,11 +10,11 @@ import {
   type UpdateTermPayload,
 } from "@/lib/terms";
 
-const TERM_NUMBER_OPTIONS = [
+const TERM_NUMBER_OPTIONS: Array<{ value: number; label: string }> = [
   { value: 1, label: "Term 1" },
   { value: 2, label: "Term 2" },
   { value: 3, label: "Term 3" },
-] as const;
+];
 
 function formatDateInput(value?: string | null) {
   if (!value) {
