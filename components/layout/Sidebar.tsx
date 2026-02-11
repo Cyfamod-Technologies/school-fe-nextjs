@@ -342,15 +342,8 @@ export function Sidebar() {
           return linkVisible(link) ? link : null;
         })
         .filter(Boolean) as MenuLink[];
-    },
-    [linkVisible],
-  );
+    };
 
-  const filteredQuickLinks = useMemo(() => {
-    return sidebarQuickLinks.filter(linkVisible);
-  }, [linkVisible]);
-
-  const filteredSections = useMemo(() => {
     return menuSections
       .filter((section) => {
         if (isAdminRole && section.label === "Student") {
@@ -363,7 +356,7 @@ export function Sidebar() {
       })
       .map((section) => ({
         ...section,
-        links: filterLinks(section.links),
+        links: filterLinksRecursively(section.links),
       }))
       .filter((section) => section.links.length > 0);
   }, [filterLinks, isTeacher, isAdminRole]);
