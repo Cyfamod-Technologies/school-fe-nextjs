@@ -1,8 +1,9 @@
 import { apiFetch } from "@/lib/apiClient";
 
 export interface Term {
-  id: number;
+  id: number | string;
   name: string;
+  term_number?: number | null;
   session?: number | string;
   session_id?: number | string;
   start_date?: string | null;
@@ -47,6 +48,7 @@ export async function getTerm(termId: number | string): Promise<Term | null> {
 
 export interface TermPayload {
   name: string;
+  term_number: number;
   start_date: string;
   end_date: string;
 }
@@ -71,7 +73,7 @@ export async function updateTerm(
 ): Promise<Term> {
   const body = {
     ...payload,
-    slug: payload.name.toLowerCase().replace(/\s+/g, "-"),
+    slug: `${payload.name.toLowerCase().replace(/\s+/g, "-")}-${payload.term_number}`,
   };
 
   return apiFetch<Term>(`/api/v1/terms/${termId}`, {
