@@ -326,11 +326,11 @@ export function Sidebar() {
   );
 
   const filterLinks = useCallback(
-    function filterLinksInternal(links: MenuLink[]): MenuLink[] {
+    function filterLinksRecursively(links: MenuLink[]): MenuLink[] {
       return links
         .map((link) => {
           if (link.children && link.children.length > 0) {
-            const visibleChildren = filterLinksInternal(link.children);
+            const visibleChildren = filterLinksRecursively(link.children);
             if (visibleChildren.length === 0) {
               return null;
             }
@@ -342,8 +342,15 @@ export function Sidebar() {
           return linkVisible(link) ? link : null;
         })
         .filter(Boolean) as MenuLink[];
-    };
+    },
+    [linkVisible],
+  );
 
+  const filteredQuickLinks = useMemo(() => {
+    return sidebarQuickLinks.filter(linkVisible);
+  }, [linkVisible]);
+
+  const filteredSections = useMemo(() => {
     return menuSections
       .filter((section) => {
         if (isAdminRole && section.label === "Student") {
@@ -356,7 +363,7 @@ export function Sidebar() {
       })
       .map((section) => ({
         ...section,
-        links: filterLinksRecursively(section.links),
+        links: filterLinks(section.links),
       }))
       .filter((section) => section.links.length > 0);
   }, [filterLinks, isTeacher, isAdminRole]);
