@@ -270,13 +270,30 @@ export default function StudentResultEntryPage() {
 
     if (isTeacher) {
       if (!student?.school_class_id || !teacherDashboard) {
-        return subjects;
+        return [];
       }
 
       const classId = String(student.school_class_id);
+      const studentArmId =
+        student.class_arm_id != null ? String(student.class_arm_id) : "";
+      const studentSectionId =
+        student.class_section_id != null ? String(student.class_section_id) : "";
       const subjectIds = new Set<string>();
       teacherDashboard.assignments.forEach((assignment) => {
         if (String(assignment.class?.id ?? "") !== classId) {
+          return;
+        }
+        const assignmentArmId = assignment.class_arm?.id
+          ? String(assignment.class_arm.id)
+          : "";
+        const assignmentSectionId = assignment.class_section?.id
+          ? String(assignment.class_section.id)
+          : "";
+
+        if (assignmentArmId && assignmentArmId !== studentArmId) {
+          return;
+        }
+        if (assignmentSectionId && assignmentSectionId !== studentSectionId) {
           return;
         }
         assignment.subjects.forEach((subject) => {
@@ -284,21 +301,23 @@ export default function StudentResultEntryPage() {
         });
       });
 
-      if (!subjectIds.size) {
-        return subjects;
-      }
-
       return subjects.filter((subject) => subjectIds.has(String(subject.id)));
     }
 
-    if (!subjectFilterIds || subjectFilterIds.size === 0) {
-      return subjects;
+    if (!student?.school_class_id) {
+      return [];
+    }
+
+    if (subjectFilterIds === null) {
+      return [];
     }
 
     return subjects.filter((subject) => subjectFilterIds.has(String(subject.id)));
   }, [
     isTeacher,
     student?.school_class_id,
+    student?.class_arm_id,
+    student?.class_section_id,
     subjectFilterIds,
     subjects,
     teacherDashboard,
@@ -474,7 +493,7 @@ export default function StudentResultEntryPage() {
 
   useEffect(() => {
     if (isTeacher || !student?.school_class_id) {
-      setSubjectFilterIds(null);
+      setSubjectFilterIds(new Set());
       return;
     }
 
@@ -500,14 +519,14 @@ export default function StudentResultEntryPage() {
             ids.add(String(assignment.subject_id));
           }
         });
-        setSubjectFilterIds(ids.size ? ids : null);
+        setSubjectFilterIds(ids);
       })
       .catch((error) => {
         if (cancelled) {
           return;
         }
         console.error("Unable to load subject assignments", error);
-        setSubjectFilterIds(null);
+        setSubjectFilterIds(new Set());
       });
 
     return () => {
@@ -1076,7 +1095,8 @@ export default function StudentResultEntryPage() {
     if (!filteredSubjects.length) {
       setFeedback({
         type: "info",
-        message: "No subjects available for this student context.",
+        message:
+          "No subjects are assigned to this student's class/arm for the selected term.",
       });
       setRows([]);
       return;
