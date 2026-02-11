@@ -34,6 +34,18 @@ export async function apiFetch<T = unknown>(
   });
 
   if (!response.ok) {
+    if (response.status === 401 && authScope === "staff") {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("app:auth-unauthorized", {
+            detail: { path, status: response.status },
+          }),
+        );
+      }
+
+      throw new Error("Session expired. Re-checking authentication.");
+    }
+
     // For 403 (Forbidden) errors on read-only staff requests, return empty data
     // instead of throwing. For mutations (POST/PUT/DELETE), always throw so
     // the UI can surface proper error feedback.

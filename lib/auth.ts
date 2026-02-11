@@ -99,6 +99,12 @@ export interface UpdateUserPayload {
   password_confirmation?: string;
 }
 
+export interface LogoutOtherDevicesResponse {
+  message: string;
+  revoked_tokens?: number;
+  [key: string]: unknown;
+}
+
 export async function login(payload: LoginPayload): Promise<LoginResponse> {
   const response = await apiFetch<LoginResponse>(API_ROUTES.login, {
     method: "POST",
@@ -121,6 +127,12 @@ export async function logout(): Promise<void> {
   } finally {
     deleteCookie("token");
   }
+}
+
+export async function logoutOtherDevices(): Promise<LogoutOtherDevicesResponse> {
+  return apiFetch<LogoutOtherDevicesResponse>(API_ROUTES.logoutOtherDevices, {
+    method: "POST",
+  });
 }
 
 export async function getAuthenticatedUser(): Promise<User | null> {
@@ -175,7 +187,7 @@ export async function getAuthenticatedUser(): Promise<User | null> {
   }
 }
 
-export async function getPermissionHierarchy(): Promise<any> {
+export async function getPermissionHierarchy(): Promise<unknown> {
   try {
     const payload = await apiFetch(API_ROUTES.permissionHierarchy);
     return payload;
