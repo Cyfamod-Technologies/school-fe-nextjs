@@ -24,8 +24,6 @@ export interface PositionRange {
 
 export interface CommentRange {
   id: number | string | null;
-  min_score: number;
-  max_score: number;
   teacher_comment: string;
   principal_comment: string;
   locked?: boolean;
@@ -83,8 +81,6 @@ export interface PositionRangePayload {
 
 export interface CommentRangePayload {
   id?: number | string | null;
-  min_score: number;
-  max_score: number;
   teacher_comment: string;
   principal_comment: string;
 }

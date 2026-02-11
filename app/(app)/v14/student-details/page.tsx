@@ -36,10 +36,6 @@ import {
   type StudentTermSummary,
 } from "@/lib/studentTermSummaries";
 import {
-  fetchResultPageSettings,
-  type ResultPageSettings,
-} from "@/lib/resultPageSettings";
-import {
   fetchStudentAttendanceReport,
   type StudentAttendanceReport,
 } from "@/lib/attendance";
@@ -144,10 +140,8 @@ export default function StudentDetailsPage() {
   const [termSummaryFeedbackType, setTermSummaryFeedbackType] =
     useState<"success" | "warning" | "danger">("success");
   const [termSummarySaving, setTermSummarySaving] = useState(false);
-  const [commentMode, setCommentMode] = useState<
-    ResultPageSettings["comment_mode"]
-  >(schoolContext.school?.result_comment_mode ?? "manual");
-  const [commentModeLoading, setCommentModeLoading] = useState(false);
+  const [teacherCommentOptions, setTeacherCommentOptions] = useState<string[]>([]);
+  const [principalCommentOptions, setPrincipalCommentOptions] = useState<string[]>([]);
 
   const [attendanceReport, setAttendanceReport] =
     useState<StudentAttendanceReport | null>(null);
@@ -329,6 +323,8 @@ export default function StudentDetailsPage() {
         days_present: null,
         days_absent: null,
       });
+      setTeacherCommentOptions([]);
+      setPrincipalCommentOptions([]);
       setAttendanceInput({
         daysPresent: "",
         daysAbsent: "",
@@ -348,6 +344,16 @@ export default function StudentDetailsPage() {
         days_present: summary.days_present ?? null,
         days_absent: summary.days_absent ?? null,
       });
+      setTeacherCommentOptions(
+        Array.isArray(summary.class_teacher_comment_options)
+          ? (summary.class_teacher_comment_options as string[])
+          : [],
+      );
+      setPrincipalCommentOptions(
+        Array.isArray(summary.principal_comment_options)
+          ? (summary.principal_comment_options as string[])
+          : [],
+      );
       setAttendanceInput({
         daysPresent:
           summary.days_present != null ? String(summary.days_present) : "",
@@ -364,6 +370,8 @@ export default function StudentDetailsPage() {
         days_present: null,
         days_absent: null,
       });
+      setTeacherCommentOptions([]);
+      setPrincipalCommentOptions([]);
       setAttendanceInput({
         daysPresent: "",
         daysAbsent: "",
@@ -549,7 +557,7 @@ export default function StudentDetailsPage() {
       }));
       scheduleSkillSave(skillTypeId, value);
     },
-    [scheduleSkillSave, skillRatingsMap],
+    [scheduleSkillSave],
   );
 
   const handleTermSummaryChange = (
@@ -591,6 +599,16 @@ export default function StudentDetailsPage() {
         days_present: updated.days_present ?? termSummary.days_present ?? null,
         days_absent: updated.days_absent ?? termSummary.days_absent ?? null,
       });
+      setTeacherCommentOptions(
+        Array.isArray(updated.class_teacher_comment_options)
+          ? (updated.class_teacher_comment_options as string[])
+          : [],
+      );
+      setPrincipalCommentOptions(
+        Array.isArray(updated.principal_comment_options)
+          ? (updated.principal_comment_options as string[])
+          : [],
+      );
       setTermSummaryFeedback("Comments saved successfully.");
       setTermSummaryFeedbackType("success");
     } catch (err) {
@@ -1053,27 +1071,6 @@ export default function StudentDetailsPage() {
       .then(setSessions)
       .catch((err) => console.error("Unable to load sessions", err));
   }, []);
-
-  useEffect(() => {
-    setCommentModeLoading(true);
-    fetchResultPageSettings()
-      .then((settings) => {
-        setCommentMode(settings.comment_mode ?? "manual");
-      })
-      .catch((err) => {
-        console.error("Unable to load result page settings", err);
-        setCommentMode(
-          schoolContext.school?.result_comment_mode ?? "manual",
-        );
-      })
-      .finally(() => setCommentModeLoading(false));
-  }, [schoolContext.school?.result_comment_mode]);
-
-  useEffect(() => {
-    if (schoolContext.school?.result_comment_mode) {
-      setCommentMode(schoolContext.school.result_comment_mode);
-    }
-  }, [schoolContext.school?.result_comment_mode]);
 
   useEffect(() => {
     if (!selectedSession) {
@@ -1680,67 +1677,101 @@ export default function StudentDetailsPage() {
             </div>
           </div>
           <form className="mb-3" onSubmit={handleTermSummarySubmit}>
-            {commentModeLoading ? (
-              <div className="alert alert-info">
-                Loading comment settings…
-              </div>
-            ) : null}
-            {commentMode === "range" ? (
-              <div className="alert alert-info">
-                Comment mode is set to range. Manual comments are disabled on
-                this page.
-              </div>
-            ) : (
-              <>
-                <div className="row">
-                  <div className="col-md-6 col-12 form-group">
-                    <label className="text-dark-medium">
-                      Class Teacher&apos;s Comment
-                    </label>
-                    <textarea
-                      className="form-control"
-                      style={{ backgroundColor: "#f8f8f8" }}
-                      rows={4}
-                      maxLength={2000}
-                      value={termSummary.class_teacher_comment ?? ""}
-                      onChange={(event) =>
-                        handleTermSummaryChange(
-                          "class_teacher_comment",
-                          event.target.value,
-                        )
-                      }
-                      disabled={!selectedSession || !selectedTerm}
-                    />
-                  </div>
-                  <div className="col-md-6 col-12 form-group">
-                    <label className="text-dark-medium">
-                      Principal&apos;s Comment
-                    </label>
-                    <textarea
-                      className="form-control"
-                      style={{ backgroundColor: "#f8f8f8" }}
-                      rows={4}
-                      maxLength={2000}
-                      value={termSummary.principal_comment ?? ""}
-                      onChange={(event) =>
-                        handleTermSummaryChange(
-                          "principal_comment",
-                          event.target.value,
-                        )
-                      }
-                      disabled={!selectedSession || !selectedTerm}
-                    />
-                  </div>
-                </div>
-                <button
-                  type="submit"
-                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                  disabled={termSummarySaving || !selectedSession || !selectedTerm}
+            <div className="row">
+              <div className="col-md-6 col-12 form-group">
+                <label className="text-dark-medium">
+                  Class Teacher&apos;s Comment
+                </label>
+                <select
+                  className="form-control mb-2"
+                  value={
+                    teacherCommentOptions.includes(
+                      termSummary.class_teacher_comment ?? "",
+                    )
+                      ? termSummary.class_teacher_comment ?? ""
+                      : ""
+                  }
+                  onChange={(event) =>
+                    handleTermSummaryChange(
+                      "class_teacher_comment",
+                      event.target.value,
+                    )
+                  }
+                  disabled={!selectedSession || !selectedTerm}
                 >
-                  {termSummarySaving ? "Saving…" : "Save Comments"}
-                </button>
-              </>
-            )}
+                  <option value="">Select saved comment (optional)</option>
+                  {teacherCommentOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+                <textarea
+                  className="form-control"
+                  style={{ backgroundColor: "#f8f8f8" }}
+                  rows={4}
+                  maxLength={2000}
+                  value={termSummary.class_teacher_comment ?? ""}
+                  onChange={(event) =>
+                    handleTermSummaryChange(
+                      "class_teacher_comment",
+                      event.target.value,
+                    )
+                  }
+                  disabled={!selectedSession || !selectedTerm}
+                />
+              </div>
+              <div className="col-md-6 col-12 form-group">
+                <label className="text-dark-medium">
+                  Principal&apos;s Comment
+                </label>
+                <select
+                  className="form-control mb-2"
+                  value={
+                    principalCommentOptions.includes(
+                      termSummary.principal_comment ?? "",
+                    )
+                      ? termSummary.principal_comment ?? ""
+                      : ""
+                  }
+                  onChange={(event) =>
+                    handleTermSummaryChange(
+                      "principal_comment",
+                      event.target.value,
+                    )
+                  }
+                  disabled={!selectedSession || !selectedTerm}
+                >
+                  <option value="">Select saved comment (optional)</option>
+                  {principalCommentOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+                <textarea
+                  className="form-control"
+                  style={{ backgroundColor: "#f8f8f8" }}
+                  rows={4}
+                  maxLength={2000}
+                  value={termSummary.principal_comment ?? ""}
+                  onChange={(event) =>
+                    handleTermSummaryChange(
+                      "principal_comment",
+                      event.target.value,
+                    )
+                  }
+                  disabled={!selectedSession || !selectedTerm}
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+              disabled={termSummarySaving || !selectedSession || !selectedTerm}
+            >
+              {termSummarySaving ? "Saving…" : "Save Comments"}
+            </button>
           </form>
           {termSummaryFeedback ? (
             <div

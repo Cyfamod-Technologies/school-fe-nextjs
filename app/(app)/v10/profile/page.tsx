@@ -4,11 +4,18 @@ import Link from "next/link";
 import Image, { type ImageLoader } from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { logoutOtherDevices } from "@/lib/auth";
 import { resolveBackendUrl } from "@/lib/config";
+import { userHasRole } from "@/lib/roleChecks";
 
 export default function SchoolProfilePage() {
   const { user, schoolContext, loading, refreshSchoolContext } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const [securityMessage, setSecurityMessage] = useState<string | null>(null);
+  const [securityMessageType, setSecurityMessageType] = useState<
+    "success" | "danger" | "warning"
+  >("success");
+  const [loggingOutDevices, setLoggingOutDevices] = useState(false);
 
   useEffect(() => {
     refreshSchoolContext().catch((err) => {
@@ -58,6 +65,50 @@ export default function SchoolProfilePage() {
         })()
       : "N/A";
 
+  const isAdminUser =
+    userHasRole(user, "admin") || userHasRole(user, "super_admin");
+
+  const handleLogoutOtherDevices = async () => {
+    if (!isAdminUser || loggingOutDevices) {
+      return;
+    }
+
+    const shouldContinue = window.confirm(
+      "This will log this admin account out from every other device. Continue?",
+    );
+    if (!shouldContinue) {
+      return;
+    }
+
+    setSecurityMessage(null);
+    setLoggingOutDevices(true);
+
+    try {
+      const response = await logoutOtherDevices();
+      const revokedTokens =
+        typeof response.revoked_tokens === "number"
+          ? response.revoked_tokens
+          : null;
+      const suffix =
+        revokedTokens !== null
+          ? ` (${revokedTokens} session${revokedTokens === 1 ? "" : "s"} ended)`
+          : "";
+      setSecurityMessage(
+        `${response.message ?? "Other devices logged out successfully."}${suffix}`,
+      );
+      setSecurityMessageType("success");
+    } catch (logoutError) {
+      setSecurityMessage(
+        logoutError instanceof Error
+          ? logoutError.message
+          : "Unable to log out other devices.",
+      );
+      setSecurityMessageType("danger");
+    } finally {
+      setLoggingOutDevices(false);
+    }
+  };
+
   if (loading && !school) {
     return (
       <div className="d-flex align-items-center justify-content-center flex-column min-vh-100">
@@ -84,6 +135,12 @@ export default function SchoolProfilePage() {
       {error ? (
         <div id="error-container" className="alert alert-danger" role="alert">
           Failed to load profile data: {error}
+        </div>
+      ) : null}
+
+      {securityMessage ? (
+        <div className={`alert alert-${securityMessageType}`} role="alert">
+          {securityMessage}
         </div>
       ) : null}
 
@@ -253,6 +310,18 @@ export default function SchoolProfilePage() {
                   >
                     Edit
                   </Link>
+                  {isAdminUser ? (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-danger"
+                      onClick={() => void handleLogoutOtherDevices()}
+                      disabled={loggingOutDevices}
+                    >
+                      {loggingOutDevices
+                        ? "Logging out other devices..."
+                        : "Log Out Other Devices"}
+                    </button>
+                  ) : null}
                 </div>
               </div>
               <div className="user-details-box">
