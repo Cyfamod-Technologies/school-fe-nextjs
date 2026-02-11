@@ -102,6 +102,7 @@ export const menuSections: MenuSection[] = [
       {
         label: "Student",
         href: "#",
+        excludeRoles: ["teacher"],
         children: [
           { label: "View Student", href: "/v14/all-students", requiredPermissions: "students.view" },
           { label: "Add Student", href: "/v14/add-student", requiredPermissions: "students.create" },
@@ -276,6 +277,15 @@ export function Sidebar() {
     return isTeacherUser(user) ? "/v25/staff-dashboard" : "/v10/dashboard";
   }, [user]);
 
+  const isAdminRole = useMemo(
+    () =>
+      roleSet.has("admin") ||
+      roleSet.has("super_admin") ||
+      roleSet.has("superadmin") ||
+      roleSet.has("administrator"),
+    [roleSet],
+  );
+
   const isLinkActive = useCallback(
     (href: string) => pathname === href || pathname.startsWith(`${href}/`),
     [pathname],
@@ -316,11 +326,11 @@ export function Sidebar() {
   );
 
   const filterLinks = useCallback(
-    (links: MenuLink[]): MenuLink[] => {
+    function filterLinksInternal(links: MenuLink[]): MenuLink[] {
       return links
         .map((link) => {
           if (link.children && link.children.length > 0) {
-            const visibleChildren = filterLinks(link.children);
+            const visibleChildren = filterLinksInternal(link.children);
             if (visibleChildren.length === 0) {
               return null;
             }
@@ -343,6 +353,9 @@ export function Sidebar() {
   const filteredSections = useMemo(() => {
     return menuSections
       .filter((section) => {
+        if (isAdminRole && section.label === "Student") {
+          return false;
+        }
         if (!isTeacher) {
           return true;
         }
@@ -353,10 +366,12 @@ export function Sidebar() {
         links: filterLinks(section.links),
       }))
       .filter((section) => section.links.length > 0);
-  }, [linkVisible, isTeacher]);
+  }, [filterLinks, isTeacher, isAdminRole]);
 
-  const isSectionActive = (section: MenuSection) =>
-    section.links.some((link) => isLinkActive(link.href));
+  const isSectionActive = useCallback(
+    (section: MenuSection) => section.links.some((link) => isLinkActive(link.href)),
+    [isLinkActive],
+  );
 
   const isGroupActive = (group: MenuLink) =>
     (group.children ?? []).some((link) => isLinkActive(link.href));
