@@ -175,6 +175,7 @@ export default function UserRolesPage() {
           page,
           per_page: perPageValue,
           search: searchValue ? searchValue.trim() : undefined,
+          support_only: true,
         });
 
         setUsers(response.data ?? []);

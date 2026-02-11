@@ -29,6 +29,7 @@ export interface UserFilters {
   page?: number;
   per_page?: number;
   search?: string;
+  support_only?: boolean;
 }
 
 type UserPayload =
@@ -115,6 +116,7 @@ export async function listUsers(filters: UserFilters = {}): Promise<UserListResp
     page: filters.page,
     per_page: filters.per_page,
     search: filters.search,
+    support_only: filters.support_only ? 1 : undefined,
   });
 
   const payload = await apiFetch<UserPayload>(`${API_ROUTES.users}${query}`);
@@ -161,4 +163,3 @@ export async function updateUserRoles(
 
   return [];
 }
-
