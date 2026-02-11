@@ -480,7 +480,7 @@ export function Sidebar() {
                       return (
                         <li
                           key={groupKey}
-                          className={`nav-item sidebar-nav-item ${groupOpen ? "open active" : ""}`}
+                          className={`nav-item ${groupOpen ? "open active" : ""}`}
                         >
                           <a
                             href="#"
