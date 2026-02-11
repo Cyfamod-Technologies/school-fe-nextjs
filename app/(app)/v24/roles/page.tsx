@@ -22,7 +22,7 @@ import {
   type Role,
 } from "@/lib/roles";
 
-type FeedbackType = "success" | "danger";
+type FeedbackType = "success" | "warning" | "danger";
 
 interface FeedbackState {
   type: FeedbackType;
