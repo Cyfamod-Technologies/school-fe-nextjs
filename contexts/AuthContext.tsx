@@ -23,12 +23,17 @@ import {
 } from "@/lib/schoolContext";
 import { deleteCookie, getCookie, setCookie } from "@/lib/cookies";
 
+type PermissionHierarchyNode = {
+  name?: string | null;
+  children?: PermissionHierarchyNode[] | null;
+};
+
 interface AuthState {
   user: User | null;
   schoolContext: SchoolContext;
   loading: boolean;
   permissions: Set<string>;
-  permissionHierarchy: any;
+  permissionHierarchy: PermissionHierarchyNode[] | null;
   hasPermission: (permission?: string | string[] | null) => boolean;
   login: (payload: LoginPayload) => Promise<void>;
   logout: () => Promise<void>;
@@ -45,7 +50,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
   const [loading, setLoading] = useState(true);
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
-  const [permissionHierarchy, setPermissionHierarchy] = useState<any>(null);
+  const [permissionHierarchy, setPermissionHierarchy] = useState<
+    PermissionHierarchyNode[] | null
+  >(null);
 
   const hydrate = useCallback(async () => {
     const token = getCookie("token");
@@ -73,7 +80,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ),
       );
       setSchoolContext(school);
-      setPermissionHierarchy(hierarchy);
+      setPermissionHierarchy(
+        Array.isArray(hierarchy)
+          ? (hierarchy as PermissionHierarchyNode[])
+          : null,
+      );
     } catch (error) {
       console.error("Failed to hydrate auth context", error);
       setUser(null);
@@ -87,6 +98,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     hydrate();
+  }, [hydrate]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    let isChecking = false;
+
+    const handleUnauthorized = () => {
+      if (isChecking) {
+        return;
+      }
+
+      isChecking = true;
+      void hydrate().finally(() => {
+        isChecking = false;
+      });
+    };
+
+    window.addEventListener("app:auth-unauthorized", handleUnauthorized);
+
+    return () => {
+      window.removeEventListener("app:auth-unauthorized", handleUnauthorized);
+    };
   }, [hydrate]);
 
   const login = useCallback(async (payload: LoginPayload) => {
@@ -134,8 +170,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         const findChildren = (p: string): string[] => {
-          const perm = permissionHierarchy.find((item: any) => item.name === p);
-          return perm && perm.children ? perm.children : [];
+          const perm = permissionHierarchy.find((item) => item?.name === p);
+          const children = perm?.children;
+          if (!Array.isArray(children)) {
+            return [];
+          }
+          return children
+            .map((child) => child?.name)
+            .filter((name): name is string => typeof name === "string");
         };
 
         const children = findChildren(permission);

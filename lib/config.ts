@@ -99,6 +99,7 @@ export function resolveBackendUrl(path: string | null | undefined): string {
 export const API_ROUTES = {
   login: "/api/v1/login",
   logout: "/api/v1/logout",
+  logoutOtherDevices: "/api/v1/logout/other-devices",
   currentUser: "/api/v1/user",
   schoolContext: "/api/v1/school",
   classes: "/api/v1/classes",
