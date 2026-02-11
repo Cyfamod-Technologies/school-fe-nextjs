@@ -10,7 +10,7 @@ import {
 } from "react";
 import {
   createSkillCategory,
-  createSkillType,
+  createSkillTypesBulk,
   deleteSkillCategory,
   deleteSkillType,
   listSkillCategories,
@@ -38,6 +38,7 @@ interface SkillFormState {
   id: string;
   skill_category_id: string;
   name: string;
+  names: string[];
   weight: string;
   description: string;
 }
@@ -52,6 +53,7 @@ const emptySkillForm: SkillFormState = {
   id: "",
   skill_category_id: "",
   name: "",
+  names: [""],
   weight: "",
   description: "",
 };
@@ -74,6 +76,8 @@ export default function SkillsPage() {
   const [loadingSkills, setLoadingSkills] = useState(false);
   const [categorySubmitting, setCategorySubmitting] = useState(false);
   const [skillSubmitting, setSkillSubmitting] = useState(false);
+  const [skillCategoryFilter, setSkillCategoryFilter] = useState("");
+  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
 
   const refreshCategories = useCallback(async () => {
     setLoadingCategories(true);
@@ -97,7 +101,7 @@ export default function SkillsPage() {
   const refreshSkillTypes = useCallback(async () => {
     setLoadingSkills(true);
     try {
-      const data = await listSkillTypes();
+      const data = await listSkillTypes(skillCategoryFilter || undefined);
       setSkillTypes(data);
     } catch (error) {
       console.error("Unable to load skill types", error);
@@ -111,15 +115,26 @@ export default function SkillsPage() {
     } finally {
       setLoadingSkills(false);
     }
-  }, []);
+  }, [skillCategoryFilter]);
 
   useEffect(() => {
-    (async () => {
-      await Promise.all([refreshCategories(), refreshSkillTypes()]);
-    })().catch((error) =>
+    refreshCategories().catch((error) =>
+      console.error("Unable to load skill categories", error),
+    );
+  }, [refreshCategories]);
+
+  useEffect(() => {
+    refreshSkillTypes().catch((error) =>
       console.error("Unable to load skill settings", error),
     );
-  }, [refreshCategories, refreshSkillTypes]);
+  }, [refreshSkillTypes]);
+
+  useEffect(() => {
+    const visibleSkillIds = new Set(skillTypes.map((skill) => String(skill.id)));
+    setSelectedSkillIds((previous) =>
+      previous.filter((skillId) => visibleSkillIds.has(skillId)),
+    );
+  }, [skillTypes]);
 
   const categoryCountById = useMemo(() => {
     const map = new Map<string, number>();
@@ -223,6 +238,9 @@ export default function SkillsPage() {
       if (categoryForm.id === String(category.id)) {
         setCategoryForm(emptyCategoryForm);
       }
+      if (skillCategoryFilter === String(category.id)) {
+        setSkillCategoryFilter("");
+      }
       await refreshCategories();
       await refreshSkillTypes();
     } catch (error) {
@@ -249,15 +267,6 @@ export default function SkillsPage() {
       return;
     }
 
-    const name = skillForm.name.trim();
-    if (!name) {
-      setSkillFeedback({
-        type: "warning",
-        message: "Skill name is required.",
-      });
-      return;
-    }
-
     const weightRaw = skillForm.weight.trim();
     let weightValue: number | null = null;
     if (weightRaw !== "") {
@@ -272,9 +281,8 @@ export default function SkillsPage() {
       weightValue = parsed;
     }
 
-    const payload = {
+    const sharedPayload = {
       skill_category_id: skillForm.skill_category_id,
-      name,
       weight: weightValue,
       description: skillForm.description.trim() || null,
     };
@@ -282,16 +290,62 @@ export default function SkillsPage() {
     try {
       setSkillSubmitting(true);
       if (skillForm.id) {
-        await updateSkillType(skillForm.id, payload);
+        const name = skillForm.name.trim();
+        if (!name) {
+          setSkillFeedback({
+            type: "warning",
+            message: "Skill name is required.",
+          });
+          return;
+        }
+
+        await updateSkillType(skillForm.id, {
+          ...sharedPayload,
+          name,
+        });
         setSkillFeedback({
           type: "success",
           message: "Skill updated successfully.",
         });
       } else {
-        await createSkillType(payload);
+        const names = skillForm.names.map((entry) => entry.trim()).filter(Boolean);
+
+        if (!names.length) {
+          setSkillFeedback({
+            type: "warning",
+            message: "Add at least one skill name to save.",
+          });
+          return;
+        }
+
+        const duplicateCount =
+          names.length - new Set(names.map((entry) => entry.toLowerCase())).size;
+        if (duplicateCount > 0) {
+          setSkillFeedback({
+            type: "warning",
+            message: "Each skill name must be unique in the list.",
+          });
+          return;
+        }
+
+        const tooLongName = names.find((entry) => entry.length > 500);
+        if (tooLongName) {
+          setSkillFeedback({
+            type: "warning",
+            message: "Each skill name must be 500 characters or less.",
+          });
+          return;
+        }
+
+        const createdSkills = await createSkillTypesBulk({
+          ...sharedPayload,
+          names,
+        });
         setSkillFeedback({
           type: "success",
-          message: "Skill created successfully.",
+          message: `${createdSkills.length} skill${
+            createdSkills.length === 1 ? "" : "s"
+          } created successfully.`,
         });
       }
       setSkillForm(emptySkillForm);
@@ -318,6 +372,7 @@ export default function SkillsPage() {
         skill.weight === null || skill.weight === undefined
           ? ""
           : `${Number(skill.weight).toFixed(2)}`,
+      names: [""],
       description: skill.description ?? "",
     });
     setSkillFeedback(null);
@@ -326,6 +381,38 @@ export default function SkillsPage() {
   const cancelSkillEdit = () => {
     setSkillForm(emptySkillForm);
     setSkillFeedback(null);
+  };
+
+  const handleAddSkillNameField = () => {
+    setSkillForm((prev) => ({
+      ...prev,
+      names: [...prev.names, ""],
+    }));
+  };
+
+  const handleSkillNameFieldChange = (index: number, value: string) => {
+    setSkillForm((prev) => ({
+      ...prev,
+      names: prev.names.map((entry, entryIndex) =>
+        entryIndex === index ? value : entry,
+      ),
+    }));
+  };
+
+  const handleRemoveSkillNameField = (index: number) => {
+    setSkillForm((prev) => {
+      if (prev.names.length <= 1) {
+        return {
+          ...prev,
+          names: [""],
+        };
+      }
+
+      return {
+        ...prev,
+        names: prev.names.filter((_, entryIndex) => entryIndex !== index),
+      };
+    });
   };
 
   const handleDeleteSkill = async (skill: SkillType) => {
@@ -341,6 +428,9 @@ export default function SkillsPage() {
       if (skillForm.id === String(skill.id)) {
         setSkillForm(emptySkillForm);
       }
+      setSelectedSkillIds((previous) =>
+        previous.filter((skillId) => skillId !== String(skill.id)),
+      );
       await refreshSkillTypes();
       await refreshCategories();
     } catch (error) {
@@ -350,6 +440,104 @@ export default function SkillsPage() {
         message:
           error instanceof Error ? error.message : "Unable to delete skill.",
       });
+    }
+  };
+
+  const toggleSkillSelection = (skillId: string) => {
+    setSelectedSkillIds((previous) =>
+      previous.includes(skillId)
+        ? previous.filter((id) => id !== skillId)
+        : [...previous, skillId],
+    );
+  };
+
+  const allVisibleSelected =
+    skillTypes.length > 0 &&
+    skillTypes.every((skill) => selectedSkillIds.includes(String(skill.id)));
+
+  const toggleSelectAllVisibleSkills = () => {
+    const visibleIds = skillTypes.map((skill) => String(skill.id));
+    if (!visibleIds.length) {
+      return;
+    }
+
+    if (allVisibleSelected) {
+      setSelectedSkillIds((previous) =>
+        previous.filter((skillId) => !visibleIds.includes(skillId)),
+      );
+      return;
+    }
+
+    setSelectedSkillIds((previous) => {
+      const merged = new Set([...previous, ...visibleIds]);
+      return Array.from(merged);
+    });
+  };
+
+  const handleDeleteSelectedSkills = async () => {
+    if (!selectedSkillIds.length) {
+      setSkillFeedback({
+        type: "warning",
+        message: "Select at least one skill to delete.",
+      });
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Delete ${selectedSkillIds.length} selected skill${
+          selectedSkillIds.length === 1 ? "" : "s"
+        }?`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setSkillSubmitting(true);
+      const selectedIds = [...selectedSkillIds];
+      const results = await Promise.allSettled(
+        selectedIds.map((skillId) => deleteSkillType(skillId)),
+      );
+
+      const failedCount = results.filter(
+        (result) => result.status === "rejected",
+      ).length;
+      const deletedCount = results.length - failedCount;
+
+      if (selectedIds.includes(skillForm.id)) {
+        setSkillForm(emptySkillForm);
+      }
+
+      setSelectedSkillIds([]);
+      await refreshSkillTypes();
+      await refreshCategories();
+
+      if (failedCount > 0) {
+        setSkillFeedback({
+          type: "warning",
+          message: `${deletedCount} deleted, ${failedCount} failed. Try again for the remaining skills.`,
+        });
+        return;
+      }
+
+      setSkillFeedback({
+        type: "success",
+        message: `${deletedCount} skill${
+          deletedCount === 1 ? "" : "s"
+        } deleted successfully.`,
+      });
+    } catch (error) {
+      console.error("Unable to delete selected skills", error);
+      setSkillFeedback({
+        type: "danger",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to delete selected skills.",
+      });
+    } finally {
+      setSkillSubmitting(false);
     }
   };
 
@@ -401,7 +589,7 @@ export default function SkillsPage() {
     if (loadingSkills) {
       return (
         <tr>
-          <td colSpan={5}>Loading skills...</td>
+          <td colSpan={6}>Loading skills...</td>
         </tr>
       );
     }
@@ -409,7 +597,11 @@ export default function SkillsPage() {
     if (!skillTypes.length) {
       return (
         <tr>
-          <td colSpan={5}>No skills found.</td>
+          <td colSpan={6}>
+            {skillCategoryFilter
+              ? "No skills found in the selected category."
+              : "No skills found."}
+          </td>
         </tr>
       );
     }
@@ -425,6 +617,13 @@ export default function SkillsPage() {
           : Number(skill.weight).toFixed(2);
       return (
         <tr key={skill.id}>
+          <td>
+            <input
+              type="checkbox"
+              checked={selectedSkillIds.includes(String(skill.id))}
+              onChange={() => toggleSkillSelection(String(skill.id))}
+            />
+          </td>
           <td>{skill.name}</td>
           <td>{categoryName}</td>
           <td>{weightText}</td>
@@ -620,24 +819,65 @@ export default function SkillsPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="form-group col-md-6">
-                    <label className="text-dark-medium">Skill Name</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={skillForm.name}
-                      onChange={(event) =>
-                        setSkillForm((prev) => ({
-                          ...prev,
-                          name: event.target.value,
-                        }))
-                      }
-                      placeholder="e.g. Punctuality"
-                      maxLength={100}
-                      required
-                    />
-                  </div>
+                  {skillForm.id ? (
+                    <div className="form-group col-md-6">
+                      <label className="text-dark-medium">Skill Name</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={skillForm.name}
+                        onChange={(event) =>
+                          setSkillForm((prev) => ({
+                            ...prev,
+                            name: event.target.value,
+                          }))
+                        }
+                        placeholder="e.g. Punctuality"
+                        maxLength={500}
+                        required
+                      />
+                    </div>
+                  ) : null}
                 </div>
+
+                {!skillForm.id ? (
+                  <div className="form-group">
+                    <label className="text-dark-medium">Skill Names</label>
+                    {skillForm.names.map((entry, index) => (
+                      <div key={`skill-name-${index}`} className="d-flex align-items-start mb-2">
+                        <textarea
+                          className="form-control"
+                          rows={2}
+                          value={entry}
+                          onChange={(event) =>
+                            handleSkillNameFieldChange(index, event.target.value)
+                          }
+                          placeholder="e.g. Explores objects by linking together different approaches..."
+                          maxLength={500}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-link text-danger ml-2 p-0"
+                          onClick={() => handleRemoveSkillNameField(index)}
+                          disabled={skillSubmitting}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                      onClick={handleAddSkillNameField}
+                      disabled={skillSubmitting}
+                    >
+                      Add another skill
+                    </button>
+                    <small className="form-text text-muted">
+                      Each box is one skill name. Long names and commas are allowed.
+                    </small>
+                  </div>
+                ) : null}
 
                 <div className="form-row">
                   <div className="form-group col-md-4">
@@ -682,7 +922,7 @@ export default function SkillsPage() {
                     className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
                     disabled={skillSubmitting}
                   >
-                    {skillForm.id ? "Update Skill" : "Save Skill"}
+                    {skillForm.id ? "Update Skill" : "Save Skills"}
                   </button>
                   <button
                     type="button"
@@ -706,10 +946,48 @@ export default function SkillsPage() {
                 </div>
               ) : null}
 
+              <div className="form-group mb-3">
+                <label className="text-dark-medium">Filter by Category</label>
+                <select
+                  className="form-control"
+                  value={skillCategoryFilter}
+                  onChange={(event) =>
+                    setSkillCategoryFilter(event.target.value)
+                  }
+                >
+                  <option value="">All categories</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={String(category.id)}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="d-flex align-items-center mb-3">
+                <button
+                  type="button"
+                  className="btn btn-light mr-2"
+                  onClick={toggleSelectAllVisibleSkills}
+                  disabled={!skillTypes.length || skillSubmitting}
+                >
+                  {allVisibleSelected ? "Unselect all" : "Select all visible"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={handleDeleteSelectedSkills}
+                  disabled={!selectedSkillIds.length || skillSubmitting}
+                >
+                  Delete selected ({selectedSkillIds.length})
+                </button>
+              </div>
+
               <div className="table-responsive">
                 <table className="table display text-nowrap">
                   <thead>
                     <tr>
+                      <th>Select</th>
                       <th>Skill</th>
                       <th>Category</th>
                       <th>Weight</th>

@@ -121,14 +121,29 @@ export async function deleteSkillCategory(
   });
 }
 
-export async function listSkillTypes(): Promise<SkillType[]> {
-  const payload = await apiFetch<SkillTypesResponse>(API_ROUTES.skillTypes);
+export async function listSkillTypes(
+  skillCategoryId?: number | string,
+): Promise<SkillType[]> {
+  const endpoint = skillCategoryId
+    ? `${API_ROUTES.skillTypes}?skill_category_id=${encodeURIComponent(
+        String(skillCategoryId),
+      )}`
+    : API_ROUTES.skillTypes;
+
+  const payload = await apiFetch<SkillTypesResponse>(endpoint);
   return normalizeSkillTypes(payload);
 }
 
 export interface UpsertSkillTypePayload {
   skill_category_id: number | string;
   name: string;
+  weight?: number | null;
+  description?: string | null;
+}
+
+export interface BulkCreateSkillTypesPayload {
+  skill_category_id: number | string;
+  names: string[];
   weight?: number | null;
   description?: string | null;
 }
@@ -163,6 +178,30 @@ export async function createSkillType(
     },
   );
   return extractSkillType(response);
+}
+
+interface BulkSkillTypeResponse {
+  data?: SkillType[];
+  message?: string;
+  [key: string]: unknown;
+}
+
+export async function createSkillTypesBulk(
+  payload: BulkCreateSkillTypesPayload,
+): Promise<SkillType[]> {
+  const response = await apiFetch<BulkSkillTypeResponse>(
+    API_ROUTES.skillTypesBulk,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (response && Array.isArray(response.data)) {
+    return response.data;
+  }
+
+  throw new Error("Unexpected server response for bulk skill create request.");
 }
 
 export async function updateSkillType(
