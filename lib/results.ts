@@ -28,10 +28,11 @@ export interface ResultListResponse {
 export interface ResultFilters {
   page?: number;
   per_page?: number;
+  student_id?: string | number;
   session_id: string | number;
   term_id: string | number;
-  subject_id: string | number;
-  school_class_id: string | number;
+  subject_id?: string | number;
+  school_class_id?: string | number;
   class_arm_id?: string | number | null;
   class_section_id?: string | number | null;
   assessment_component_id?: string | number | "none" | null;
@@ -112,6 +113,7 @@ export async function listResults(
   const query = buildQuery({
     page: filters.page,
     per_page: filters.per_page,
+    student_id: filters.student_id,
     session_id: filters.session_id,
     term_id: filters.term_id,
     subject_id: filters.subject_id,
