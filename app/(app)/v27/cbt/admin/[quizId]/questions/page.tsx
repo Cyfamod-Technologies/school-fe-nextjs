@@ -340,34 +340,36 @@ const buildBulkEntryFromCsvRecord = (record: Record<string, string>): Record<str
 const parseBulkOptions = (value: unknown): QuizOption[] => {
   if (!Array.isArray(value)) return [];
 
-  return value
-    .map((entry, index) => {
-      if (typeof entry === 'string') {
-        const optionText = entry.trim();
-        if (!optionText) return null;
-        return {
-          option_text: optionText,
-          is_correct: false,
-          order: index + 1,
-        } satisfies QuizOption;
-      }
+  const parsed: QuizOption[] = [];
 
-      if (!isRecord(entry)) return null;
+  value.forEach((entry, index) => {
+    if (typeof entry === 'string') {
+      const optionText = entry.trim();
+      if (!optionText) return;
+      parsed.push({
+        option_text: optionText,
+        is_correct: false,
+        order: index + 1,
+      });
+      return;
+    }
 
-      const optionTextRaw = entry.option_text;
-      if (typeof optionTextRaw !== 'string' || !optionTextRaw.trim()) {
-        return null;
-      }
+    if (!isRecord(entry)) return;
 
-      return {
-        option_text: optionTextRaw.trim(),
-        is_correct: Boolean(entry.is_correct),
-        order: typeof entry.order === 'number' && entry.order >= 1 ? Math.floor(entry.order) : index + 1,
-        image_url: typeof entry.image_url === 'string' ? entry.image_url.trim() || null : null,
-      } satisfies QuizOption;
-    })
-    .filter((option): option is QuizOption => option !== null)
-    .map((option, index) => ({ ...option, order: index + 1 }));
+    const optionTextRaw = entry.option_text;
+    if (typeof optionTextRaw !== 'string' || !optionTextRaw.trim()) {
+      return;
+    }
+
+    parsed.push({
+      option_text: optionTextRaw.trim(),
+      is_correct: Boolean(entry.is_correct),
+      order: typeof entry.order === 'number' && entry.order >= 1 ? Math.floor(entry.order) : index + 1,
+      image_url: typeof entry.image_url === 'string' ? entry.image_url.trim() || null : null,
+    });
+  });
+
+  return parsed.map((option, index) => ({ ...option, order: index + 1 }));
 };
 
 const buildBulkQuestionPayload = (entry: unknown, defaultOrder: number): Record<string, unknown> => {
