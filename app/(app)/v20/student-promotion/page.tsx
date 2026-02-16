@@ -444,7 +444,7 @@ export default function StudentPromotionPage() {
                     }
                     disabled={!filters.school_class_id || armsForFilter.length === 0}
                   >
-                    <option value="">All arms</option>
+                    <option value="">None</option>
                     {armsForFilter.map((arm) => (
                       <option key={arm.id} value={arm.id}>
                         {arm.name}
@@ -543,7 +543,7 @@ export default function StudentPromotionPage() {
                       }
                       disabled={!target.school_class_id || targetArms.length === 0}
                     >
-                      <option value="">All arms</option>
+                      <option value="">None</option>
                       {targetArms.map((arm) => (
                         <option key={arm.id} value={arm.id}>
                           {arm.name}

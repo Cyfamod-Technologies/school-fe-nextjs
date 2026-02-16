@@ -9,7 +9,7 @@ export interface SubjectAssignment {
   id: number;
   subject_id: number;
   school_class_id: number;
-  class_arm_id: number;
+  class_arm_id?: number | null;
   class_section_id?: number | null;
   created_at?: string;
   updated_at?: string;
@@ -80,7 +80,7 @@ export async function createSubjectAssignment(
   payload: {
     subject_id: string | number;
     school_class_id: string | number;
-    class_arm_id: string | number;
+    class_arm_id?: string | number | null;
     class_section_id?: string | number | null;
   },
 ): Promise<SubjectAssignment> {
@@ -97,7 +97,7 @@ export async function updateSubjectAssignment(
   payload: {
     subject_id: string | number;
     school_class_id: string | number;
-    class_arm_id: string | number;
+    class_arm_id?: string | number | null;
     class_section_id?: string | number | null;
   },
 ): Promise<SubjectAssignment> {

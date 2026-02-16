@@ -83,7 +83,7 @@ function bindEvents() {
             state.page = 1;
             resetSelect(elements.sessionSelect, 'All Sessions');
             resetSelect(elements.classSelect, 'All Classes');
-            resetSelect(elements.classArmSelect, 'All Arms', true);
+            resetSelect(elements.classArmSelect, 'None', true);
             resetSelect(elements.classSectionSelect, 'All Sections', true);
             fetchStudents();
         });
@@ -114,7 +114,7 @@ function bindEvents() {
             state.filters.classSection = '';
             state.page = 1;
 
-            resetSelect(elements.classArmSelect, 'All Arms', !state.filters.class);
+            resetSelect(elements.classArmSelect, 'None', !state.filters.class);
             resetSelect(elements.classSectionSelect, 'All Sections', true);
 
             if (state.filters.class) {
@@ -229,7 +229,7 @@ async function loadClassArmsIntoFilter(classId) {
         const data = await response.json();
         const arms = Array.isArray(data) ? data : (data.data || []);
 
-        resetSelect(elements.classArmSelect, 'All Arms');
+        resetSelect(elements.classArmSelect, 'None');
         arms.forEach((arm) => {
             const option = new Option(arm.name, arm.id);
             elements.classArmSelect.add(option);
@@ -238,7 +238,7 @@ async function loadClassArmsIntoFilter(classId) {
         elements.classArmSelect.disabled = false;
     } catch (error) {
         console.error('Failed to load class arms', error);
-        resetSelect(elements.classArmSelect, 'All Arms', true);
+        resetSelect(elements.classArmSelect, 'None', true);
     }
 }
 

@@ -10,7 +10,7 @@ export interface ClassTeacherAssignment {
   id: number;
   staff_id: number;
   school_class_id: number;
-  class_arm_id: number;
+  class_arm_id?: number | null;
   class_section_id?: number | null;
   session_id: number;
   term_id: number;
@@ -91,7 +91,7 @@ export async function createClassTeacherAssignment(
   payload: {
     staff_id: string | number;
     school_class_id: string | number;
-    class_arm_id: string | number;
+    class_arm_id?: string | number | null;
     class_section_id?: string | number | null;
     session_id: string | number;
     term_id: string | number;
@@ -110,7 +110,7 @@ export async function updateClassTeacherAssignment(
   payload: {
     staff_id: string | number;
     school_class_id: string | number;
-    class_arm_id: string | number;
+    class_arm_id?: string | number | null;
     class_section_id?: string | number | null;
     session_id: string | number;
     term_id: string | number;

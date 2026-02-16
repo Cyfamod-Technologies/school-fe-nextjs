@@ -281,7 +281,6 @@ export default function AssignClassTeachersPage() {
     if (
       !form.staff_id ||
       !form.school_class_id ||
-      !form.class_arm_id ||
       !form.session_id
     ) {
       setFormError("Please complete all required fields.");
@@ -303,7 +302,7 @@ export default function AssignClassTeachersPage() {
       const payload = {
         staff_id: form.staff_id,
         school_class_id: form.school_class_id,
-        class_arm_id: form.class_arm_id,
+        class_arm_id: form.class_arm_id || null,
         class_section_id: form.class_section_id || null,
         session_id: form.session_id,
         term_id: derivedTermId,
@@ -333,8 +332,10 @@ export default function AssignClassTeachersPage() {
     setEditingId(assignment.id);
     setFormError(null);
 
-    const classId = `${assignment.school_class_id}`;
-    const armId = `${assignment.class_arm_id}`;
+    const classId = assignment.school_class_id
+      ? `${assignment.school_class_id}`
+      : "";
+    const armId = assignment.class_arm_id ? `${assignment.class_arm_id}` : "";
     const sectionId = assignment.class_section_id
       ? `${assignment.class_section_id}`
       : "";
@@ -464,7 +465,7 @@ export default function AssignClassTeachersPage() {
                     </select>
                   </div>
                   <div className="col-12 form-group">
-                    <label htmlFor="class-teacher-arm">Class Arm *</label>
+                    <label htmlFor="class-teacher-arm">Class Arm</label>
                     <select
                       id="class-teacher-arm"
                       className="form-control"
@@ -478,9 +479,8 @@ export default function AssignClassTeachersPage() {
                         }));
                       }}
                       disabled={!form.school_class_id}
-                      required
                     >
-                      <option value="">Select class arm</option>
+                      <option value="">Select class arm (optional)</option>
                       {armsForForm.map((arm) => (
                         <option key={arm.id} value={arm.id}>
                           {arm.name}
@@ -665,7 +665,7 @@ export default function AssignClassTeachersPage() {
                     }}
                     disabled={!filters.school_class_id || armsForFilter.length === 0}
                   >
-                    <option value="">All arms</option>
+                    <option value="">None</option>
                     {armsForFilter.map((arm) => (
                       <option key={arm.id} value={arm.id}>
                         {arm.name}

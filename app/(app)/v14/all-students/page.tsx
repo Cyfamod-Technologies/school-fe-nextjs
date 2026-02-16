@@ -545,7 +545,7 @@ export default function AllStudentsPage() {
                 }}
                 disabled={!filters.school_class_id || classArms.length === 0}
               >
-                <option value="">All Arms</option>
+                <option value="">None</option>
                 {classArms.map((arm) => (
                   <option key={arm.id} value={arm.id}>
                     {arm.name}

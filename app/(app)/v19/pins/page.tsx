@@ -952,7 +952,7 @@ export default function PinsPage() {
                   }}
                   disabled={armsLoading || !selectedClass}
                 >
-                  <option value="">All arms</option>
+                  <option value="">None</option>
                   {availableArms.map((arm) => (
                     <option key={arm.id} value={String(arm.id)}>
                       {arm.name}

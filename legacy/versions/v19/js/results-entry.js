@@ -304,7 +304,7 @@ function populateClassOptions() {
 function populateArmOptions(classId, selectedId = '') {
     if (!resultsEls.armSelect) return;
     const arms = classId ? (resultsState.armsByClass.get(classId) ?? []) : [];
-    const options = ['<option value="">All arms</option>']
+    const options = ['<option value="">None</option>']
         .concat(arms.map((arm) => `<option value="${arm.id}">${arm.name}</option>`));
     resultsEls.armSelect.innerHTML = options.join('');
     if (selectedId) {

@@ -279,10 +279,10 @@ export default function AssignSubjectsPage() {
     event.preventDefault();
     setFormFeedback(null);
 
-    if (!form.school_class_id || !form.class_arm_id) {
+    if (!form.school_class_id) {
       setFormFeedback({
         type: "danger",
-        message: "Class and class arm are required.",
+        message: "Class is required.",
       });
       return;
     }
@@ -310,7 +310,7 @@ export default function AssignSubjectsPage() {
         await updateSubjectAssignment(editingId, {
           subject_id: subjectId,
           school_class_id: form.school_class_id,
-          class_arm_id: form.class_arm_id,
+          class_arm_id: form.class_arm_id || null,
           class_section_id: form.class_section_id || null,
         });
         setFormFeedback({
@@ -335,7 +335,7 @@ export default function AssignSubjectsPage() {
           await createSubjectAssignment({
             subject_id: subjectId,
             school_class_id: form.school_class_id,
-            class_arm_id: form.class_arm_id,
+            class_arm_id: form.class_arm_id || null,
             class_section_id: form.class_section_id || null,
           });
           successIds.push(subjectId);
@@ -401,8 +401,10 @@ export default function AssignSubjectsPage() {
     setEditingId(assignment.id);
     setFormFeedback(null);
 
-    const classId = `${assignment.school_class_id}`;
-    const armId = `${assignment.class_arm_id}`;
+    const classId = assignment.school_class_id
+      ? `${assignment.school_class_id}`
+      : "";
+    const armId = assignment.class_arm_id ? `${assignment.class_arm_id}` : "";
     const sectionId = assignment.class_section_id
       ? `${assignment.class_section_id}`
       : "";
@@ -537,7 +539,7 @@ export default function AssignSubjectsPage() {
                     </select>
                   </div>
                   <div className="col-12 form-group">
-                    <label htmlFor="form-arm">Class Arm *</label>
+                    <label htmlFor="form-arm">Class Arm</label>
                     <select
                       id="form-arm"
                       className="form-control"
@@ -551,9 +553,8 @@ export default function AssignSubjectsPage() {
                         }));
                       }}
                       disabled={!form.school_class_id}
-                      required
                     >
-                      <option value="">Select class arm</option>
+                      <option value="">Select class arm (optional)</option>
                       {armsForClass.map((arm) => (
                         <option key={arm.id} value={arm.id}>
                           {arm.name}
@@ -693,7 +694,7 @@ export default function AssignSubjectsPage() {
                     }}
                     disabled={!filters.school_class_id || filterArms.length === 0}
                   >
-                    <option value="">All arms</option>
+                    <option value="">None</option>
                     {filterArms.map((arm) => (
                       <option key={arm.id} value={arm.id}>
                         {arm.name}

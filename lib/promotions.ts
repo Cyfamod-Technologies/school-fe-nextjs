@@ -4,7 +4,7 @@ import { apiFetch } from "@/lib/apiClient";
 export interface PromotionRequest {
   target_session_id: string | number;
   target_school_class_id: string | number;
-  target_class_arm_id: string | number;
+  target_class_arm_id?: string | number | null;
   target_class_section_id?: string | number | null;
   retain_subjects?: boolean;
   student_ids: Array<string | number>;

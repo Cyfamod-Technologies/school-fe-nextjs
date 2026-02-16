@@ -321,7 +321,7 @@ export default function BulkResultsPage() {
                 }}
                 disabled={!filters.classId || classArms.length === 0}
               >
-                <option value="">All arms</option>
+                <option value="">None</option>
                 {classArms.map((arm) => (
                   <option key={arm.id} value={arm.id}>
                     {arm.name}
