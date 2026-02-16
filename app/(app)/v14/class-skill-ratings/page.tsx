@@ -844,7 +844,7 @@ export default function ClassSkillRatingsPage() {
                 onChange={handleFilterChange("armId")}
                 disabled={!selectedClass}
               >
-                <option value="">All arms</option>
+                <option value="">None</option>
                 {arms.map((arm) => (
                   <option key={arm.id} value={arm.id}>
                     {arm.name}

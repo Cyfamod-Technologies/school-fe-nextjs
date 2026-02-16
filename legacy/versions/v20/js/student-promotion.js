@@ -206,7 +206,7 @@
     async function loadClassArms(classId, selectElement = classArmSelect) {
         if (!selectElement) return;
         clearSelect(selectElement);
-        const defaultLabel = selectElement === targetClassArmSelect ? 'Optional' : 'All arms';
+        const defaultLabel = selectElement === targetClassArmSelect ? 'Optional' : 'None';
         selectElement.innerHTML = `<option value="">${defaultLabel}</option>`;
 
         if (!classId) {

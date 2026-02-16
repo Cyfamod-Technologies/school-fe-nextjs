@@ -186,7 +186,7 @@
     async function loadClassArms(classId) {
         if (!classArmSelect) return;
         clearSelect(classArmSelect);
-        classArmSelect.innerHTML = '<option value="">All arms</option>';
+        classArmSelect.innerHTML = '<option value="">None</option>';
 
         if (!classId) {
             return;

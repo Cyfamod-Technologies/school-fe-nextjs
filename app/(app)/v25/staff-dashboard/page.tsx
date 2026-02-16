@@ -316,8 +316,7 @@ function AssignmentCard({
                   {assignment.class?.name ?? "Unassigned Class"}
                 </h5>
                 <small className="text-muted">
-                  {assignment.class_arm?.name ?? "General"} •{" "}
-                  {assignment.class_section?.name ?? "All Sections"}
+                  {assignment.class_arm?.name ?? "General"}
                 </small>
               </div>
             </div>

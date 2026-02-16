@@ -128,6 +128,7 @@ export default function AddStudentPage() {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [classArms, setClassArms] = useState<ClassArm[]>([]);
   const [classSections, setClassSections] = useState<ClassArmSection[]>([]);
+  void classSections;
   const [parents, setParents] = useState<Parent[]>([]);
 
   const [countries, setCountries] = useState<Country[]>([]);
@@ -346,9 +347,8 @@ export default function AddStudentPage() {
     payload.append("current_session_id", form.current_session_id);
     payload.append("current_term_id", form.current_term_id);
     payload.append("school_class_id", form.school_class_id);
-    payload.append("class_arm_id", form.class_arm_id);
-    if (form.class_section_id) {
-      payload.append("class_section_id", form.class_section_id);
+    if (form.class_arm_id) {
+      payload.append("class_arm_id", form.class_arm_id);
     }
     if (form.parent_id) {
       payload.append("parent_id", form.parent_id);
@@ -683,7 +683,7 @@ export default function AddStudentPage() {
                   }
                   disabled={!form.school_class_id}
                 >
-                  <option value="">All arms</option>
+                  <option value="">None</option>
                   {classArms.map((arm) => (
                     <option key={arm.id} value={arm.id}>
                       {arm.name}

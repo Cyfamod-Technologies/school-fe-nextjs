@@ -143,7 +143,7 @@ const SIDEBAR_PERMISSION_GROUPS: PermissionGroupTemplate[] = [
   {
     key: "classes",
     title: "Classes",
-    patterns: ["classes.", "class-arms.", "class-sections."],
+    patterns: ["classes.", "class-arms."],
     icon: "fas fa-chalkboard",
     color: "#f59e0b",
   },

@@ -671,7 +671,7 @@ export default function StudentAttendancePage() {
                   }))
                 }
               >
-                <option value="">All arms</option>
+                <option value="">None</option>
                 {arms.map((arm) => (
                   <option key={arm.id} value={String(arm.id)}>
                     {arm.name}

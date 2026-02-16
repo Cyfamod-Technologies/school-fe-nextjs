@@ -10,7 +10,7 @@ export interface ClassTeacherAssignment {
   id: number;
   staff_id: number;
   school_class_id: number;
-  class_arm_id: number;
+  class_arm_id?: number | null;
   class_section_id?: number | null;
   session_id: number;
   term_id: number;
@@ -69,7 +69,6 @@ export async function listClassTeacherAssignments(
     staff_id: filters.staff_id,
     school_class_id: filters.school_class_id,
     class_arm_id: filters.class_arm_id,
-    class_section_id: filters.class_section_id,
     session_id: filters.session_id,
     term_id: filters.term_id,
   });
@@ -92,18 +91,17 @@ export async function createClassTeacherAssignment(
   payload: {
     staff_id: string | number;
     school_class_id: string | number;
-    class_arm_id: string | number;
+    class_arm_id?: string | number | null;
     class_section_id?: string | number | null;
     session_id: string | number;
     term_id: string | number;
   },
 ): Promise<ClassTeacherAssignment> {
+  const sanitizedPayload = { ...payload };
+  delete sanitizedPayload.class_section_id;
   return apiFetch<ClassTeacherAssignment>(API_ROUTES.classTeachers, {
     method: "POST",
-    body: JSON.stringify({
-      ...payload,
-      class_section_id: payload.class_section_id || null,
-    }),
+    body: JSON.stringify(sanitizedPayload),
   });
 }
 
@@ -112,20 +110,19 @@ export async function updateClassTeacherAssignment(
   payload: {
     staff_id: string | number;
     school_class_id: string | number;
-    class_arm_id: string | number;
+    class_arm_id?: string | number | null;
     class_section_id?: string | number | null;
     session_id: string | number;
     term_id: string | number;
   },
 ): Promise<ClassTeacherAssignment> {
+  const sanitizedPayload = { ...payload };
+  delete sanitizedPayload.class_section_id;
   return apiFetch<ClassTeacherAssignment>(
     `${API_ROUTES.classTeachers}/${assignmentId}`,
     {
       method: "PUT",
-      body: JSON.stringify({
-        ...payload,
-        class_section_id: payload.class_section_id || null,
-      }),
+      body: JSON.stringify(sanitizedPayload),
     },
   );
 }

@@ -63,14 +63,6 @@ export const PERMISSIONS = {
   CLASS_ARMS_DELETE: 'class-arms.delete',
 
   // ============================================
-  // Class Sections (v12)
-  // ============================================
-  CLASS_SECTIONS_VIEW: 'class-sections.view',
-  CLASS_SECTIONS_CREATE: 'class-sections.create',
-  CLASS_SECTIONS_UPDATE: 'class-sections.update',
-  CLASS_SECTIONS_DELETE: 'class-sections.delete',
-
-  // ============================================
   // Parents (v13)
   // ============================================
   PARENTS_VIEW: 'parents.view',
@@ -422,10 +414,6 @@ export const PERMISSION_GROUPS = {
       PERMISSIONS.CLASS_ARMS_CREATE,
       PERMISSIONS.CLASS_ARMS_UPDATE,
       PERMISSIONS.CLASS_ARMS_DELETE,
-      PERMISSIONS.CLASS_SECTIONS_VIEW,
-      PERMISSIONS.CLASS_SECTIONS_CREATE,
-      PERMISSIONS.CLASS_SECTIONS_UPDATE,
-      PERMISSIONS.CLASS_SECTIONS_DELETE,
     ],
   },
   parents: {

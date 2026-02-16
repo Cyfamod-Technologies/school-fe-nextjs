@@ -9,7 +9,7 @@ export interface SubjectAssignment {
   id: number;
   subject_id: number;
   school_class_id: number;
-  class_arm_id: number;
+  class_arm_id?: number | null;
   class_section_id?: number | null;
   created_at?: string;
   updated_at?: string;
@@ -60,7 +60,6 @@ export async function listSubjectAssignments(
     search: filters.search,
     school_class_id: filters.school_class_id,
     class_arm_id: filters.class_arm_id,
-    class_section_id: filters.class_section_id,
   });
 
   const payload = await apiFetch<SubjectAssignmentListResponse>(
@@ -81,16 +80,15 @@ export async function createSubjectAssignment(
   payload: {
     subject_id: string | number;
     school_class_id: string | number;
-    class_arm_id: string | number;
+    class_arm_id?: string | number | null;
     class_section_id?: string | number | null;
   },
 ): Promise<SubjectAssignment> {
+  const sanitizedPayload = { ...payload };
+  delete sanitizedPayload.class_section_id;
   return apiFetch<SubjectAssignment>(API_ROUTES.subjectAssignments, {
     method: "POST",
-    body: JSON.stringify({
-      ...payload,
-      class_section_id: payload.class_section_id || null,
-    }),
+    body: JSON.stringify(sanitizedPayload),
   });
 }
 
@@ -99,18 +97,17 @@ export async function updateSubjectAssignment(
   payload: {
     subject_id: string | number;
     school_class_id: string | number;
-    class_arm_id: string | number;
+    class_arm_id?: string | number | null;
     class_section_id?: string | number | null;
   },
 ): Promise<SubjectAssignment> {
+  const sanitizedPayload = { ...payload };
+  delete sanitizedPayload.class_section_id;
   return apiFetch<SubjectAssignment>(
     `${API_ROUTES.subjectAssignments}/${assignmentId}`,
     {
       method: "PUT",
-      body: JSON.stringify({
-        ...payload,
-        class_section_id: payload.class_section_id || null,
-      }),
+      body: JSON.stringify(sanitizedPayload),
     },
   );
 }
