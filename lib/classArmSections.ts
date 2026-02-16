@@ -1,5 +1,3 @@
-import { apiFetch } from "@/lib/apiClient";
-
 export interface ClassArmSection {
   id: number;
   name: string;
@@ -8,31 +6,13 @@ export interface ClassArmSection {
   [key: string]: unknown;
 }
 
-type SectionsResponse =
-  | ClassArmSection[]
-  | {
-      data?: ClassArmSection[];
-      [key: string]: unknown;
-    };
-
-function normalizeSections(payload: SectionsResponse): ClassArmSection[] {
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-  if (payload && Array.isArray(payload.data)) {
-    return payload.data;
-  }
-  return [];
-}
-
 export async function listClassArmSections(
   classId: number | string,
   armId: number | string,
 ): Promise<ClassArmSection[]> {
-  const payload = await apiFetch<SectionsResponse>(
-    `/api/v1/classes/${classId}/arms/${armId}/sections`,
-  );
-  return normalizeSections(payload);
+  void classId;
+  void armId;
+  return [];
 }
 
 export async function getClassArmSection(
@@ -40,14 +20,10 @@ export async function getClassArmSection(
   armId: number | string,
   sectionId: number | string,
 ): Promise<ClassArmSection | null> {
-  try {
-    return await apiFetch<ClassArmSection>(
-      `/api/v1/classes/${classId}/arms/${armId}/sections/${sectionId}`,
-    );
-  } catch (error) {
-    console.error("Unable to load class arm section", error);
-    return null;
-  }
+  void classId;
+  void armId;
+  void sectionId;
+  return null;
 }
 
 export async function createClassArmSection(
@@ -55,13 +31,10 @@ export async function createClassArmSection(
   armId: number | string,
   payload: { name: string },
 ): Promise<ClassArmSection> {
-  return apiFetch<ClassArmSection>(
-    `/api/v1/classes/${classId}/arms/${armId}/sections`,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    },
-  );
+  void classId;
+  void armId;
+  void payload;
+  throw new Error("Class section feature has been removed.");
 }
 
 export async function updateClassArmSection(
@@ -70,13 +43,11 @@ export async function updateClassArmSection(
   sectionId: number | string,
   payload: { name: string },
 ): Promise<ClassArmSection> {
-  return apiFetch<ClassArmSection>(
-    `/api/v1/classes/${classId}/arms/${armId}/sections/${sectionId}`,
-    {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    },
-  );
+  void classId;
+  void armId;
+  void sectionId;
+  void payload;
+  throw new Error("Class section feature has been removed.");
 }
 
 export async function deleteClassArmSection(
@@ -84,10 +55,8 @@ export async function deleteClassArmSection(
   armId: number | string,
   sectionId: number | string,
 ): Promise<void> {
-  await apiFetch(
-    `/api/v1/classes/${classId}/arms/${armId}/sections/${sectionId}`,
-    {
-      method: "DELETE",
-    },
-  );
+  void classId;
+  void armId;
+  void sectionId;
+  throw new Error("Class section feature has been removed.");
 }

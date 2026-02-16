@@ -80,7 +80,6 @@ export async function listSubjectTeacherAssignments(
     term_id: filters.term_id,
     school_class_id: filters.school_class_id,
     class_arm_id: filters.class_arm_id,
-    class_section_id: filters.class_section_id,
   });
 
   const payload = await apiFetch<SubjectTeacherAssignmentListResponse>(
@@ -111,9 +110,11 @@ type AssignmentMutationPayload = {
 export async function createSubjectTeacherAssignment(
   payload: AssignmentMutationPayload,
 ): Promise<SubjectTeacherAssignment> {
+  const sanitizedPayload = { ...payload };
+  delete sanitizedPayload.class_section_id;
   return apiFetch<SubjectTeacherAssignment>(API_ROUTES.subjectTeacherAssignments, {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(sanitizedPayload),
   });
 }
 
@@ -121,11 +122,13 @@ export async function updateSubjectTeacherAssignment(
   assignmentId: number | string,
   payload: AssignmentMutationPayload,
 ): Promise<SubjectTeacherAssignment> {
+  const sanitizedPayload = { ...payload };
+  delete sanitizedPayload.class_section_id;
   return apiFetch<SubjectTeacherAssignment>(
     `${API_ROUTES.subjectTeacherAssignments}/${assignmentId}`,
     {
       method: "PUT",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(sanitizedPayload),
     },
   );
 }

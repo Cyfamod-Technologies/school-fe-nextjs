@@ -61,17 +61,16 @@ function buildQuery(params: Record<string, string | number | undefined>): string
 export async function bulkPromoteStudents(
   payload: PromotionRequest,
 ): Promise<PromotionResponse> {
+  const basePayload = { ...payload };
+  delete basePayload.target_class_section_id;
+  delete basePayload.target_class_arm_id;
   return apiFetch<PromotionResponse>(API_ROUTES.promotionsBulk, {
     method: "POST",
     body: JSON.stringify({
-      target_session_id: payload.target_session_id,
-      target_class_id: payload.target_school_class_id,
-      // Treat target arm as optional for now; let backend
-      // infer or leave null rather than failing on a mismatch.
-      // target_class_arm_id is intentionally omitted.
-      target_section_id: payload.target_class_section_id ?? null,
-      retain_subjects: Boolean(payload.retain_subjects),
-      student_ids: payload.student_ids,
+      target_session_id: basePayload.target_session_id,
+      target_class_id: basePayload.target_school_class_id,
+      retain_subjects: Boolean(basePayload.retain_subjects),
+      student_ids: basePayload.student_ids,
     }),
   });
 }
@@ -84,7 +83,6 @@ export async function listPromotionHistory(
     term_id: filters.term_id,
     school_class_id: filters.school_class_id,
     class_arm_id: filters.class_arm_id,
-    class_section_id: filters.class_section_id,
   });
 
   const payload = await apiFetch<PromotionHistoryResponse>(
@@ -112,7 +110,6 @@ export function promotionHistoryExportUrl(
     term_id: filters.term_id,
     school_class_id: filters.school_class_id,
     class_arm_id: filters.class_arm_id,
-    class_section_id: filters.class_section_id,
   });
   const base = `${BACKEND_URL}${API_ROUTES.promotionsHistory}`;
   return `${base}/export.${format}${query}`;

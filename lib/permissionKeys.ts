@@ -63,14 +63,6 @@ export const PERMISSIONS = {
   CLASS_ARMS_DELETE: 'class-arms.delete',
 
   // ============================================
-  // Class Sections (v12)
-  // ============================================
-  CLASS_SECTIONS_VIEW: 'class-sections.view',
-  CLASS_SECTIONS_CREATE: 'class-sections.create',
-  CLASS_SECTIONS_UPDATE: 'class-sections.update',
-  CLASS_SECTIONS_DELETE: 'class-sections.delete',
-
-  // ============================================
   // Parents (v13)
   // ============================================
   PARENTS_VIEW: 'parents.view',

@@ -119,7 +119,6 @@ export async function listResults(
     subject_id: filters.subject_id,
     school_class_id: filters.school_class_id,
     class_arm_id: filters.class_arm_id ?? undefined,
-    class_section_id: filters.class_section_id ?? undefined,
     assessment_component_id: filters.assessment_component_id ?? undefined,
   });
 

@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    ["class_arm_id", "class_section_id", "autoprint"].forEach((param) => {
+    ["class_arm_id", "autoprint"].forEach((param) => {
       const value = searchParams.get(param);
       if (value) {
         backendUrl.searchParams.set(param, value);

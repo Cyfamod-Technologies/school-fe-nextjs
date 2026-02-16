@@ -46,12 +46,6 @@ export const PERMISSION_ACTIONS: PermissionActionEntry[] = [
   { function: "Edit Class Arm", description: "Modify class arm", permission: "class-arms.update" },
   { function: "Delete Class Arm", description: "Remove a class arm", permission: "class-arms.delete" },
   
-  // Class Sections
-  { function: "View Sections", description: "List all sections", permission: "class-sections.view" },
-  { function: "Create Section", description: "Create new section", permission: "class-sections.create" },
-  { function: "Edit Section", description: "Modify section", permission: "class-sections.update" },
-  { function: "Delete Section", description: "Remove a section", permission: "class-sections.delete" },
-  
   // Parents
   { function: "View Parents", description: "List and search parents", permission: "parents.view" },
   { function: "Create Parent", description: "Create new parent record", permission: "parents.create" },

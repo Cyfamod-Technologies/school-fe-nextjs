@@ -209,6 +209,7 @@ export default function EditStudentPage() {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [classArms, setClassArms] = useState<ClassArm[]>([]);
   const [classSections, setClassSections] = useState<ClassArmSection[]>([]);
+  void classSections;
   const [parents, setParents] = useState<Parent[]>([]);
 
   const [countries, setCountries] = useState<Country[]>([]);
@@ -577,9 +578,6 @@ export default function EditStudentPage() {
     payload.append("current_term_id", form.current_term_id);
     payload.append("school_class_id", form.school_class_id);
     payload.append("class_arm_id", form.class_arm_id);
-    if (form.class_section_id) {
-      payload.append("class_section_id", form.class_section_id);
-    }
     if (form.parent_id) {
       payload.append("parent_id", form.parent_id);
     }

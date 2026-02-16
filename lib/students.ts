@@ -79,7 +79,6 @@ export async function listStudents(
     current_session_id: filters.current_session_id,
     school_class_id: filters.school_class_id,
     class_arm_id: filters.class_arm_id,
-    class_section_id: filters.class_section_id,
   });
 
   const payload = await apiFetch<StudentListResponse>(

@@ -80,6 +80,7 @@ export default function AllStudentsPage() {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [classArms, setClassArms] = useState<ClassArm[]>([]);
   const [classSections, setClassSections] = useState<ClassArmSection[]>([]);
+  void classSections;
 
   const [data, setData] = useState<StudentListResponse | null>(null);
   const [students, setStudents] = useState<StudentSummary[]>([]);
@@ -104,7 +105,6 @@ export default function AllStudentsPage() {
         current_session_id: filters.current_session_id || undefined,
         school_class_id: filters.school_class_id || undefined,
         class_arm_id: filters.class_arm_id || undefined,
-        class_section_id: filters.class_section_id || undefined,
       });
       setData(response);
       setStudents(Array.isArray(response.data) ? response.data : []);
@@ -284,9 +284,6 @@ export default function AllStudentsPage() {
       }
       if (filters.class_arm_id) {
         params.set("class_arm_id", filters.class_arm_id);
-      }
-      if (filters.class_section_id) {
-        params.set("class_section_id", filters.class_section_id);
       }
       params.set("page", String(page));
       params.set("per_page", String(perPage));
@@ -556,29 +553,7 @@ export default function AllStudentsPage() {
                 ))}
               </select>
             </div>
-            <div className="col-lg-2 col-12 form-group">
-              <label htmlFor="filter-class-section">Section</label>
-              <select
-                id="filter-class-section"
-                className="form-control"
-                value={filters.class_section_id}
-                onChange={(event) => {
-                  setPage(1);
-                  setFilters((prev) => ({
-                    ...prev,
-                    class_section_id: event.target.value,
-                  }));
-                }}
-                disabled={!filters.school_class_id || classSections.length === 0}
-              >
-                <option value="">All Sections</option>
-                {classSections.map((section) => (
-                  <option key={section.id} value={section.id}>
-                    {section.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Class section filter removed */}
             <div className="col-lg-1 col-12 d-flex align-items-end">
               <button
                 type="button"
