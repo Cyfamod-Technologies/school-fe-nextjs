@@ -326,11 +326,11 @@ export function Sidebar() {
   );
 
   const filterLinks = useCallback(
-    function filterLinksInternal(links: MenuLink[]): MenuLink[] {
+    function filterLinksRecursively(links: MenuLink[]): MenuLink[] {
       return links
         .map((link) => {
           if (link.children && link.children.length > 0) {
-            const visibleChildren = filterLinksInternal(link.children);
+            const visibleChildren = filterLinksRecursively(link.children);
             if (visibleChildren.length === 0) {
               return null;
             }
@@ -480,7 +480,7 @@ export function Sidebar() {
                       return (
                         <li
                           key={groupKey}
-                          className={`nav-item sidebar-nav-item ${groupOpen ? "open active" : ""}`}
+                          className={`nav-item ${groupOpen ? "open active" : ""}`}
                         >
                           <a
                             href="#"

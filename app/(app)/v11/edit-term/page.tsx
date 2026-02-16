@@ -10,7 +10,11 @@ import {
   type UpdateTermPayload,
 } from "@/lib/terms";
 
-const ALLOWED_TERM_NAMES = ["1st", "2nd", "3rd"] as const;
+const TERM_NUMBER_OPTIONS: Array<{ value: number; label: string }> = [
+  { value: 1, label: "Term 1" },
+  { value: 2, label: "Term 2" },
+  { value: 3, label: "Term 3" },
+];
 
 function formatDateInput(value?: string | null) {
   if (!value) {
@@ -34,6 +38,7 @@ export default function EditTermPage() {
   const [sessionId, setSessionId] = useState("");
   const [form, setForm] = useState<UpdateTermPayload>({
     name: "",
+    term_number: 1,
     session: "",
     start_date: "",
     end_date: "",
@@ -57,9 +62,14 @@ export default function EditTermPage() {
 
         const sessionValue =
           `${term.session_id ?? term.session ?? ""}` || "";
+        const resolvedTermNumber =
+          typeof term.term_number === "number" && term.term_number > 0
+            ? term.term_number
+            : 1;
         setSessionId(sessionValue);
         setForm({
           name: term.name ?? "",
+          term_number: resolvedTermNumber,
           session: sessionValue,
           start_date: formatDateInput(term.start_date),
           end_date: formatDateInput(term.end_date),
@@ -83,6 +93,17 @@ export default function EditTermPage() {
     [sessions],
   );
 
+  const termNumberOptions = useMemo(() => {
+    const options = [...TERM_NUMBER_OPTIONS];
+    if (!options.some((option) => option.value === form.term_number)) {
+      options.push({
+        value: form.term_number,
+        label: `Term ${form.term_number}`,
+      });
+    }
+    return options;
+  }, [form.term_number]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!termId) {
@@ -96,15 +117,21 @@ export default function EditTermPage() {
       return;
     }
 
-    if (!ALLOWED_TERM_NAMES.includes(form.name as (typeof ALLOWED_TERM_NAMES)[number])) {
-      setError("Term name must be 1st, 2nd, or 3rd.");
+    if (!form.name.trim()) {
+      setError("Please enter a term name.");
+      return;
+    }
+
+    if (!Number.isInteger(form.term_number) || form.term_number < 1) {
+      setError("Please select a valid term slot.");
       return;
     }
 
     setSubmitting(true);
     try {
       await updateTerm(termId, {
-        name: form.name,
+        name: form.name.trim(),
+        term_number: form.term_number,
         session: sessionId,
         start_date: toISODate(form.start_date),
         end_date: toISODate(form.end_date),
@@ -190,23 +217,40 @@ export default function EditTermPage() {
                 </select>
               </div>
               <div className="col-xl-6 col-lg-6 col-12 form-group">
-                <label htmlFor="term-name">Term Name *</label>
+                <label htmlFor="term-number">Term Slot *</label>
                 <select
+                  id="term-number"
+                  className="form-control"
+                  value={form.term_number}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      term_number: Number.parseInt(event.target.value, 10) || 1,
+                    }))
+                  }
+                  required
+                >
+                  {termNumberOptions.map((term) => (
+                    <option key={term.value} value={term.value}>
+                      {term.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-xl-6 col-lg-6 col-12 form-group">
+                <label htmlFor="term-name">Term Name *</label>
+                <input
                   id="term-name"
+                  type="text"
                   className="form-control"
                   value={form.name}
                   onChange={(event) =>
                     setForm((prev) => ({ ...prev, name: event.target.value }))
                   }
+                  placeholder="e.g. Autumn Term"
+                  maxLength={100}
                   required
-                >
-                  <option value="">Select term name</option>
-                  {ALLOWED_TERM_NAMES.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
               <div className="col-xl-6 col-lg-6 col-12 form-group">
                 <label htmlFor="start-date">Start Date *</label>

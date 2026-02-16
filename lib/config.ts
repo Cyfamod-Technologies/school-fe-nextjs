@@ -129,6 +129,7 @@ export const API_ROUTES = {
   gradeScales: "/api/v1/grades/scales",
   skillCategories: "/api/v1/settings/skill-categories",
   skillTypes: "/api/v1/settings/skill-types",
+  skillTypesBulk: "/api/v1/settings/skill-types/bulk",
   assessmentComponents: "/api/v1/settings/assessment-components",
   resultPageSettings: "/api/v1/settings/result-page",
   results: "/api/v1/results",

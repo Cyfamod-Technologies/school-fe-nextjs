@@ -22,7 +22,7 @@ import {
   type Role,
 } from "@/lib/roles";
 
-type FeedbackType = "success" | "danger";
+type FeedbackType = "success" | "warning" | "danger";
 
 interface FeedbackState {
   type: FeedbackType;
@@ -396,6 +396,31 @@ const summarizeRolePermissions = (role: Role): ReactNode => {
   );
 };
 
+const containsManageTerm = (...values: Array<string | null | undefined>): boolean => {
+  const text = values
+    .map((value) => String(value ?? "").trim())
+    .filter((value) => value.length > 0)
+    .join(" ")
+    .toLowerCase();
+
+  return text.includes("manage");
+};
+
+const ALLOWED_STAFF_PERMISSIONS = new Set([
+  "staff.view",
+  "staff.create",
+  "staff.update",
+  "staff.delete",
+]);
+
+const shouldHidePermissionKey = (permissionKey: string): boolean => {
+  const normalized = permissionKey.trim().toLowerCase();
+  if (normalized.startsWith("staff.") && !ALLOWED_STAFF_PERMISSIONS.has(normalized)) {
+    return true;
+  }
+  return false;
+};
+
 const buildPermissionActionItems = (
   permissions: Permission[],
 ): PermissionActionItem[] => {
@@ -411,6 +436,16 @@ const buildPermissionActionItems = (
   PERMISSION_ACTIONS.forEach((entry, index) => {
     const permissionKey = String(entry.permission ?? "");
     const permission = permissionByKey.get(permissionKey) ?? null;
+    const functionLabel = String(entry.function ?? "").trim() || permissionKey;
+    const description = String(entry.description ?? "").trim();
+
+    if (
+      containsManageTerm(functionLabel, description, permissionKey) ||
+      shouldHidePermissionKey(permissionKey)
+    ) {
+      return;
+    }
+
     const permissionId =
       permission && permission.id !== undefined && permission.id !== null
         ? String(permission.id)
@@ -421,8 +456,8 @@ const buildPermissionActionItems = (
       permission,
       permissionId,
       permissionKey,
-      functionLabel: String(entry.function ?? "").trim() || permissionKey,
-      description: String(entry.description ?? "").trim(),
+      functionLabel,
+      description,
       subtitle,
     });
   });
@@ -437,6 +472,15 @@ const buildPermissionActionItems = (
     }
     const { primaryLabel, subtitle } = formatPermissionLabels(permissionKey);
     const functionLabel = subtitle ? `${primaryLabel} ${subtitle}` : primaryLabel;
+    const description = String(permission?.description ?? "").trim();
+
+    if (
+      containsManageTerm(functionLabel, description, permissionKey) ||
+      shouldHidePermissionKey(permissionKey)
+    ) {
+      return;
+    }
+
     actionItems.push({
       id: `fallback-${permissionKey}`,
       permission,
@@ -446,7 +490,7 @@ const buildPermissionActionItems = (
           : null,
       permissionKey,
       functionLabel,
-      description: String(permission?.description ?? "").trim(),
+      description,
       subtitle,
     });
   });
@@ -502,11 +546,24 @@ export default function RolesPage() {
   );
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
 
-  const isSystemRoleName = useCallback((name: string): boolean => {
-    const n = name.trim().toLowerCase();
-    // disallow admin and super_admin variants
-    return /\b(super[ _-]?admin|admin)\b/i.test(n);
+  const normalizeRoleName = useCallback((name: string): string => {
+    return name
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .replace(/-/g, "_");
   }, []);
+
+  const isSystemRoleName = useCallback((name: string): boolean => {
+    const n = normalizeRoleName(name);
+    // disallow admin and super_admin variants
+    return n === "admin" || n === "super_admin";
+  }, [normalizeRoleName]);
+
+  const isLockedRoleName = useCallback((name: string): boolean => {
+    const n = normalizeRoleName(name);
+    return n === "teacher" || isSystemRoleName(n);
+  }, [isSystemRoleName, normalizeRoleName]);
 
   const showFeedback = useCallback(
     (message: string, type: FeedbackType) => {
@@ -654,7 +711,7 @@ export default function RolesPage() {
   const visibleRoleCount = filteredRoles.length;
   const totalRolesCount = roles.length;
   const permissionCountLabel = canAssignPermissions
-    ? String(permissions.length)
+    ? String(permissionActionItems.length)
     : "Restricted";
 
   const openCreateModal = () => {
@@ -674,6 +731,9 @@ export default function RolesPage() {
 
   const openEditModal = (role: Role) => {
     if (!canUpdateRole) {
+      return;
+    }
+    if (isLockedRoleName(role.name ?? "")) {
       return;
     }
     setModalMode("edit");
@@ -702,22 +762,10 @@ export default function RolesPage() {
     setFormError(null);
   };
 
-  const isLockedPermission = useCallback((permission: Permission): boolean => {
-    if (modalMode !== "edit" || !editingRole) {
-      return false;
-    }
-    const roleName = editingRole.name?.toLowerCase() ?? "";
-    if (roleName !== "teacher") {
-      return false;
-    }
-    const lockedPermissionNames = [
-      "staff.dashboard.view",
-      "staff.profile.view",
-      "staff.profile.update",
-    ];
-    const permissionName = permission?.name ?? "";
-    return lockedPermissionNames.includes(permissionName);
-  }, [modalMode, editingRole]);
+  const isLockedPermission = useCallback((_permission: Permission): boolean => {
+    void _permission;
+    return false;
+  }, []);
 
   const toggleGroupExpanded = useCallback((groupKey: string) => {
     setExpandedGroups((prev) => {
@@ -896,6 +944,10 @@ export default function RolesPage() {
 
   const handleDeleteRole = async (role: Role) => {
     if (!canDeleteRole) {
+      return;
+    }
+    if (isLockedRoleName(role.name ?? "")) {
+      showFeedback("This role is locked and cannot be deleted.", "warning");
       return;
     }
     const confirmationMessage = role.name
@@ -1096,13 +1148,13 @@ export default function RolesPage() {
                 ) : (
                   filteredRoles.map((role) => {
                     const permissionCount = Array.isArray(role.permissions) ? role.permissions.length : 0;
-                    const isSystemRole = isSystemRoleName(role.name || "");
+                    const isLockedRole = isLockedRoleName(role.name || "");
                     return (
-                      <tr key={String(role.id)} className={isSystemRole ? "system-role-row" : ""}>
+                      <tr key={String(role.id)} className={isLockedRole ? "system-role-row" : ""}>
                         <td>
                           <div className="role-name-cell">
                             <span className="role-name">{role.name}</span>
-                            {isSystemRole && (
+                            {isLockedRole && (
                               <span className="role-system-badge">
                                 <i className="fas fa-shield-alt" /> System
                               </span>
@@ -1122,8 +1174,8 @@ export default function RolesPage() {
                           <span className="role-updated">{formatDateTime(role.updated_at)}</span>
                         </td>
                         <td className="text-right">
-                          {isSystemRole ? (
-                            <span className="role-locked-indicator" title="System roles cannot be edited">
+                          {isLockedRole ? (
+                            <span className="role-locked-indicator" title="Locked roles cannot be edited or deleted">
                               <i className="fas fa-lock" />
                             </span>
                           ) : !canUpdateRole && !canDeleteRole ? (

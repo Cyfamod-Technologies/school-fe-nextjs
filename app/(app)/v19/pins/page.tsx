@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { listSessions, type Session } from "@/lib/sessions";
 import { listTermsBySession, type Term } from "@/lib/terms";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import { listClassArms, type ClassArm } from "@/lib/classArms";
 import { resolveBackendUrl } from "@/lib/config";
 import { getCookie } from "@/lib/cookies";
+import { PERMISSIONS } from "@/lib/permissionKeys";
 import {
   bulkGenerateResultPins,
   generateResultPinForStudent,
@@ -113,6 +115,7 @@ const buildResultPinStudentLabel = (pin: ResultPin): string => {
 };
 
 export default function PinsPage() {
+  const { hasPermission, user } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [selectedSession, setSelectedSession] = useState<string>("");
@@ -149,6 +152,32 @@ export default function PinsPage() {
   const [generatingSingle, setGeneratingSingle] = useState(false);
   const [generatingBulk, setGeneratingBulk] = useState(false);
   const [pinActionKey, setPinActionKey] = useState<string | null>(null);
+
+  const isAdmin = useMemo(() => {
+    const directRole = String(
+      (user as { role?: string | null })?.role ?? "",
+    ).toLowerCase();
+    if (directRole === "admin") {
+      return true;
+    }
+    const roles = (user as { roles?: Array<{ name?: string | null }> })?.roles;
+    if (Array.isArray(roles)) {
+      return roles.some(
+        (role) => String(role?.name ?? "").toLowerCase() === "admin",
+      );
+    }
+    return false;
+  }, [user]);
+
+  const canViewPins = isAdmin || hasPermission(PERMISSIONS.RESULT_PIN_VIEW);
+  const canCreatePin = isAdmin || hasPermission(PERMISSIONS.RESULT_PIN_CREATE);
+  const canBulkCreatePins =
+    isAdmin || hasPermission(PERMISSIONS.RESULT_PIN_BULK_CREATE);
+  const canInvalidatePins =
+    isAdmin ||
+    hasPermission(PERMISSIONS.RESULT_PIN_INVALIDATE) ||
+    hasPermission("result.pin.delete");
+  const canExportPins = isAdmin || hasPermission(PERMISSIONS.RESULT_PIN_EXPORT);
 
   const availableTerms = useMemo(() => {
     if (!selectedSession) {
@@ -351,6 +380,12 @@ export default function PinsPage() {
   ]);
 
   const loadPins = useCallback(async () => {
+    if (!canViewPins) {
+      setPins([]);
+      setPinsError("You do not have permission to view result PINs.");
+      return;
+    }
+
     if (!selectedSession || !selectedTerm) {
       setPins([]);
       setPinsError(null);
@@ -385,6 +420,7 @@ export default function PinsPage() {
       setPinsLoading(false);
     }
   }, [
+    canViewPins,
     selectedArm,
     selectedClass,
     selectedSession,
@@ -415,6 +451,11 @@ export default function PinsPage() {
   }, [loadPins]);
 
   const handleGenerateSingle = async () => {
+    if (!canCreatePin) {
+      showFeedback("You do not have permission to generate result PINs.", "warning");
+      return;
+    }
+
     if (!selectedStudent) {
       showFeedback(
         "Select a student from the list, or use “Generate PINs for Class”.",
@@ -472,6 +513,11 @@ export default function PinsPage() {
   };
 
   const handleBulkGenerate = async () => {
+    if (!canBulkCreatePins) {
+      showFeedback("You do not have permission to bulk-generate result PINs.", "warning");
+      return;
+    }
+
     if (!selectedSession || !selectedTerm) {
       showFeedback(
         "Select a session and term before generating PINs.",
@@ -533,6 +579,11 @@ export default function PinsPage() {
 
   const handlePrintCards = useCallback(
     async (scope: "student" | "class") => {
+      if (!canExportPins) {
+        showFeedback("You do not have permission to print scratch cards.", "warning");
+        return;
+      }
+
       if (!selectedSession || !selectedTerm) {
         showFeedback(
           "Select a session and term before printing scratch cards.",
@@ -648,6 +699,7 @@ export default function PinsPage() {
       }
     },
     [
+      canExportPins,
       selectedArm,
       selectedClass,
       selectedSession,
@@ -658,6 +710,11 @@ export default function PinsPage() {
   );
 
   const handleRegeneratePin = async (studentId: number | string) => {
+    if (!canCreatePin) {
+      showFeedback("You do not have permission to regenerate result PINs.", "warning");
+      return;
+    }
+
     if (!selectedSession || !selectedTerm) {
       showFeedback(
         "Select a session and term before generating PINs.",
@@ -709,6 +766,11 @@ export default function PinsPage() {
   };
 
   const handleInvalidatePin = async (pinId: number | string) => {
+    if (!canInvalidatePins) {
+      showFeedback("You do not have permission to invalidate result PINs.", "warning");
+      return;
+    }
+
     if (!window.confirm("Invalidate this result PIN?")) {
       return;
     }
@@ -734,6 +796,9 @@ export default function PinsPage() {
   };
 
   const tableMessage = useMemo(() => {
+    if (!canViewPins) {
+      return "You do not have permission to view result PINs.";
+    }
     if (!selectedSession || !selectedTerm) {
       return "Select a session and term to view PINs.";
     }
@@ -747,7 +812,7 @@ export default function PinsPage() {
       return "No result PINs found for the selected filters.";
     }
     return null;
-  }, [pins.length, pinsError, pinsLoading, selectedSession, selectedTerm]);
+  }, [canViewPins, pins.length, pinsError, pinsLoading, selectedSession, selectedTerm]);
 
   return (
     <>
@@ -976,73 +1041,81 @@ export default function PinsPage() {
             <div className="form-row">
               <div className="form-group col-12">
                 <div className="d-flex flex-column flex-md-row justify-content-md-end align-items-md-center">
-                  <button
-                    type="button"
-                    id="pin-generate-single"
-                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mb-2 mb-md-0 mr-md-3"
-                    onClick={() => {
-                      void handleGenerateSingle();
-                    }}
-                    disabled={generatingSingle || !selectedStudent}
-                    title={
-                      selectedStudent
-                        ? undefined
-                        : "Pick a student to enable this action."
-                    }
-                  >
-                    {generatingSingle
-                      ? "Generating…"
-                      : "Generate PIN for Student"}
-                  </button>
-                  <div className="d-flex flex-column">
+                  {canCreatePin ? (
                     <button
                       type="button"
-                      id="pin-generate-bulk"
-                      className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                      id="pin-generate-single"
+                      className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mb-2 mb-md-0 mr-md-3"
                       onClick={() => {
-                        void handleBulkGenerate();
+                        void handleGenerateSingle();
                       }}
-                      disabled={generatingBulk}
+                      disabled={generatingSingle || !selectedStudent}
+                      title={
+                        selectedStudent
+                          ? undefined
+                          : "Pick a student to enable this action."
+                      }
                     >
-                      {generatingBulk
+                      {generatingSingle
                         ? "Generating…"
-                        : "Generate PINs for Class"}
+                        : "Generate PIN for Student"}
                     </button>
-                    <small className="text-muted mt-1">
-                      Select a class above and click once to create PINs for every student.
-                    </small>
+                  ) : null}
+                  <div className="d-flex flex-column">
+                    {canBulkCreatePins ? (
+                      <>
+                        <button
+                          type="button"
+                          id="pin-generate-bulk"
+                          className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                          onClick={() => {
+                            void handleBulkGenerate();
+                          }}
+                          disabled={generatingBulk}
+                        >
+                          {generatingBulk
+                            ? "Generating…"
+                            : "Generate PINs for Class"}
+                        </button>
+                        <small className="text-muted mt-1">
+                          Select a class above and click once to create PINs for every student.
+                        </small>
+                      </>
+                    ) : null}
                   </div>
                 </div>
-                <div className="d-flex flex-column flex-md-row justify-content-md-end align-items-md-center mt-3">
-                  <button
-                    type="button"
-                    className="btn-fill-lg mb-2 mb-md-0 mr-md-3"
-                    style={{
-                      backgroundColor: "#1d4ed8",
-                      color: "#fff",
-                      borderColor: "#1d4ed8",
-                    }}
-                    onClick={() => {
-                      handlePrintCards("student");
-                    }}
-                  >
-                    Print Student Scratch Card
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-fill-lg"
-                    style={{
-                      backgroundColor: "#1d4ed8",
-                      color: "#fff",
-                      borderColor: "#1d4ed8",
-                    }}
-                    onClick={() => {
-                      handlePrintCards("class");
-                    }}
-                  >
-                    Print Class Scratch Cards
-                  </button>
-                </div>
+                {canExportPins ? (
+                  <div className="d-flex flex-column flex-md-row justify-content-md-end align-items-md-center mt-3">
+                    <button
+                      type="button"
+                      className="btn-fill-lg mb-2 mb-md-0 mr-md-3"
+                      style={{
+                        backgroundColor: "#1d4ed8",
+                        color: "#fff",
+                        borderColor: "#1d4ed8",
+                      }}
+                      onClick={() => {
+                        handlePrintCards("student");
+                      }}
+                    >
+                      Print Student Scratch Card
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-fill-lg"
+                      style={{
+                        backgroundColor: "#1d4ed8",
+                        color: "#fff",
+                        borderColor: "#1d4ed8",
+                      }}
+                      onClick={() => {
+                        handlePrintCards("class");
+                      }}
+                    >
+                      Print Class Scratch Cards
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
           </form>
@@ -1104,7 +1177,9 @@ export default function PinsPage() {
                             onClick={() => {
                               void handleRegeneratePin(pin.student_id);
                             }}
-                            disabled={pinActionKey === `regen-${pin.student_id}`}
+                            disabled={
+                              pinActionKey === `regen-${pin.student_id}` || !canCreatePin
+                            }
                           >
                             Regenerate
                           </button>
@@ -1114,7 +1189,9 @@ export default function PinsPage() {
                             onClick={() => {
                               void handleInvalidatePin(pin.id);
                             }}
-                            disabled={pinActionKey === `invalidate-${pin.id}`}
+                            disabled={
+                              pinActionKey === `invalidate-${pin.id}` || !canInvalidatePins
+                            }
                           >
                             Invalidate
                           </button>

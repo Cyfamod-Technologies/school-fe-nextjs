@@ -99,11 +99,17 @@ export default function StudentDetailsPage() {
   const allStudentsHref = useMemo(() => {
     return filterQuery ? `/v14/all-students?${filterQuery}` : "/v14/all-students";
   }, [filterQuery]);
-  const { schoolContext, user } = useAuth();
+  const { schoolContext, user, hasPermission } = useAuth();
 
   const isTeacher = isTeacherUser(user);
   const hidePrintResult =
     studentId === "4cc05231-689a-4c36-9ba5-8fb4d8b6c51e";
+  const canOpenResultEntry = hasPermission([
+    "results.entry.view",
+    "results.entry.enter",
+    "results.enter",
+    "results.view",
+  ]);
 
   const [student, setStudent] = useState<StudentDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -113,6 +119,56 @@ export default function StudentDetailsPage() {
   const [termsCache, setTermsCache] = useState<Record<string, Term[]>>({});
   const [selectedSession, setSelectedSession] = useState<string>("");
   const [selectedTerm, setSelectedTerm] = useState<string>("");
+  const studentResultEntryHref = useMemo(() => {
+    if (!studentId) {
+      return "/v14/student-result-entry";
+    }
+
+    const params = new URLSearchParams();
+    params.set("id", studentId);
+
+    if (filterQuery) {
+      const filterParams = new URLSearchParams(filterQuery);
+      filterParams.forEach((value, key) => {
+        params.set(key, value);
+      });
+    }
+
+    const sessionCandidate =
+      selectedSession ||
+      (schoolContext.current_session_id != null
+        ? String(schoolContext.current_session_id)
+        : student?.current_session_id != null
+          ? String(student.current_session_id)
+          : "");
+
+    const termCandidate =
+      selectedTerm ||
+      (schoolContext.current_term_id != null
+        ? String(schoolContext.current_term_id)
+        : student?.current_term_id != null
+          ? String(student.current_term_id)
+          : "");
+
+    if (sessionCandidate) {
+      params.set("session_id", sessionCandidate);
+    }
+
+    if (termCandidate) {
+      params.set("term_id", termCandidate);
+    }
+
+    return `/v14/student-result-entry?${params.toString()}`;
+  }, [
+    filterQuery,
+    schoolContext.current_session_id,
+    schoolContext.current_term_id,
+    selectedSession,
+    selectedTerm,
+    student?.current_session_id,
+    student?.current_term_id,
+    studentId,
+  ]);
 
   const [skillTypes, setSkillTypes] = useState<StudentSkillType[]>([]);
   const [skillRatings, setSkillRatings] = useState<StudentSkillRating[]>([]);
@@ -1411,15 +1467,43 @@ export default function StudentDetailsPage() {
               </select>
             </div>
           </div>
-          <div className="d-flex justify-content-end">
+          <div className="d-flex justify-content-end align-items-center flex-wrap">
             <button
               type="button"
-              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mb-2"
               onClick={() => setSkillsModalOpen(true)}
             >
               Open Skill Ratings
             </button>
           </div>
+        </div>
+      </div>
+
+      <div className="card height-auto mt-4">
+        <div className="card-body">
+          <div className="heading-layout1">
+            <div className="item-title">
+              <h3>Result Entry</h3>
+              <p className="mb-0 text-muted small">
+                Open a dedicated page to enter this student&rsquo;s subject
+                scores by assessment component.
+              </p>
+            </div>
+          </div>
+          {canOpenResultEntry ? (
+            <div className="d-flex justify-content-end">
+              <Link
+                href={studentResultEntryHref}
+                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+              >
+                Open Result Entry
+              </Link>
+            </div>
+          ) : (
+            <div className="text-muted small">
+              You do not have permission to access result entry.
+            </div>
+          )}
         </div>
       </div>
 

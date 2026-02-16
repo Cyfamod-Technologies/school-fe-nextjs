@@ -219,6 +219,7 @@ export default function AllTermsPage() {
               <thead>
                 <tr>
                   <th>#</th>
+                  <th>Slot</th>
                   <th>Term</th>
                   <th>Session</th>
                   <th>Start Date</th>
@@ -229,19 +230,19 @@ export default function AllTermsPage() {
               <tbody>
                 {!selectedSessionId ? (
                   <tr>
-                    <td colSpan={6} className="text-center">
+                    <td colSpan={7} className="text-center">
                       Select a session to view its terms.
                     </td>
                   </tr>
                 ) : loading ? (
                   <tr>
-                    <td colSpan={6} className="text-center">
+                    <td colSpan={7} className="text-center">
                       Loading terms…
                     </td>
                   </tr>
                 ) : terms.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center">
+                    <td colSpan={7} className="text-center">
                       No terms found for this session.
                     </td>
                   </tr>
@@ -249,6 +250,7 @@ export default function AllTermsPage() {
                   terms.map((term, index) => (
                     <tr key={term.id}>
                       <td>{index + 1}</td>
+                      <td>{term.term_number ?? "—"}</td>
                       <td>{term.name}</td>
                       <td>{selectedSessionName || "—"}</td>
                       <td>{formatDate(term.start_date)}</td>

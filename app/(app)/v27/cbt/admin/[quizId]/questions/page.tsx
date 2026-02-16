@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/apiClient';
 
 type QuestionType = 'mcq' | 'multiple_select' | 'true_false' | 'short_answer';
 type ShortAnswerMatch = 'exact' | 'contains' | 'keywords';
+type BulkImportResult = { imported: number; failed: number; errors: string[] };
 
 interface Quiz {
   id: string;
@@ -142,6 +144,333 @@ const parseShortAnswerList = (value: string): string[] => {
     .filter(Boolean);
 };
 
+const bulkImportTemplate = [
+  'question_text,question_type,marks,options,correct_answers,correct_answer,short_answer_answers,short_answer_keywords,short_answer_match,image_url,explanation',
+  '"What is the capital of France?",mcq,1,"London|Paris|Berlin","2",,,,,,',
+  '"Select prime numbers.",multiple_select,2,"2|3|4|5","1|2|4",,,,,,',
+  '"The earth is round.",true_false,1,,,true,,,,,',
+  '"2 + 2 = ?",short_answer,1,,,,"4|four","addition|math",exact,,',
+].join('\n');
+
+const validQuestionTypes: QuestionType[] = ['mcq', 'multiple_select', 'true_false', 'short_answer'];
+const validShortAnswerMatches: ShortAnswerMatch[] = ['exact', 'contains', 'keywords'];
+const csvSeparator = '|';
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const parseBooleanValue = (value: unknown): boolean | null => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (value === 1) return true;
+    if (value === 0) return false;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', 'yes', 'y', '1'].includes(normalized)) return true;
+    if (['false', 'no', 'n', '0'].includes(normalized)) return false;
+  }
+  return null;
+};
+
+const parseListValue = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return parseShortAnswerList(value);
+  }
+  return [];
+};
+
+const normalizeCsvHeader = (header: string): string => {
+  return header.trim().toLowerCase().replace(/[\s-]+/g, '_');
+};
+
+const splitPipeList = (value: string): string[] => {
+  return value
+    .split(csvSeparator)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
+const parseCsvRows = (input: string): string[][] => {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    const next = input[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        field += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (!inQuotes && char === ',') {
+      row.push(field);
+      field = '';
+      continue;
+    }
+
+    if (!inQuotes && (char === '\n' || char === '\r')) {
+      if (char === '\r' && next === '\n') {
+        i += 1;
+      }
+      row.push(field);
+      field = '';
+      if (row.some((value) => value.trim() !== '')) {
+        rows.push(row);
+      }
+      row = [];
+      continue;
+    }
+
+    field += char;
+  }
+
+  row.push(field);
+  if (row.some((value) => value.trim() !== '')) {
+    rows.push(row);
+  }
+
+  return rows;
+};
+
+const parseBulkCsvRecords = (input: string): Record<string, string>[] => {
+  const rows = parseCsvRows(input);
+  if (rows.length < 2) {
+    throw new Error('CSV must include a header row and at least one question row.');
+  }
+
+  const headers = rows[0].map(normalizeCsvHeader);
+  const questionHeaderExists = headers.includes('question_text') || headers.includes('question');
+  if (!questionHeaderExists) {
+    throw new Error('CSV header must include question_text.');
+  }
+
+  const records: Record<string, string>[] = [];
+  for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
+    const values = rows[rowIndex];
+    const record: Record<string, string> = {};
+    headers.forEach((header, columnIndex) => {
+      record[header] = (values[columnIndex] ?? '').trim();
+    });
+    if (Object.values(record).some((value) => value !== '')) {
+      records.push(record);
+    }
+  }
+
+  if (records.length === 0) {
+    throw new Error('No question rows found in CSV.');
+  }
+
+  return records;
+};
+
+const markCorrectOptions = (options: QuizOption[], correctTokens: string[]) => {
+  if (correctTokens.length === 0) return;
+
+  const normalizedOptionMap = new Map(
+    options.map((option, index) => [option.option_text.trim().toLowerCase(), index] as const),
+  );
+
+  correctTokens.forEach((token) => {
+    const numericIndex = Number(token);
+    if (Number.isInteger(numericIndex) && numericIndex >= 1 && numericIndex <= options.length) {
+      options[numericIndex - 1].is_correct = true;
+      return;
+    }
+    const mappedIndex = normalizedOptionMap.get(token.trim().toLowerCase());
+    if (typeof mappedIndex === 'number') {
+      options[mappedIndex].is_correct = true;
+    }
+  });
+};
+
+const buildBulkEntryFromCsvRecord = (record: Record<string, string>): Record<string, unknown> => {
+  const questionText = record.question_text || record.question || '';
+  const questionType = (record.question_type || record.type || 'mcq').toLowerCase().replace(/-/g, '_');
+  const marks = record.marks || '1';
+  const order = record.order;
+
+  const optionsFromSingleField = splitPipeList(record.options || record.option_texts || '');
+  const optionColumnValues = Object.entries(record)
+    .filter(([key, value]) => key.startsWith('option_') && value)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, value]) => value.trim())
+    .filter(Boolean);
+  const optionTexts = [...optionsFromSingleField, ...optionColumnValues];
+
+  const options = optionTexts.map((optionText, index) => ({
+    option_text: optionText,
+    is_correct: false,
+    order: index + 1,
+  }));
+
+  markCorrectOptions(options, splitPipeList(record.correct_answers || record.correct || ''));
+
+  const entry: Record<string, unknown> = {
+    question_text: questionText,
+    question_type: questionType,
+    marks,
+    order,
+    image_url: record.image_url || '',
+    explanation: record.explanation || '',
+    options,
+    correct_answer: record.correct_answer || record.answer || '',
+    short_answer_answers: splitPipeList(record.short_answer_answers || record.accepted_answers || ''),
+    short_answer_keywords: splitPipeList(record.short_answer_keywords || record.keywords || ''),
+    short_answer_match: record.short_answer_match || 'exact',
+  };
+
+  return entry;
+};
+
+const parseBulkOptions = (value: unknown): QuizOption[] => {
+  if (!Array.isArray(value)) return [];
+
+  const parsed: QuizOption[] = [];
+
+  value.forEach((entry, index) => {
+    if (typeof entry === 'string') {
+      const optionText = entry.trim();
+      if (!optionText) return;
+      parsed.push({
+        option_text: optionText,
+        is_correct: false,
+        order: index + 1,
+      });
+      return;
+    }
+
+    if (!isRecord(entry)) return;
+
+    const optionTextRaw = entry.option_text;
+    if (typeof optionTextRaw !== 'string' || !optionTextRaw.trim()) {
+      return;
+    }
+
+    parsed.push({
+      option_text: optionTextRaw.trim(),
+      is_correct: Boolean(entry.is_correct),
+      order: typeof entry.order === 'number' && entry.order >= 1 ? Math.floor(entry.order) : index + 1,
+      image_url: typeof entry.image_url === 'string' ? entry.image_url.trim() || null : null,
+    });
+  });
+
+  return parsed.map((option, index) => ({ ...option, order: index + 1 }));
+};
+
+const buildBulkQuestionPayload = (entry: unknown, defaultOrder: number): Record<string, unknown> => {
+  if (!isRecord(entry)) {
+    throw new Error('Each question must be a JSON object.');
+  }
+
+  const questionText = typeof entry.question_text === 'string' ? entry.question_text.trim() : '';
+  if (!questionText) {
+    throw new Error('question_text is required.');
+  }
+
+  const questionTypeRaw =
+    typeof entry.question_type === 'string' ? entry.question_type.trim().toLowerCase().replace('-', '_') : 'mcq';
+  if (!validQuestionTypes.includes(questionTypeRaw as QuestionType)) {
+    throw new Error('question_type must be one of mcq, multiple_select, true_false, short_answer.');
+  }
+  const questionType = questionTypeRaw as QuestionType;
+
+  const marksRaw = entry.marks ?? 1;
+  const marks = Number(marksRaw);
+  if (!Number.isInteger(marks) || marks < 1) {
+    throw new Error('marks must be an integer greater than or equal to 1.');
+  }
+
+  const orderRaw = entry.order;
+  const order =
+    typeof orderRaw === 'number' && Number.isInteger(orderRaw) && orderRaw >= 1 ? orderRaw : defaultOrder;
+
+  const payload: Record<string, unknown> = {
+    question_text: questionText,
+    question_type: questionType,
+    marks,
+    order,
+    image_url: typeof entry.image_url === 'string' ? entry.image_url.trim() || null : null,
+    explanation: typeof entry.explanation === 'string' ? entry.explanation.trim() || null : null,
+  };
+
+  if (questionType === 'short_answer') {
+    const shortAnswerMatchRaw =
+      typeof entry.short_answer_match === 'string' ? entry.short_answer_match.trim().toLowerCase() : 'exact';
+    if (!validShortAnswerMatches.includes(shortAnswerMatchRaw as ShortAnswerMatch)) {
+      throw new Error('short_answer_match must be one of exact, contains, keywords.');
+    }
+    const shortAnswerAnswers = parseListValue(entry.short_answer_answers);
+    const shortAnswerKeywords = parseListValue(entry.short_answer_keywords);
+
+    if (shortAnswerAnswers.length === 0 && shortAnswerKeywords.length === 0) {
+      throw new Error('Provide short_answer_answers or short_answer_keywords for short_answer questions.');
+    }
+
+    payload.short_answer_match = shortAnswerMatchRaw;
+    payload.short_answer_answers = shortAnswerAnswers;
+    payload.short_answer_keywords = shortAnswerKeywords;
+    return payload;
+  }
+
+  let options = parseBulkOptions(entry.options);
+  if (questionType === 'true_false' && options.length === 0) {
+    const correctAnswer = parseBooleanValue(entry.correct_answer);
+    if (correctAnswer === null) {
+      throw new Error('true_false questions require options or a boolean correct_answer.');
+    }
+    options = [
+      { option_text: 'True', is_correct: correctAnswer, order: 1 },
+      { option_text: 'False', is_correct: !correctAnswer, order: 2 },
+    ];
+  }
+
+  if (options.length < 2) {
+    throw new Error('At least two options are required.');
+  }
+
+  const correctCount = options.filter((option) => option.is_correct).length;
+  if (correctCount === 0) {
+    throw new Error('Select at least one correct option.');
+  }
+  if ((questionType === 'mcq' || questionType === 'true_false') && correctCount > 1) {
+    throw new Error('Only one correct option is allowed for mcq/true_false.');
+  }
+
+  payload.options = options.map((option, index) => ({
+    option_text: option.option_text,
+    is_correct: option.is_correct,
+    order: index + 1,
+    image_url: option.image_url ?? null,
+  }));
+
+  return payload;
+};
+
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (isRecord(error) && typeof error.message === 'string' && error.message) {
+    return error.message;
+  }
+  return fallback;
+};
+
 export default function QuizQuestionsPage() {
   const router = useRouter();
   const params = useParams();
@@ -156,6 +485,9 @@ export default function QuizQuestionsPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
   const [questionForm, setQuestionForm] = useState<QuestionForm>(() => emptyQuestionForm(1));
+  const [bulkInput, setBulkInput] = useState('');
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkImportResult, setBulkImportResult] = useState<BulkImportResult | null>(null);
 
   const totalQuestionCount = questions.length;
   const nextQuestionOrder = totalQuestionCount + 1;
@@ -166,7 +498,7 @@ export default function QuizQuestionsPage() {
     return quiz.total_questions !== totalQuestionCount;
   }, [quiz, totalQuestionCount]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -186,12 +518,12 @@ export default function QuizQuestionsPage() {
       setQuestions(nextQuestions);
       setActiveQuestionId(null);
       setQuestionForm(emptyQuestionForm(nextQuestions.length + 1));
-    } catch (err: any) {
-      setError(err.message || 'Failed to load quiz questions');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load quiz questions'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [quizId]);
 
   const refreshQuestions = async (): Promise<QuizQuestion[]> => {
     const response = await apiFetch<{ data: QuizQuestion[] }>(
@@ -207,7 +539,7 @@ export default function QuizQuestionsPage() {
     if (authLoading) return;
     if (!user) return;
     loadData();
-  }, [authLoading, user, quizId]);
+  }, [authLoading, user, loadData]);
 
   const resetQuestionForm = (order: number) => {
     setActiveQuestionId(null);
@@ -421,8 +753,8 @@ export default function QuizQuestionsPage() {
       const refreshedQuestions = await refreshQuestions();
       resetQuestionForm(refreshedQuestions.length + 1);
       setSuccess('Question saved successfully.');
-    } catch (err: any) {
-      setError(err.message || 'Failed to save question');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to save question'));
     } finally {
       setSavingQuestion(false);
     }
@@ -439,10 +771,103 @@ export default function QuizQuestionsPage() {
       const refreshedQuestions = await refreshQuestions();
       resetQuestionForm(refreshedQuestions.length + 1);
       setSuccess('Question deleted successfully.');
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete question');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to delete question'));
     } finally {
       setSavingQuestion(false);
+    }
+  };
+
+  const handleBulkFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const content = await file.text();
+      setBulkInput(content);
+      setError(null);
+      setSuccess(`Loaded ${file.name}. Review and click Import Questions.`);
+      setBulkImportResult(null);
+    } catch {
+      setError('Unable to read file. Please use a valid CSV file.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleDownloadCsvTemplate = () => {
+    const blob = new Blob([bulkImportTemplate], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `cbt-questions-template-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleBulkImport = async () => {
+    if (!bulkInput.trim()) {
+      setError('Paste CSV questions or upload a CSV file first.');
+      return;
+    }
+
+    try {
+      setSavingQuestion(true);
+      setBulkImporting(true);
+      setError(null);
+      setSuccess(null);
+      setBulkImportResult(null);
+
+      const items = parseBulkCsvRecords(bulkInput).map(buildBulkEntryFromCsvRecord);
+      if (items.length === 0) {
+        throw new Error('No questions found in CSV payload.');
+      }
+
+      const importErrors: string[] = [];
+      let imported = 0;
+      let orderCursor = nextQuestionOrder;
+
+      for (let index = 0; index < items.length; index += 1) {
+        const item = items[index];
+        try {
+          const payload = buildBulkQuestionPayload(item, orderCursor);
+          await apiFetch(`/api/v1/cbt/quizzes/${quizId}/questions`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          imported += 1;
+          orderCursor += 1;
+        } catch (itemError: unknown) {
+          const questionLabel =
+            isRecord(item) && typeof item.question_text === 'string' && item.question_text.trim()
+              ? ` (${item.question_text.trim().slice(0, 40)})`
+              : '';
+          importErrors.push(`Item ${index + 1}${questionLabel}: ${getErrorMessage(itemError, 'Import failed.')}`);
+        }
+      }
+
+      const refreshedQuestions = await refreshQuestions();
+      resetQuestionForm(refreshedQuestions.length + 1);
+
+      setBulkImportResult({
+        imported,
+        failed: importErrors.length,
+        errors: importErrors,
+      });
+
+      if (imported > 0 && importErrors.length === 0) {
+        setSuccess(`Imported ${imported} question${imported === 1 ? '' : 's'} successfully.`);
+      } else if (imported > 0) {
+        setSuccess(`Imported ${imported} question${imported === 1 ? '' : 's'} with ${importErrors.length} failure(s).`);
+      } else {
+        setError('Bulk import failed. Fix the errors and try again.');
+      }
+    } catch (importError: unknown) {
+      setError(getErrorMessage(importError, 'Failed to import questions.'));
+    } finally {
+      setSavingQuestion(false);
+      setBulkImporting(false);
     }
   };
 
@@ -478,7 +903,7 @@ export default function QuizQuestionsPage() {
         <h3>Quiz Questions</h3>
         <ul>
           <li>
-            <a href="/v27/cbt/admin">Quiz Management</a>
+            <Link href="/v27/cbt/admin">Quiz Management</Link>
           </li>
           <li>Questions</li>
         </ul>
@@ -558,6 +983,87 @@ export default function QuizQuestionsPage() {
                   >
                     + New Question
                   </button>
+
+                  <div className="border rounded p-3 mt-3">
+                    <h5 className="mb-2">Bulk Import Questions</h5>
+                    <p className="text-muted small mb-2">
+                      Paste CSV rows (or upload a CSV file), then import all questions at once.
+                    </p>
+                    <p className="text-muted small mb-3">
+                      Use <code>{`|`}</code> to separate values in cells like <code>options</code> and{' '}
+                      <code>correct_answers</code>. For <strong>true_false</strong>, set <code>correct_answer</code> to true or false.
+                    </p>
+
+                    <textarea
+                      className="form-control mb-2"
+                      rows={9}
+                      value={bulkInput}
+                      onChange={(e) => setBulkInput(e.target.value)}
+                      placeholder="Paste CSV bulk payload here"
+                    />
+
+                    <input
+                      type="file"
+                      accept=".csv,text/csv,text/plain"
+                      className="form-control-file mb-3"
+                      onChange={handleBulkFileSelect}
+                    />
+
+                    <div className="d-flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary mr-2 mb-2"
+                        onClick={() => setBulkInput(bulkImportTemplate)}
+                      >
+                        Use CSV Template
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary mr-2 mb-2"
+                        onClick={handleDownloadCsvTemplate}
+                      >
+                        Download CSV
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary mr-2 mb-2"
+                        onClick={() => {
+                          setBulkInput('');
+                          setBulkImportResult(null);
+                        }}
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary mb-2"
+                        onClick={handleBulkImport}
+                        disabled={bulkImporting || !bulkInput.trim()}
+                      >
+                        {bulkImporting ? 'Importing...' : 'Import Questions'}
+                      </button>
+                    </div>
+
+                    {bulkImportResult && (
+                      <div className={`alert ${bulkImportResult.failed > 0 ? 'alert-warning' : 'alert-success'} mt-3 mb-0`}>
+                        <div className="font-weight-bold">
+                          Imported: {bulkImportResult.imported} | Failed: {bulkImportResult.failed}
+                        </div>
+                        {bulkImportResult.errors.length > 0 && (
+                          <ul className="mb-0 pl-3">
+                            {bulkImportResult.errors.slice(0, 5).map((item) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {bulkImportResult.errors.length > 5 && (
+                          <div className="small mt-1">
+                            Showing first 5 errors only.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="col-lg-7 col-12">

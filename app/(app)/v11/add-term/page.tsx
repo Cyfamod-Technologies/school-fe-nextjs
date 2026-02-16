@@ -6,7 +6,11 @@ import { useRouter } from "next/navigation";
 import { listSessions, type Session } from "@/lib/sessions";
 import { createTerm, type TermPayload } from "@/lib/terms";
 
-const ALLOWED_TERM_NAMES = ["1st", "2nd", "3rd"] as const;
+const TERM_NUMBER_OPTIONS = [
+  { value: 1, label: "Term 1" },
+  { value: 2, label: "Term 2" },
+  { value: 3, label: "Term 3" },
+] as const;
 
 function toISODate(value: string) {
   if (!value) {
@@ -22,6 +26,7 @@ export default function AddTermPage() {
   const [sessionId, setSessionId] = useState("");
   const [form, setForm] = useState<TermPayload>({
     name: "",
+    term_number: 1,
     start_date: "",
     end_date: "",
   });
@@ -64,8 +69,13 @@ export default function AddTermPage() {
       return;
     }
 
-    if (!ALLOWED_TERM_NAMES.includes(form.name as (typeof ALLOWED_TERM_NAMES)[number])) {
-      setError("Term name must be 1st, 2nd, or 3rd.");
+    if (!form.name.trim()) {
+      setError("Please enter a term name.");
+      return;
+    }
+
+    if (!Number.isInteger(form.term_number) || form.term_number < 1) {
+      setError("Please select a valid term slot.");
       return;
     }
 
@@ -73,6 +83,7 @@ export default function AddTermPage() {
       setSubmitting(true);
       await createTerm(sessionId, {
         ...form,
+        name: form.name.trim(),
         start_date: toISODate(form.start_date),
         end_date: toISODate(form.end_date),
       });
@@ -138,23 +149,40 @@ export default function AddTermPage() {
                 </select>
               </div>
               <div className="col-xl-6 col-lg-6 col-12 form-group">
-                <label htmlFor="term-name">Term Name *</label>
+                <label htmlFor="term-number">Term Slot *</label>
                 <select
+                  id="term-number"
+                  className="form-control"
+                  value={form.term_number}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      term_number: Number.parseInt(event.target.value, 10) || 1,
+                    }))
+                  }
+                  required
+                >
+                  {TERM_NUMBER_OPTIONS.map((term) => (
+                    <option key={term.value} value={term.value}>
+                      {term.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-xl-6 col-lg-6 col-12 form-group">
+                <label htmlFor="term-name">Term Name *</label>
+                <input
                   id="term-name"
+                  type="text"
                   className="form-control"
                   value={form.name}
                   onChange={(event) =>
                     setForm((prev) => ({ ...prev, name: event.target.value }))
                   }
+                  placeholder="e.g. Autumn Term"
+                  maxLength={100}
                   required
-                >
-                  <option value="">Select term name</option>
-                  {ALLOWED_TERM_NAMES.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
               <div className="col-xl-6 col-lg-6 col-12 form-group">
                 <label htmlFor="start-date">Start Date *</label>
