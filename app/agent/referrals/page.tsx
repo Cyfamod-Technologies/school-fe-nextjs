@@ -63,6 +63,9 @@ const formatDate = (dateString: string): string => {
 export default function AgentReferralsPage() {
   const router = useRouter();
   const [referrals, setReferrals] = useState<ReferralRow[]>([]);
+  const [maxReferralCodes, setMaxReferralCodes] = useState(10);
+  const [remainingReferralCodes, setRemainingReferralCodes] = useState(0);
+  const [canGenerateReferral, setCanGenerateReferral] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
@@ -99,6 +102,7 @@ export default function AgentReferralsPage() {
       const payload = await response.json();
       const root = asRecord(payload);
       const source = asRecord(root.data ?? root);
+      const stats = asRecord(source.referrals);
       const recent = source.recent_referrals;
       const rows = Array.isArray(recent)
         ? recent
@@ -119,6 +123,18 @@ export default function AgentReferralsPage() {
       });
 
       setReferrals(parsedRows);
+      const parsedMaxCodes = asNumber(stats.max_referral_codes, 10);
+      const parsedRemainingCodes = asNumber(
+        stats.remaining_referral_codes,
+        Math.max(parsedMaxCodes - parsedRows.length, 0),
+      );
+      setMaxReferralCodes(parsedMaxCodes);
+      setRemainingReferralCodes(parsedRemainingCodes);
+      setCanGenerateReferral(
+        typeof stats.can_generate_referral === 'boolean'
+          ? Boolean(stats.can_generate_referral)
+          : parsedRemainingCodes > 0,
+      );
     } catch {
       setError('Unable to load referrals right now.');
     } finally {
@@ -132,6 +148,12 @@ export default function AgentReferralsPage() {
 
   const handleGenerateReferral = async (event: React.FormEvent) => {
     event.preventDefault();
+
+    if (!canGenerateReferral) {
+      setError(`Referral code limit reached (${maxReferralCodes}).`);
+      return;
+    }
+
     setGeneratingCode(true);
     setError(null);
 
@@ -140,6 +162,15 @@ export default function AgentReferralsPage() {
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        const responseMaxCodes = asNumber(payload?.max_referral_codes, maxReferralCodes);
+        const responseRemainingCodes = asNumber(
+          payload?.remaining_referral_codes,
+          remainingReferralCodes,
+        );
+        setMaxReferralCodes(responseMaxCodes);
+        setRemainingReferralCodes(responseRemainingCodes);
+        setCanGenerateReferral(responseRemainingCodes > 0);
+
         const message =
           typeof payload?.message === 'string'
             ? payload.message
@@ -159,6 +190,13 @@ export default function AgentReferralsPage() {
       };
 
       setReferrals((prev) => [nextReferral, ...prev]);
+      const nextRemainingCodes = asNumber(
+        payload?.remaining_referral_codes,
+        Math.max(remainingReferralCodes - 1, 0),
+      );
+      setRemainingReferralCodes(nextRemainingCodes);
+      setCanGenerateReferral(nextRemainingCodes > 0);
+
       setCustomCode('');
       setShowGenerateModal(false);
     } catch {
@@ -298,8 +336,9 @@ export default function AgentReferralsPage() {
             </div>
             <button
               type="button"
-              className="btn-fill-lmd bg-orange-peel text-light"
+              className={`btn-fill-lmd text-light ${canGenerateReferral ? 'bg-orange-peel' : 'bg-secondary'}`}
               onClick={() => setShowGenerateModal(true)}
+              disabled={!canGenerateReferral}
             >
               Generate Referral
             </button>
@@ -307,6 +346,10 @@ export default function AgentReferralsPage() {
 
           <p className="text-muted mb-4">
             Generate referral codes, copy links quickly, and track performance by status.
+          </p>
+
+          <p className="text-muted mb-3">
+            Referral slots remaining: {remainingReferralCodes} of {maxReferralCodes}.
           </p>
 
           {error && (

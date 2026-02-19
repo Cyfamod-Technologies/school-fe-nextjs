@@ -1,5 +1,39 @@
 import { apiClient } from './apiClient';
 
+export interface AgentProfile {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  whatsapp_number: string | null;
+  bank_account_name: string | null;
+  bank_account_number: string | null;
+  bank_name: string | null;
+  company_name: string | null;
+  address: string | null;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AgentProfileUpdateData {
+  full_name: string;
+  email: string;
+  phone?: string | null;
+  whatsapp_number?: string | null;
+  bank_account_name?: string | null;
+  bank_account_number?: string | null;
+  bank_name?: string | null;
+  company_name?: string | null;
+  address?: string | null;
+}
+
+export interface AgentPasswordChangeData {
+  current_password?: string;
+  password: string;
+  password_confirmation: string;
+}
+
 const getAgentAuthHeaders = (): Record<string, string> => {
   if (typeof window === 'undefined') {
     return {};
@@ -46,6 +80,25 @@ export const agentApi = {
   getDashboard: async (agentId?: string) => {
     const params = agentId ? `?agent_id=${agentId}` : '';
     return apiClient.get(`/api/v1/agents/dashboard${params}`, {
+      headers: getAgentAuthHeaders(),
+    });
+  },
+
+  // Profile
+  getProfile: async () => {
+    return apiClient.get('/api/v1/agents/profile', {
+      headers: getAgentAuthHeaders(),
+    });
+  },
+
+  updateProfile: async (data: AgentProfileUpdateData) => {
+    return apiClient.put('/api/v1/agents/profile', data, {
+      headers: getAgentAuthHeaders(),
+    });
+  },
+
+  changePassword: async (data: AgentPasswordChangeData) => {
+    return apiClient.put('/api/v1/agents/profile/password', data, {
       headers: getAgentAuthHeaders(),
     });
   },

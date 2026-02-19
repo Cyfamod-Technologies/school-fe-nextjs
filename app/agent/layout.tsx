@@ -8,6 +8,7 @@ import './agent-ui.css';
 
 const AGENT_NAV_ITEMS = [
   { href: '/agent/dashboard', label: 'Dashboard', icon: 'flaticon-dashboard' },
+  { href: '/agent/profile', label: 'Profile', icon: 'flaticon-user' },
   { href: '/agent/referrals', label: 'Referrals', icon: 'flaticon-classmates' },
   { href: '/agent/earnings', label: 'Earnings', icon: 'flaticon-money' },
   { href: '/agent/payouts', label: 'Payouts', icon: 'flaticon-script' },
