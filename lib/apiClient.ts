@@ -6,6 +6,26 @@ type FetchOptions = RequestInit & {
   authScope?: "staff" | "student";
 };
 
+function buildHeaders(
+  headers?: HeadersInit,
+  body?: BodyInit | null,
+  forceJsonContentType = false,
+): Headers {
+  const resolvedHeaders = new Headers(headers || {});
+  resolvedHeaders.set("Accept", "application/json");
+
+  const isFormData =
+    typeof FormData !== "undefined" && body instanceof FormData;
+
+  if (!isFormData && (forceJsonContentType || body)) {
+    if (!resolvedHeaders.has("Content-Type")) {
+      resolvedHeaders.set("Content-Type", "application/json");
+    }
+  }
+
+  return resolvedHeaders;
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
   options: FetchOptions = {},
@@ -13,15 +33,7 @@ export async function apiFetch<T = unknown>(
   const { skipAuth = false, authScope = "staff", headers, ...rest } = options;
   const tokenName = authScope === "student" ? "student_token" : "token";
   const token = getCookie(tokenName);
-  const resolvedHeaders = new Headers(headers);
-
-  const isFormData =
-    typeof FormData !== "undefined" && rest.body instanceof FormData;
-
-  resolvedHeaders.set("Accept", "application/json");
-  if (!resolvedHeaders.has("Content-Type") && rest.body && !isFormData) {
-    resolvedHeaders.set("Content-Type", "application/json");
-  }
+  const resolvedHeaders = buildHeaders(headers, rest.body);
 
   if (!skipAuth && token) {
     resolvedHeaders.set("Authorization", `Bearer ${token}`);
@@ -54,7 +66,7 @@ export async function apiFetch<T = unknown>(
     if (response.status === 403 && authScope === "staff" && isReadOnlyMethod) {
       return [] as T;
     }
-    
+
     let message = response.statusText;
     try {
       const data = await response.json();
@@ -71,3 +83,67 @@ export async function apiFetch<T = unknown>(
 
   return (await response.json()) as T;
 }
+
+export const apiClient = {
+  get: async (
+    path: string,
+    options: FetchOptions = {}
+  ): Promise<Response> => {
+    const { headers, ...rest } = options;
+    const response = await fetch(`${BACKEND_URL}${path}`, {
+      method: "GET",
+      credentials: "include",
+      ...rest,
+      headers: buildHeaders(headers),
+    });
+    return response;
+  },
+
+  post: async (
+    path: string,
+    data?: unknown,
+    options: FetchOptions = {}
+  ): Promise<Response> => {
+    const { headers, ...rest } = options;
+    const body = data ? JSON.stringify(data) : undefined;
+    const response = await fetch(`${BACKEND_URL}${path}`, {
+      method: "POST",
+      body,
+      credentials: "include",
+      ...rest,
+      headers: buildHeaders(headers, body, true),
+    });
+    return response;
+  },
+
+  put: async (
+    path: string,
+    data?: unknown,
+    options: FetchOptions = {}
+  ): Promise<Response> => {
+    const { headers, ...rest } = options;
+    const body = data ? JSON.stringify(data) : undefined;
+    const response = await fetch(`${BACKEND_URL}${path}`, {
+      method: "PUT",
+      body,
+      credentials: "include",
+      ...rest,
+      headers: buildHeaders(headers, body, true),
+    });
+    return response;
+  },
+
+  delete: async (
+    path: string,
+    options: FetchOptions = {}
+  ): Promise<Response> => {
+    const { headers, ...rest } = options;
+    const response = await fetch(`${BACKEND_URL}${path}`, {
+      method: "DELETE",
+      credentials: "include",
+      ...rest,
+      headers: buildHeaders(headers),
+    });
+    return response;
+  },
+};

@@ -1,0 +1,117 @@
+.agent-ui {
+  --agent-bg: #f4f8fc;
+  --agent-bg-accent: #e8f2fb;
+  --agent-border: #d7e4f0;
+  --agent-ink: #102338;
+  --agent-muted: #4d6478;
+  --agent-card: #ffffff;
+  font-size: 17px;
+  color: var(--agent-ink);
+}
+
+.agent-ui > .min-h-screen {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(56, 189, 248, 0.12), transparent 35%),
+    radial-gradient(circle at 100% 100%, rgba(249, 115, 22, 0.1), transparent 34%),
+    linear-gradient(180deg, var(--agent-bg), var(--agent-bg-accent));
+}
+
+.agent-ui h1 {
+  font-size: clamp(2.2rem, 3.5vw, 2.95rem) !important;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.agent-ui h2 {
+  font-size: clamp(1.6rem, 2.1vw, 2rem) !important;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+
+.agent-ui h3 {
+  font-size: clamp(1.15rem, 1.5vw, 1.4rem) !important;
+  line-height: 1.25;
+}
+
+.agent-ui p,
+.agent-ui li,
+.agent-ui label,
+.agent-ui th,
+.agent-ui td,
+.agent-ui a,
+.agent-ui button {
+  font-size: 1.03rem;
+  line-height: 1.55;
+}
+
+.agent-ui .text-xs {
+  font-size: 0.92rem !important;
+}
+
+.agent-ui .text-sm {
+  font-size: 1rem !important;
+}
+
+.agent-ui .text-base {
+  font-size: 1.08rem !important;
+}
+
+.agent-ui .text-lg {
+  font-size: 1.2rem !important;
+}
+
+.agent-ui input,
+.agent-ui textarea,
+.agent-ui select {
+  font-size: 1rem !important;
+  line-height: 1.45;
+  border-color: var(--agent-border) !important;
+}
+
+.agent-ui button {
+  font-size: 1rem;
+}
+
+.agent-ui table thead th {
+  font-weight: 700;
+}
+
+.agent-ui table tbody td {
+  font-size: 0.97rem;
+}
+
+.agent-ui .bg-white {
+  background-color: var(--agent-card) !important;
+  border: 1px solid rgba(16, 35, 56, 0.06);
+}
+
+.agent-ui .rounded-lg {
+  border-radius: 0.85rem !important;
+}
+
+.agent-ui .rounded-xl {
+  border-radius: 1rem !important;
+}
+
+.agent-ui .rounded-2xl {
+  border-radius: 1.15rem !important;
+}
+
+.agent-ui .text-gray-600,
+.agent-ui .text-gray-500 {
+  color: var(--agent-muted) !important;
+}
+
+@media (max-width: 768px) {
+  .agent-ui {
+    font-size: 16px;
+  }
+
+  .agent-ui h1 {
+    font-size: clamp(1.9rem, 7vw, 2.35rem) !important;
+  }
+
+  .agent-ui h2 {
+    font-size: clamp(1.35rem, 5.5vw, 1.7rem) !important;
+  }
+}
