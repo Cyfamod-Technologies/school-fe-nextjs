@@ -115,6 +115,35 @@
   padding: 0 30px 20px;
 }
 
+/* Keep agent cards content-sized; default theme forces full-height cards. */
+.agent-main-content .card {
+  height: auto !important;
+  padding-bottom: 14px;
+}
+
+.agent-main-content .card .card-body {
+  padding: 14px 22px 20px;
+}
+
+.agent-main-content .dashboard-summery-one {
+  padding: 16px 18px;
+  margin-bottom: 20px;
+}
+
+.agent-main-content .dashboard-summery-one .item-icon {
+  height: 64px;
+  width: 64px;
+  line-height: 64px;
+}
+
+.agent-main-content .dashboard-summery-one .item-icon i:before {
+  font-size: 32px;
+}
+
+.agent-main-content .dashboard-summery-one .item-content .item-number {
+  font-size: 18px;
+}
+
 .agent-mobile-header {
   display: none;
 }
@@ -286,6 +315,14 @@
 
   .agent-main-content {
     padding: 0 14px 18px;
+  }
+
+  .agent-main-content .card .card-body {
+    padding: 12px 14px 16px;
+  }
+
+  .agent-main-content .dashboard-summery-one {
+    padding: 12px 14px;
   }
 
   .agent-ui h1 {

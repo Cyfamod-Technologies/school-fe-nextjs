@@ -1,307 +1,468 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { agentApi } from '@/lib/agents';
 
-interface Referral {
+interface ReferralRow {
   id: string;
   referral_code: string;
   referral_link: string;
   status: string;
-  school_id?: string;
-  first_payment_amount?: number;
+  first_payment_amount: number;
   created_at: string;
 }
 
+const asRecord = (value: unknown): Record<string, unknown> =>
+  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+
+const asNumber = (value: unknown, fallback = 0): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const asString = (value: unknown, fallback = ''): string =>
+  typeof value === 'string' ? value : fallback;
+
+const toStatusLabel = (value: string): string =>
+  value
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+
+const statusBadgeClass = (status: string): string => {
+  const value = status.toLowerCase();
+  if (value === 'paid' || value === 'active') return 'badge badge-success';
+  if (value === 'registered') return 'badge badge-info';
+  if (value === 'visited') return 'badge badge-primary';
+  if (value === 'rejected' || value === 'inactive') return 'badge badge-danger';
+  return 'badge badge-warning';
+};
+
+const formatNaira = (amount: number): string =>
+  `₦${amount.toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
+
+const formatDate = (dateString: string): string => {
+  if (!dateString) {
+    return 'N/A';
+  }
+
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) {
+    return 'N/A';
+  }
+
+  return new Intl.DateTimeFormat('en-NG', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+  }).format(date);
+};
+
 export default function AgentReferralsPage() {
-  const [referrals, setReferrals] = useState<Referral[]>([]);
+  const router = useRouter();
+  const [referrals, setReferrals] = useState<ReferralRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [customCode, setCustomCode] = useState('');
   const [generatingCode, setGeneratingCode] = useState(false);
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const fetchReferrals = async () => {
+  const fetchReferrals = useCallback(async () => {
     try {
       const response = await agentApi.getDashboard();
-      if (response.ok) {
-        const data = await response.json();
-        setReferrals(data.recent_referrals || []);
+
+      if (response.status === 401) {
+        localStorage.removeItem('agentToken');
+        localStorage.removeItem('agent_token');
+        localStorage.removeItem('agent');
+        router.replace('/agent/login');
+        return;
       }
+
+      if (!response.ok) {
+        let message = 'Failed to load referrals.';
+        try {
+          const payload = await response.json();
+          if (typeof payload?.message === 'string') {
+            message = payload.message;
+          }
+        } catch {
+          // ignore parse failure
+        }
+        setError(message);
+        return;
+      }
+
+      const payload = await response.json();
+      const root = asRecord(payload);
+      const source = asRecord(root.data ?? root);
+      const recent = source.recent_referrals;
+      const rows = Array.isArray(recent)
+        ? recent
+        : Array.isArray(asRecord(recent).data)
+        ? (asRecord(recent).data as unknown[])
+        : [];
+
+      const parsedRows = rows.map((entry, index) => {
+        const row = asRecord(entry);
+        return {
+          id: asString(row.id, `referral-${index + 1}`),
+          referral_code: asString(row.referral_code, 'N/A'),
+          referral_link: asString(row.referral_link, ''),
+          status: asString(row.status, 'pending'),
+          first_payment_amount: asNumber(row.first_payment_amount, 0),
+          created_at: asString(row.created_at, ''),
+        };
+      });
+
+      setReferrals(parsedRows);
     } catch {
-      setError('Failed to load referrals');
+      setError('Unable to load referrals right now.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
 
   useEffect(() => {
-    fetchReferrals();
-  }, []);
+    void fetchReferrals();
+  }, [fetchReferrals]);
 
-  const handleGenerateReferral = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleGenerateReferral = async (event: React.FormEvent) => {
+    event.preventDefault();
     setGeneratingCode(true);
     setError(null);
 
     try {
-      const response = await agentApi.generateReferral(customCode || undefined);
-      if (response.ok) {
-        const data = await response.json();
-        setReferrals([data.referral, ...referrals]);
-        setCustomCode('');
-        setShowGenerateModal(false);
-      } else {
-        const data = await response.json();
-        setError(data.message || 'Failed to generate referral');
+      const response = await agentApi.generateReferral(customCode.trim() || undefined);
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const message =
+          typeof payload?.message === 'string'
+            ? payload.message
+            : 'Failed to generate referral.';
+        setError(message);
+        return;
       }
+
+      const row = asRecord(payload?.referral);
+      const nextReferral: ReferralRow = {
+        id: asString(row.id, `referral-${Date.now()}`),
+        referral_code: asString(row.referral_code, 'N/A'),
+        referral_link: asString(row.referral_link, ''),
+        status: asString(row.status, 'visited'),
+        first_payment_amount: asNumber(row.first_payment_amount, 0),
+        created_at: asString(row.created_at, ''),
+      };
+
+      setReferrals((prev) => [nextReferral, ...prev]);
+      setCustomCode('');
+      setShowGenerateModal(false);
     } catch {
-      setError('An error occurred');
+      setError('An error occurred while generating referral.');
     } finally {
       setGeneratingCode(false);
     }
   };
 
-  const handleCopyCode = (code: string) => {
-    navigator.clipboard.writeText(code);
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode(null), 2000);
-  };
-
-  const handleCopyLink = (link: string) => {
-    navigator.clipboard.writeText(link);
-    setCopiedCode('link-' + link);
-    setTimeout(() => setCopiedCode(null), 2000);
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'visited':
-        return 'bg-blue-100 text-blue-800';
-      case 'registered':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'paid':
-        return 'bg-green-100 text-green-800';
-      case 'active':
-        return 'bg-purple-100 text-purple-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  const handleCopy = async (key: string, value: string) => {
+    if (!value) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedKey(key);
+      window.setTimeout(() => setCopiedKey(null), 1600);
+    } catch {
+      setError('Unable to copy to clipboard.');
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-600">Loading referrals...</p>
-      </div>
-    );
-  }
+  const activeCount = useMemo(
+    () =>
+      referrals.filter((item) =>
+        ['visited', 'registered', 'paid', 'active'].includes(item.status.toLowerCase()),
+      ).length,
+    [referrals],
+  );
+
+  const paidCount = useMemo(
+    () => referrals.filter((item) => item.status.toLowerCase() === 'paid').length,
+    [referrals],
+  );
+
+  const totalFirstPayments = useMemo(
+    () => referrals.reduce((sum, item) => sum + asNumber(item.first_payment_amount, 0), 0),
+    [referrals],
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              Manage Referrals
-            </h1>
-            <p className="text-gray-600">
-              Generate codes, share links, and track referrals
-            </p>
+    <>
+      <div className="breadcrumbs-area">
+        <h3>Referrals</h3>
+        <ul>
+          <li>
+            <Link href="/agent/dashboard">Home</Link>
+          </li>
+          <li>Referrals</li>
+        </ul>
+      </div>
+
+      <div className="row gutters-20">
+        <div className="col-xl-3 col-sm-6 col-12">
+          <div className="dashboard-summery-one mg-b-20">
+            <div className="row align-items-center">
+              <div className="col-5">
+                <div className="item-icon bg-light-blue">
+                  <i className="flaticon-classmates text-blue" />
+                </div>
+              </div>
+              <div className="col-7">
+                <div className="item-content">
+                  <div className="item-title">Total Referrals</div>
+                  <div className="item-number">
+                    <span>{referrals.length}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <button
-            onClick={() => setShowGenerateModal(true)}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
-          >
-            Generate New Code
-          </button>
         </div>
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-red-800">{error}</p>
+        <div className="col-xl-3 col-sm-6 col-12">
+          <div className="dashboard-summery-one mg-b-20">
+            <div className="row align-items-center">
+              <div className="col-5">
+                <div className="item-icon bg-light-yellow">
+                  <i className="flaticon-percentage-discount text-orange" />
+                </div>
+              </div>
+              <div className="col-7">
+                <div className="item-content">
+                  <div className="item-title">Active Referrals</div>
+                  <div className="item-number">
+                    <span>{activeCount}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        )}
+        </div>
+        <div className="col-xl-3 col-sm-6 col-12">
+          <div className="dashboard-summery-one mg-b-20">
+            <div className="row align-items-center">
+              <div className="col-5">
+                <div className="item-icon bg-light-green">
+                  <i className="flaticon-money text-green" />
+                </div>
+              </div>
+              <div className="col-7">
+                <div className="item-content">
+                  <div className="item-title">Paid Referrals</div>
+                  <div className="item-number">
+                    <span>{paidCount}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="col-xl-3 col-sm-6 col-12">
+          <div className="dashboard-summery-one mg-b-20">
+            <div className="row align-items-center">
+              <div className="col-5">
+                <div className="item-icon bg-light-red">
+                  <i className="flaticon-script text-red" />
+                </div>
+              </div>
+              <div className="col-7">
+                <div className="item-content">
+                  <div className="item-title">First Payments</div>
+                  <div className="item-number">
+                    <span>{formatNaira(totalFirstPayments)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        {/* Generate Modal */}
-        {showGenerateModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-8 max-w-md w-full">
-              <h2 className="text-2xl font-bold mb-6">Generate Referral Code</h2>
+      <div className="card dashboard-card-one pd-b-20 mg-b-20">
+        <div className="card-body">
+          <div className="heading-layout1 mg-b-17">
+            <div className="item-title">
+              <h3>Manage Referrals</h3>
+            </div>
+            <button
+              type="button"
+              className="btn-fill-lmd bg-orange-peel text-light"
+              onClick={() => setShowGenerateModal(true)}
+            >
+              Generate Referral
+            </button>
+          </div>
+
+          <p className="text-muted mb-4">
+            Generate referral codes, copy links quickly, and track performance by status.
+          </p>
+
+          {error && (
+            <div className="alert alert-danger" role="alert">
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="d-flex align-items-center justify-content-center py-5">
+              <div className="spinner-border text-primary" role="status">
+                <span className="sr-only">Loading...</span>
+              </div>
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table display data-table text-nowrap">
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Referral Link</th>
+                    <th>Status</th>
+                    <th>First Payment</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {referrals.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center text-muted">
+                        No referrals yet. Generate your first code to begin.
+                      </td>
+                    </tr>
+                  ) : (
+                    referrals.map((referral) => (
+                      <tr key={referral.id}>
+                        <td>
+                          <code>{referral.referral_code}</code>
+                        </td>
+                        <td>
+                          {referral.referral_link ? (
+                            <a
+                              href={referral.referral_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              Open Link
+                            </a>
+                          ) : (
+                            <span className="text-muted">N/A</span>
+                          )}
+                        </td>
+                        <td>
+                          <span className={statusBadgeClass(referral.status)}>
+                            {toStatusLabel(referral.status)}
+                          </span>
+                        </td>
+                        <td>
+                          {referral.first_payment_amount > 0 ? (
+                            <span className="text-dark-medium">
+                              {formatNaira(referral.first_payment_amount)}
+                            </span>
+                          ) : (
+                            <span className="text-muted">-</span>
+                          )}
+                        </td>
+                        <td>{formatDate(referral.created_at)}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-link btn-sm p-0 mr-2"
+                            onClick={() =>
+                              handleCopy(`code:${referral.id}`, referral.referral_code)
+                            }
+                          >
+                            {copiedKey === `code:${referral.id}` ? 'Copied' : 'Copy Code'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-link btn-sm p-0"
+                            onClick={() =>
+                              handleCopy(`link:${referral.id}`, referral.referral_link)
+                            }
+                          >
+                            {copiedKey === `link:${referral.id}` ? 'Copied' : 'Copy Link'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="alert alert-light mt-4 mb-0">
+            <strong>Sharing Tips:</strong> Share referral links directly with school decision
+            makers, keep outreach consistent, and monitor status updates for conversion signals.
+          </div>
+        </div>
+      </div>
+
+      {showGenerateModal && (
+        <div
+          className="position-fixed w-100 h-100 d-flex align-items-center justify-content-center"
+          style={{
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.45)',
+            zIndex: 1050,
+            padding: '1rem',
+          }}
+        >
+          <div className="card" style={{ width: '100%', maxWidth: '460px' }}>
+            <div className="card-body p-4">
+              <div className="heading-layout1 mg-b-17">
+                <div className="item-title">
+                  <h3>Generate Referral Code</h3>
+                </div>
+              </div>
+
               <form onSubmit={handleGenerateReferral}>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Custom Code (Optional)
-                  </label>
+                <div className="form-group">
+                  <label>Custom Code (optional)</label>
                   <input
                     type="text"
                     value={customCode}
-                    onChange={(e) => setCustomCode(e.target.value)}
+                    onChange={(event) => setCustomCode(event.target.value)}
+                    className="form-control"
                     placeholder="Leave blank for auto-generated"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500"
+                    disabled={generatingCode}
                   />
                 </div>
-                <div className="flex gap-4">
-                  <button
-                    type="submit"
-                    disabled={generatingCode}
-                    className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {generatingCode ? 'Generating...' : 'Generate'}
-                  </button>
+
+                <div className="d-flex justify-content-end mt-4">
                   <button
                     type="button"
+                    className="btn btn-outline-secondary mr-2"
                     onClick={() => setShowGenerateModal(false)}
-                    className="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg hover:bg-gray-300"
+                    disabled={generatingCode}
                   >
                     Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-warning"
+                    disabled={generatingCode}
+                  >
+                    {generatingCode ? 'Generating...' : 'Generate'}
                   </button>
                 </div>
               </form>
             </div>
           </div>
-        )}
-
-        {/* Referrals Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          {referrals.length === 0 ? (
-            <div className="p-8 text-center text-gray-600">
-              No referrals yet. Generate your first referral code to get started!
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                      Code
-                    </th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                      Link
-                    </th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                      First Payment
-                    </th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {referrals.map((referral) => (
-                    <tr key={referral.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <code className="bg-gray-100 px-3 py-1 rounded text-sm font-mono">
-                            {referral.referral_code}
-                          </code>
-                          <button
-                            onClick={() =>
-                              handleCopyCode(referral.referral_code)
-                            }
-                            className="text-blue-600 hover:text-blue-700"
-                          >
-                            {copiedCode === referral.referral_code
-                              ? '✓'
-                              : 'Copy'}
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <a
-                            href={referral.referral_link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline text-sm truncate"
-                          >
-                            View Link →
-                          </a>
-                          <button
-                            onClick={() =>
-                              handleCopyLink(referral.referral_link)
-                            }
-                            className="text-blue-600 hover:text-blue-700"
-                          >
-                            {copiedCode === 'link-' + referral.referral_link
-                              ? '✓'
-                              : 'Copy'}
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(
-                            referral.status
-                          )}`}
-                        >
-                          {referral.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        {referral.first_payment_amount ? (
-                          <span className="text-green-600 font-semibold">
-                            ₦
-                            {(
-                              referral.first_payment_amount / 1000
-                            ).toFixed(1)}
-                            k
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex gap-2">
-                          <a
-                            href={`/agent/referrals/${referral.id}`}
-                            className="text-blue-600 hover:underline text-sm"
-                          >
-                            Details
-                          </a>
-                          <button className="text-blue-600 hover:underline text-sm">
-                            Share
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
-
-        {/* Sharing Options */}
-        <div className="mt-8 bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">
-            Share Your Referral
-          </h2>
-          <p className="text-gray-600 mb-4">
-            Share your referral link or code with schools to earn commission on
-            their payments
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <button className="flex items-center justify-center gap-2 p-4 border rounded-lg hover:bg-gray-50">
-              <span>📱 WhatsApp</span>
-            </button>
-            <button className="flex items-center justify-center gap-2 p-4 border rounded-lg hover:bg-gray-50">
-              <span>📧 Email</span>
-            </button>
-            <button className="flex items-center justify-center gap-2 p-4 border rounded-lg hover:bg-gray-50">
-              <span>🐦 Twitter</span>
-            </button>
-            <button className="flex items-center justify-center gap-2 p-4 border rounded-lg hover:bg-gray-50">
-              <span>📥 Download QR</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }

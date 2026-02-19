@@ -260,7 +260,7 @@ export default function AgentDashboardPage() {
     return (
       <>
         <div className="breadcrumbs-area">
-          <h3>Agent Dashboard</h3>
+          <h3>SchoolAgent Dashboard</h3>
           <ul>
             <li>
               <Link href="/agent/dashboard">Home</Link>
@@ -418,7 +418,7 @@ export default function AgentDashboardPage() {
       </div>
 
       <div className="row gutters-20">
-        <div className="col-12 col-xl-8 col-6-xxxl">
+        <div className="col-12 col-xl-6">
           <div className="card dashboard-card-one pd-b-20 mg-b-20">
             <div className="card-body">
               <div className="heading-layout1 mg-b-17">
@@ -435,7 +435,7 @@ export default function AgentDashboardPage() {
               </p>
 
               {funnelRows.map((row) => (
-                  <div key={row.key} className="mg-b-20">
+                <div key={row.key} className="mg-b-20">
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <span className="text-dark-medium">{row.label}</span>
                     <span>
@@ -456,8 +456,10 @@ export default function AgentDashboardPage() {
               ))}
             </div>
           </div>
+        </div>
 
-          <div className="card dashboard-card-one pd-b-20">
+        <div className="col-12 col-xl-6">
+          <div className="card dashboard-card-one pd-b-20 mg-b-20">
             <div className="card-body">
               <div className="heading-layout1 mg-b-17">
                 <div className="item-title">
@@ -502,44 +504,6 @@ export default function AgentDashboardPage() {
                   </tbody>
                 </table>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-12 col-xl-4 col-3-xxxl">
-          <div className="card dashboard-card-three pd-b-20 mg-b-20">
-            <div className="card-body">
-              <div className="heading-layout1 mg-b-17">
-                <div className="item-title">
-                  <h3>Account Snapshot</h3>
-                </div>
-              </div>
-
-              <p className="mb-2">
-                <strong>Status:</strong>{' '}
-                <span className={badgeClassForStatus(data.agent.status)}>
-                  {statusLabel(data.agent.status)}
-                </span>
-              </p>
-              <p className="mb-2">
-                <strong>Available for payout:</strong>{' '}
-                {formatNaira(data.earnings.available_for_payout)}
-              </p>
-              <p className="mb-2">
-                <strong>Minimum threshold:</strong>{' '}
-                {formatNaira(data.earnings.min_payout_threshold)}
-              </p>
-              <p className="mb-2">
-                <strong>Payout access:</strong>{' '}
-                <span className={`badge ${payoutUnlocked ? 'badge-success' : 'badge-warning'}`}>
-                  {payoutUnlocked ? 'Unlocked' : 'Locked'}
-                </span>
-              </p>
-              <p className="text-muted mb-0">
-                {isApproved
-                  ? 'Your account is active and ready to earn.'
-                  : 'Awaiting admin approval before payouts become available.'}
-              </p>
             </div>
           </div>
         </div>
