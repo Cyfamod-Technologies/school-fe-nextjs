@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import Image, { type ImageLoader } from "next/image";
-import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BACKEND_URL, EMAIL_VERIFICATION_ENABLED, SCHOOL_REGISTRATION_ENABLED } from "@/lib/config";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const registrationEnabled = SCHOOL_REGISTRATION_ENABLED;
   const verificationEnabled = EMAIL_VERIFICATION_ENABLED;
 
@@ -18,6 +19,7 @@ export default function RegisterPage() {
     email: "",
     address: "",
     subdomain: "",
+    referral_code: "",
     password: "",
     password_confirmation: "",
   });
@@ -27,6 +29,22 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const referralFromQuery = searchParams.get("ref") ?? searchParams.get("referral_code");
+    if (!referralFromQuery) {
+      return;
+    }
+
+    setFormData((prev) =>
+      prev.referral_code.trim() !== ""
+        ? prev
+        : {
+            ...prev,
+            referral_code: referralFromQuery,
+          },
+    );
+  }, [searchParams]);
 
   const updateField = (
     key: keyof typeof formData,
@@ -228,6 +246,17 @@ export default function RegisterPage() {
                     required
                     value={formData.subdomain}
                     onChange={(event) => updateField("subdomain", event.target.value)}
+                  />
+                </div>
+                <div className="col-lg-6 col-12 form-group">
+                  <label htmlFor="referral_code">Referral Code (Optional)</label>
+                  <input
+                    id="referral_code"
+                    type="text"
+                    placeholder="Enter referral code"
+                    className="form-control"
+                    value={formData.referral_code}
+                    onChange={(event) => updateField("referral_code", event.target.value)}
                   />
                 </div>
                 <div className="col-lg-6 col-12 form-group position-relative">
