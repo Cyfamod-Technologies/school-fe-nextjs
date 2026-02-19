@@ -148,10 +148,8 @@ export const agentApi = {
   },
 
   // Payouts
-  requestPayout: async (amount: number) => {
-    return apiClient.post('/api/v1/agents/payouts/request', {
-      amount,
-    }, {
+  requestPayout: async () => {
+    return apiClient.post('/api/v1/agents/payouts/request', {}, {
       headers: getAgentAuthHeaders(),
     });
   },

@@ -32,6 +32,23 @@ const asNumber = (value: unknown, fallback = 0): number => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const extractApiErrorMessage = (payload: unknown, fallback: string): string => {
+  const root = asRecord(payload);
+  const errors = asRecord(root.errors);
+  const payoutErrors = Array.isArray(errors.payout) ? errors.payout : [];
+  const firstPayoutError = payoutErrors.find((entry) => typeof entry === 'string');
+  if (typeof firstPayoutError === 'string' && firstPayoutError.trim() !== '') {
+    return firstPayoutError;
+  }
+
+  const directMessage = asString(root.message, '');
+  if (directMessage.trim() !== '') {
+    return directMessage;
+  }
+
+  return fallback;
+};
+
 const formatNaira = (value: number): string =>
   `₦${value.toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
 
@@ -164,9 +181,23 @@ export default function AgentPayoutsPage() {
     void fetchPayoutsAndEarnings();
   }, [fetchPayoutsAndEarnings]);
 
-  const canRequestPayout =
+  const hasOpenPayoutRequest = useMemo(
+    () => payouts.some((row) => ['pending', 'approved', 'processing'].includes(row.status.toLowerCase())),
+    [payouts],
+  );
+  const thresholdGap = Math.max(
+    earnings.min_payout_threshold - earnings.available_for_payout,
+    0,
+  );
+  const meetsPayoutThreshold =
     earnings.can_request_payout ||
     earnings.available_for_payout >= earnings.min_payout_threshold;
+  const canRequestPayout = meetsPayoutThreshold && !hasOpenPayoutRequest;
+  const requestDisabledReason = hasOpenPayoutRequest
+    ? 'You already have a payout request in progress. Wait until it is completed or failed.'
+    : !meetsPayoutThreshold
+    ? `Below payout threshold. You need ${formatNaira(thresholdGap)} more.`
+    : null;
 
   const pendingAndProcessingTotal = useMemo(
     () =>
@@ -189,14 +220,11 @@ export default function AgentPayoutsPage() {
     setError(null);
 
     try {
-      const response = await agentApi.requestPayout(0);
+      const response = await agentApi.requestPayout();
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        const message =
-          typeof payload?.message === 'string'
-            ? payload.message
-            : 'Failed to request payout.';
+        const message = extractApiErrorMessage(payload, 'Failed to request payout.');
         setError(message);
         return;
       }
@@ -233,7 +261,7 @@ export default function AgentPayoutsPage() {
               </div>
               <div className="col-7">
                 <div className="item-content">
-                  <div className="item-title">Available</div>
+                  <div className="item-title">Available Balance</div>
                   <div className="item-number">
                     <span>{formatNaira(earnings.available_for_payout)}</span>
                   </div>
@@ -321,8 +349,13 @@ export default function AgentPayoutsPage() {
           </div>
 
           <p className="text-muted mb-4">
-            Submit payout requests once your approved balance reaches the required threshold.
+            Submit payout requests once your available balance reaches the required threshold.
           </p>
+          {requestDisabledReason && (
+            <p className="text-muted mb-3">
+              <small>{requestDisabledReason}</small>
+            </p>
+          )}
 
           {error && (
             <div className="alert alert-danger" role="alert">
@@ -420,7 +453,7 @@ export default function AgentPayoutsPage() {
               </div>
 
               <p className="text-muted">
-                This will request payout for your currently available approved balance.
+                This will request payout for your currently available balance.
               </p>
               <p className="mb-1">
                 <strong>Available balance:</strong> {formatNaira(earnings.available_for_payout)}
@@ -428,6 +461,16 @@ export default function AgentPayoutsPage() {
               <p className="mb-4">
                 <strong>Minimum required:</strong> {formatNaira(earnings.min_payout_threshold)}
               </p>
+              {requestDisabledReason && (
+                <div className="alert alert-warning py-2" role="alert">
+                  {requestDisabledReason}
+                </div>
+              )}
+              {error && (
+                <div className="alert alert-danger py-2" role="alert">
+                  {error}
+                </div>
+              )}
 
               <div className="d-flex justify-content-end">
                 <button
