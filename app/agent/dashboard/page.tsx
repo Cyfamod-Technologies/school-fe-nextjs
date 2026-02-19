@@ -15,6 +15,8 @@ interface DashboardData {
     visited: number;
     registered: number;
     paid: number;
+    registered_schools_total: number;
+    paid_schools_total: number;
     conversion_rate: number;
   };
   earnings: {
@@ -32,7 +34,7 @@ interface DashboardData {
 interface RecentReferral {
   id: string;
   referralCode: string;
-  schoolName: string;
+  registeredSchoolsCount: number;
   status: string;
   createdAt: string;
 }
@@ -47,6 +49,8 @@ const DEFAULT_DASHBOARD: DashboardData = {
     visited: 0,
     registered: 0,
     paid: 0,
+    registered_schools_total: 0,
+    paid_schools_total: 0,
     conversion_rate: 0,
   },
   earnings: {
@@ -94,6 +98,8 @@ const normalizeDashboard = (payload: unknown): DashboardData => {
       visited: toNumber(referrals.visited),
       registered: toNumber(referrals.registered),
       paid: toNumber(referrals.paid),
+      registered_schools_total: toNumber(referrals.registered_schools_total),
+      paid_schools_total: toNumber(referrals.paid_schools_total),
       conversion_rate: toNumber(referrals.conversion_rate),
     },
     earnings: {
@@ -175,22 +181,51 @@ export default function AgentDashboardPage() {
     () =>
       (data?.recent_referrals ?? []).map((entry, index) => {
         const row = asRecord(entry);
-        const school = asRecord(row.school);
         const code = row.referral_code;
-        const schoolName = school.name;
         const createdAt = row.created_at;
         const id = row.id;
         const status = row.status;
+        const registrations = Array.isArray(row.registrations) ? row.registrations : [];
+        const registrationSchoolIds = new Set<string>();
+        registrations.forEach((registration) => {
+          const registrationRow = asRecord(registration);
+          const schoolId = registrationRow.school_id;
+          if (typeof schoolId === 'string' && schoolId.trim() !== '') {
+            registrationSchoolIds.add(schoolId);
+            return;
+          }
+
+          const school = asRecord(registrationRow.school);
+          const nestedSchoolId = school.id;
+          if (typeof nestedSchoolId === 'string' && nestedSchoolId.trim() !== '') {
+            registrationSchoolIds.add(nestedSchoolId);
+          }
+        });
+        const legacySchool = asRecord(row.school);
+        const legacySchoolId = legacySchool.id;
+        const legacySchoolCount =
+          typeof legacySchoolId === 'string' &&
+          legacySchoolId.trim() !== '' &&
+          !registrationSchoolIds.has(legacySchoolId)
+            ? 1
+            : 0;
+        const parsedRegisteredSchoolsCount = toNumber(
+          row.registered_schools_count,
+          0,
+        );
+        const inferredRegisteredSchoolsCount =
+          registrationSchoolIds.size + legacySchoolCount;
 
         return {
           id:
             typeof id === 'string' && id.trim() !== '' ? id : `referral-${index + 1}`,
           referralCode:
             typeof code === 'string' && code.trim() !== '' ? code : 'N/A',
-          schoolName:
-            typeof schoolName === 'string' && schoolName.trim() !== ''
-              ? schoolName
-              : 'School not attached',
+          registeredSchoolsCount: Math.max(
+            parsedRegisteredSchoolsCount,
+            inferredRegisteredSchoolsCount,
+            0,
+          ),
           status:
             typeof status === 'string' && status.trim() !== '' ? status : 'pending',
           createdAt: typeof createdAt === 'string' ? createdAt : '',
@@ -314,7 +349,7 @@ export default function AgentDashboardPage() {
       iconClass: 'flaticon-classmates text-blue',
       title: 'Total Referrals',
       value: formatNumber(data.referrals.total),
-      note: `${formatNumber(data.referrals.registered)} schools registered`,
+      note: `${formatNumber(data.referrals.registered_schools_total)} schools registered`,
     },
     {
       key: 'conversion',
@@ -322,7 +357,7 @@ export default function AgentDashboardPage() {
       iconClass: 'flaticon-percentage-discount text-orange',
       title: 'Conversion Rate',
       value: `${conversionRate.toFixed(1)}%`,
-      note: `${formatNumber(data.referrals.paid)} paying schools`,
+      note: `${formatNumber(data.referrals.paid_schools_total)} paying schools`,
     },
     {
       key: 'earnings',
@@ -346,24 +381,23 @@ export default function AgentDashboardPage() {
 
   const funnelRows = [
     {
-      key: 'visited',
-      label: 'Visited',
-      value: data.referrals.visited,
-      rate: percentage(data.referrals.visited, data.referrals.total),
-      barClass: 'bg-info',
-    },
-    {
       key: 'registered',
       label: 'Registered',
-      value: data.referrals.registered,
-      rate: percentage(data.referrals.registered, data.referrals.visited),
+      value: data.referrals.registered_schools_total,
+      rate: percentage(
+        data.referrals.registered_schools_total,
+        data.referrals.registered_schools_total,
+      ),
       barClass: 'bg-warning',
     },
     {
       key: 'paid',
       label: 'Paid',
-      value: data.referrals.paid,
-      rate: percentage(data.referrals.paid, data.referrals.registered),
+      value: data.referrals.paid_schools_total,
+      rate: percentage(
+        data.referrals.paid_schools_total,
+        data.referrals.registered_schools_total,
+      ),
       barClass: 'bg-success',
     },
   ];
@@ -431,7 +465,7 @@ export default function AgentDashboardPage() {
               </div>
 
               <p className="text-muted mb-4">
-                Track the movement from referral visits to paid conversions.
+                Track registered schools and the schools that have already paid.
               </p>
 
               {funnelRows.map((row) => (
@@ -471,11 +505,11 @@ export default function AgentDashboardPage() {
               </div>
 
               <div className="table-responsive">
-                <table className="table display data-table text-nowrap">
+                <table className="table display data-table">
                   <thead>
                     <tr>
                       <th>Code</th>
-                      <th>School</th>
+                      <th>Schools</th>
                       <th>Status</th>
                       <th>Date</th>
                     </tr>
@@ -491,7 +525,7 @@ export default function AgentDashboardPage() {
                       recentReferrals.slice(0, 6).map((referral) => (
                         <tr key={referral.id}>
                           <td>{referral.referralCode}</td>
-                          <td>{referral.schoolName}</td>
+                          <td>{formatNumber(referral.registeredSchoolsCount)}</td>
                           <td>
                             <span className={badgeClassForStatus(referral.status)}>
                               {statusLabel(referral.status)}

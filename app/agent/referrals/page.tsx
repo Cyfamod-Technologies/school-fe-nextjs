@@ -9,10 +9,26 @@ interface ReferralRow {
   id: string;
   referral_code: string;
   referral_link: string;
-  school_name: string;
+  registered_schools_count: number;
   status: string;
   first_payment_amount: number;
   created_at: string;
+  registrations: unknown[];
+  school: unknown;
+}
+
+interface ReferralRegistrationTableRow {
+  id: string;
+  referral_id: string;
+  referral_code: string;
+  referral_link: string;
+  status: string;
+  first_payment_amount: number;
+  school_name: string;
+  students_count: number;
+  registered_at: string;
+  has_school_registration: boolean;
+  school_id: string;
 }
 
 const asRecord = (value: unknown): Record<string, unknown> =>
@@ -113,18 +129,18 @@ export default function AgentReferralsPage() {
 
       const parsedRows = rows.map((entry, index) => {
         const row = asRecord(entry);
-        const school = asRecord(row.school);
-        const schoolName =
-          asString(school.name) !== '' ? asString(school.name) : asString(row.school_name);
+        const registrations = Array.isArray(row.registrations) ? row.registrations : [];
 
         return {
           id: asString(row.id, `referral-${index + 1}`),
           referral_code: asString(row.referral_code, 'N/A'),
           referral_link: asString(row.referral_link, ''),
-          school_name: schoolName !== '' ? schoolName : 'Not registered yet',
+          registered_schools_count: asNumber(row.registered_schools_count, 0),
           status: asString(row.status, 'pending'),
           first_payment_amount: asNumber(row.first_payment_amount, 0),
           created_at: asString(row.created_at, ''),
+          registrations,
+          school: row.school,
         };
       });
 
@@ -190,10 +206,12 @@ export default function AgentReferralsPage() {
         id: asString(row.id, `referral-${Date.now()}`),
         referral_code: asString(row.referral_code, 'N/A'),
         referral_link: asString(row.referral_link, ''),
-        school_name: 'Not registered yet',
+        registered_schools_count: 0,
         status: asString(row.status, 'visited'),
         first_payment_amount: asNumber(row.first_payment_amount, 0),
         created_at: asString(row.created_at, ''),
+        registrations: [],
+        school: null,
       };
 
       setReferrals((prev) => [nextReferral, ...prev]);
@@ -226,17 +244,108 @@ export default function AgentReferralsPage() {
     }
   };
 
-  const activeCount = useMemo(
+  const registrationRows = useMemo<ReferralRegistrationTableRow[]>(
     () =>
-      referrals.filter((item) =>
-        ['visited', 'registered', 'paid', 'active'].includes(item.status.toLowerCase()),
-      ).length,
+      referrals.flatMap((referral) => {
+        const registrations = Array.isArray(referral.registrations)
+          ? referral.registrations
+          : [];
+        const normalizedRows = registrations.map((entry, index) => {
+          const registration = asRecord(entry);
+          const school = asRecord(registration.school);
+          const registrationId = asString(registration.id, `${referral.id}-reg-${index + 1}`);
+          const schoolName = asString(school.name, '').trim();
+          const schoolId = asString(school.id, asString(registration.school_id, '')).trim();
+
+          return {
+            id: `${referral.id}:${registrationId}`,
+            referral_id: referral.id,
+            referral_code: referral.referral_code,
+            referral_link: referral.referral_link,
+            status: referral.status,
+            first_payment_amount: referral.first_payment_amount,
+            school_name: schoolName || 'Unnamed school',
+            students_count: asNumber(school.students_count, 0),
+            registered_at: asString(
+              registration.registered_at,
+              asString(registration.created_at, referral.created_at),
+            ),
+            has_school_registration: true,
+            school_id: schoolId,
+          };
+        });
+
+        const schoolIds = new Set(
+          normalizedRows.map((row) => row.school_id).filter((value) => value !== ''),
+        );
+        const legacySchool = asRecord(referral.school);
+        const legacySchoolId = asString(legacySchool.id, '').trim();
+        const legacySchoolName = asString(legacySchool.name, '').trim();
+
+        if (
+          legacySchoolId !== '' &&
+          !schoolIds.has(legacySchoolId) &&
+          legacySchoolName !== ''
+        ) {
+          normalizedRows.push({
+            id: `${referral.id}:legacy-${legacySchoolId}`,
+            referral_id: referral.id,
+            referral_code: referral.referral_code,
+            referral_link: referral.referral_link,
+            status: referral.status,
+            first_payment_amount: referral.first_payment_amount,
+            school_name: legacySchoolName,
+            students_count: asNumber(legacySchool.students_count, 0),
+            registered_at: referral.created_at,
+            has_school_registration: true,
+            school_id: legacySchoolId,
+          });
+        }
+
+        if (normalizedRows.length === 0) {
+          return [
+            {
+              id: `${referral.id}-empty`,
+              referral_id: referral.id,
+              referral_code: referral.referral_code,
+              referral_link: referral.referral_link,
+              status: referral.status,
+              first_payment_amount: referral.first_payment_amount,
+              school_name: 'No school registration yet',
+              students_count: 0,
+              registered_at: '',
+              has_school_registration: false,
+              school_id: '',
+            },
+          ];
+        }
+
+        return normalizedRows;
+      }),
     [referrals],
   );
 
+  const activeCount = useMemo(
+    () =>
+      registrationRows.filter((item) =>
+        item.has_school_registration &&
+        ['visited', 'registered', 'paid', 'active'].includes(item.status.toLowerCase()),
+      ).length,
+    [registrationRows],
+  );
+
+  const totalReferredSchools = useMemo(
+    () => registrationRows.filter((item) => item.has_school_registration).length,
+    [registrationRows],
+  );
+
   const paidCount = useMemo(
-    () => referrals.filter((item) => item.status.toLowerCase() === 'paid').length,
-    [referrals],
+    () =>
+      registrationRows.filter((item) =>
+        item.has_school_registration &&
+        ['paid', 'active'].includes(item.status.toLowerCase()),
+      ).length,
+    [registrationRows],
   );
 
   const totalFirstPayments = useMemo(
@@ -266,10 +375,10 @@ export default function AgentReferralsPage() {
                 </div>
               </div>
               <div className="col-7">
-                <div className="item-content">
-                  <div className="item-title">Total Referrals</div>
+                  <div className="item-content">
+                  <div className="item-title">Total Referred Schools</div>
                   <div className="item-number">
-                    <span>{referrals.length}</span>
+                    <span>{totalReferredSchools}</span>
                   </div>
                 </div>
               </div>
@@ -286,7 +395,7 @@ export default function AgentReferralsPage() {
               </div>
               <div className="col-7">
                 <div className="item-content">
-                  <div className="item-title">Active Referrals</div>
+                  <div className="item-title">Active Referred Schools</div>
                   <div className="item-number">
                     <span>{activeCount}</span>
                   </div>
@@ -305,7 +414,7 @@ export default function AgentReferralsPage() {
               </div>
               <div className="col-7">
                 <div className="item-content">
-                  <div className="item-title">Paid Referrals</div>
+                  <div className="item-title">Paid Schools</div>
                   <div className="item-number">
                     <span>{paidCount}</span>
                   </div>
@@ -373,41 +482,47 @@ export default function AgentReferralsPage() {
             </div>
           ) : (
             <div className="table-responsive">
-              <table className="table display data-table text-nowrap">
+              <table className="table display data-table">
                 <thead>
                   <tr>
                     <th>Code</th>
-                    <th>Registered School</th>
-                    <th>Referral Link</th>
+                    <th>School Name</th>
+                    <th>Students</th>
+                    <th>Registered</th>
                     <th>Status</th>
                     <th>First Payment</th>
-                    <th>Created</th>
-                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {referrals.length === 0 ? (
+                  {registrationRows.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center text-muted">
+                      <td colSpan={6} className="text-center text-muted">
                         No referrals yet. Generate your first code to begin.
                       </td>
                     </tr>
                   ) : (
-                    referrals.map((referral) => (
+                    registrationRows.map((referral) => (
                       <tr key={referral.id}>
                         <td>
                           <code>{referral.referral_code}</code>
                         </td>
-                        <td>{referral.school_name}</td>
                         <td>
-                          {referral.referral_link ? (
-                            <a
-                              href={referral.referral_link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              Open Link
-                            </a>
+                          {referral.has_school_registration ? (
+                            referral.school_name
+                          ) : (
+                            <span className="text-muted">{referral.school_name}</span>
+                          )}
+                        </td>
+                        <td>
+                          {referral.has_school_registration ? (
+                            referral.students_count.toLocaleString('en-NG')
+                          ) : (
+                            <span className="text-muted">-</span>
+                          )}
+                        </td>
+                        <td>
+                          {referral.has_school_registration ? (
+                            formatDate(referral.registered_at)
                           ) : (
                             <span className="text-muted">N/A</span>
                           )}
@@ -426,32 +541,83 @@ export default function AgentReferralsPage() {
                             <span className="text-muted">-</span>
                           )}
                         </td>
-                        <td>{formatDate(referral.created_at)}</td>
-                        <td>
-                          <button
-                            type="button"
-                            className="btn btn-link btn-sm p-0 mr-2"
-                            onClick={() =>
-                              handleCopy(`code:${referral.id}`, referral.referral_code)
-                            }
-                          >
-                            {copiedKey === `code:${referral.id}` ? 'Copied' : 'Copy Code'}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-link btn-sm p-0"
-                            onClick={() =>
-                              handleCopy(`link:${referral.id}`, referral.referral_link)
-                            }
-                          >
-                            {copiedKey === `link:${referral.id}` ? 'Copied' : 'Copy Link'}
-                          </button>
-                        </td>
                       </tr>
                     ))
                   )}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {referrals.length > 0 && (
+            <div className="card dashboard-card-one mg-t-20">
+              <div className="card-body">
+                <div className="heading-layout1 mg-b-17">
+                  <div className="item-title">
+                    <h3>Referral Links & Actions</h3>
+                  </div>
+                </div>
+                <div className="table-responsive">
+                  <table className="table display data-table">
+                    <thead>
+                      <tr>
+                        <th>Code</th>
+                        <th>Schools</th>
+                        <th>Referral Link</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {referrals.map((referral) => {
+                        const schoolRowsCount = registrationRows.filter(
+                          (row) => row.referral_id === referral.id && row.has_school_registration,
+                        ).length;
+                        return (
+                          <tr key={`tools-${referral.id}`}>
+                            <td>
+                              <code>{referral.referral_code}</code>
+                            </td>
+                            <td>{schoolRowsCount.toLocaleString('en-NG')}</td>
+                            <td>
+                              {referral.referral_link ? (
+                                <a
+                                  href={referral.referral_link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  Open Link
+                                </a>
+                              ) : (
+                                <span className="text-muted">N/A</span>
+                              )}
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className="btn btn-link btn-sm p-0 mr-2"
+                                onClick={() =>
+                                  handleCopy(`code:${referral.id}`, referral.referral_code)
+                                }
+                              >
+                                {copiedKey === `code:${referral.id}` ? 'Copied' : 'Copy Code'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-link btn-sm p-0"
+                                onClick={() =>
+                                  handleCopy(`link:${referral.id}`, referral.referral_link)
+                                }
+                              >
+                                {copiedKey === `link:${referral.id}` ? 'Copied' : 'Copy Link'}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 

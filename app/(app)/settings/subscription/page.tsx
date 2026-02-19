@@ -306,6 +306,16 @@ export default function PaymentPage() {
     [selectedSessionTerms, selectedTermId],
   );
 
+  const freeTrialTerms = useMemo(
+    () => terms.filter((term) => term.is_free_trial_term),
+    [terms],
+  );
+
+  const nextPayableTerm = useMemo(
+    () => selectedSessionTerms.find((term) => term.outstanding_balance > 0) ?? null,
+    [selectedSessionTerms],
+  );
+
   const needsLogin = useMemo(() => {
     if (!error) {
       return false;
@@ -398,6 +408,12 @@ export default function PaymentPage() {
   const initializeSelectedTermPayment = async () => {
     if (!selectedSessionTerm) {
       setError('Select a term to continue.');
+      return;
+    }
+
+    if (selectedSessionTerm.is_free_trial_term) {
+      setError(null);
+      setNotice('Selected term is on free trial. No payment is required for this term.');
       return;
     }
 
@@ -520,6 +536,24 @@ export default function PaymentPage() {
           </div>
         ) : null}
 
+        {freeTrialTerms.length > 0 ? (
+          <section className={styles.trialStatus}>
+            <h3>Free Trial Active</h3>
+            <p>
+              Your school currently has free trial on <strong>{freeTrialTerms.length}</strong> term(s). Trial terms have
+              zero amount due, so payment is disabled for those specific terms.
+            </p>
+            {nextPayableTerm ? (
+              <p>
+                Next payable term in selected session: <strong>{nextPayableTerm.name}</strong> (
+                {formatNaira(nextPayableTerm.outstanding_balance)} outstanding).
+              </p>
+            ) : (
+              <p>No payable term is available yet in the currently selected session.</p>
+            )}
+          </section>
+        ) : null}
+
         {needsLogin ? (
           <section className={styles.authGate}>
             <h2>Sign in required</h2>
@@ -575,7 +609,7 @@ export default function PaymentPage() {
                   {selectedSessionTerms.length === 0 ? <option>No terms in selected session</option> : null}
                   {selectedSessionTerms.map((term) => (
                     <option key={term.id} value={term.id}>
-                      {term.name} ({term.outstanding_balance > 0 ? 'Unpaid' : 'Paid'})
+                      {term.name} ({term.is_free_trial_term ? 'Free Trial' : term.outstanding_balance > 0 ? 'Unpaid' : 'Paid'})
                     </option>
                   ))}
                 </select>
@@ -603,8 +637,16 @@ export default function PaymentPage() {
 
               {selectedSessionTerm ? (
                 <p className={styles.sessionMeta}>
-                  Selected term: <strong>{selectedSessionTerm.name}</strong> with outstanding{' '}
-                  <strong>{formatNaira(selectedSessionTerm.outstanding_balance)}</strong>.
+                  {selectedSessionTerm.is_free_trial_term ? (
+                    <>
+                      Selected term <strong>{selectedSessionTerm.name}</strong> is on free trial. Payment is not required.
+                    </>
+                  ) : (
+                    <>
+                      Selected term: <strong>{selectedSessionTerm.name}</strong> with outstanding{' '}
+                      <strong>{formatNaira(selectedSessionTerm.outstanding_balance)}</strong>.
+                    </>
+                  )}
                 </p>
               ) : null}
             </section>
@@ -682,6 +724,8 @@ export default function PaymentPage() {
                             >
                               {payingTermId === term.id ? 'Preparing...' : 'Pay Now'}
                             </button>
+                          ) : term.is_free_trial_term ? (
+                            <span className={styles.trialChip}>Free Trial</span>
                           ) : (
                             <span className={styles.settled}>Settled</span>
                           )}

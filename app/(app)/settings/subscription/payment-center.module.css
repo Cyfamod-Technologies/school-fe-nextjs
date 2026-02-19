@@ -103,6 +103,30 @@
   color: #1a4b86;
 }
 
+.trialStatus {
+  border: 1px solid #bfe6d6;
+  border-radius: 14px;
+  background: #effaf5;
+  box-shadow: 0 4px 14px rgba(13, 122, 86, 0.08);
+  padding: 16px;
+  display: grid;
+  gap: 6px;
+}
+
+.trialStatus h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #0d7a56;
+}
+
+.trialStatus p {
+  margin: 0;
+  color: #2e5a4d;
+  font-size: 0.94rem;
+}
+
 .reauthLink {
   display: inline-flex;
   align-items: center;
@@ -421,6 +445,18 @@
   background: #e8f7ee;
   color: #19744f;
   border: 1px solid #b6e5cb;
+  padding: 7px 12px;
+  font-weight: 700;
+  font-size: 0.84rem;
+}
+
+.trialChip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #eaf9f2;
+  color: #0d7a56;
+  border: 1px solid #b9e6d3;
   padding: 7px 12px;
   font-weight: 700;
   font-size: 0.84rem;
