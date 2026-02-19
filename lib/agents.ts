@@ -34,6 +34,17 @@ export interface AgentPasswordChangeData {
   password_confirmation: string;
 }
 
+export interface AgentForgotPasswordData {
+  email: string;
+}
+
+export interface AgentResetPasswordData {
+  email: string;
+  token: string;
+  password: string;
+  password_confirmation: string;
+}
+
 const getAgentAuthHeaders = (): Record<string, string> => {
   if (typeof window === 'undefined') {
     return {};
@@ -74,6 +85,14 @@ export const agentApi = {
       email,
       password,
     });
+  },
+
+  forgotPassword: async (data: AgentForgotPasswordData) => {
+    return apiClient.post('/api/v1/agents/password/forgot', data);
+  },
+
+  resetPassword: async (data: AgentResetPasswordData) => {
+    return apiClient.post('/api/v1/agents/password/reset', data);
   },
 
   // Dashboard

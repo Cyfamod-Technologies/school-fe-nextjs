@@ -20,7 +20,11 @@ export default function AgentLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isAuthPage = useMemo(
-    () => pathname === '/agent/login' || pathname === '/agent/register',
+    () =>
+      pathname === '/agent/login' ||
+      pathname === '/agent/register' ||
+      pathname === '/agent/forgot-password' ||
+      pathname === '/agent/reset-password',
     [pathname],
   );
 

@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { agentApi } from '@/lib/agents';
-import styles from './page.module.css';
+import styles from '../auth.module.css';
 
 type GoogleCredentialResponse = {
   credential?: string;
@@ -21,7 +21,7 @@ declare global {
           }) => void;
           renderButton: (
             container: HTMLElement,
-            options: Record<string, unknown>
+            options: Record<string, unknown>,
           ) => void;
         };
       };
@@ -31,16 +31,26 @@ declare global {
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? '';
 
+const readMessage = (payload: unknown, fallback: string): string => {
+  if (typeof payload === 'object' && payload !== null) {
+    const record = payload as Record<string, unknown>;
+    if (typeof record.message === 'string' && record.message.trim() !== '') {
+      return record.message;
+    }
+  }
+  return fallback;
+};
+
 export default function AgentLoginPage() {
   const router = useRouter();
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
 
   const completeAuth = useCallback(
     (payload: { token?: string; agent?: unknown }) => {
@@ -48,14 +58,12 @@ export default function AgentLoginPage() {
         localStorage.setItem('agentToken', payload.token);
         localStorage.setItem('agent_token', payload.token);
       }
-
       if (payload.agent) {
         localStorage.setItem('agent', JSON.stringify(payload.agent));
       }
-
       router.push('/agent/dashboard');
     },
-    [router]
+    [router],
   );
 
   const handleGoogleCredential = useCallback(
@@ -70,10 +78,10 @@ export default function AgentLoginPage() {
 
       try {
         const apiResponse = await agentApi.googleAuth(response.credential);
-        const data = await apiResponse.json();
+        const data = await apiResponse.json().catch(() => ({}));
 
         if (!apiResponse.ok) {
-          setError(data.message || 'Google sign-in failed. Please try again.');
+          setError(readMessage(data, 'Google sign-in failed. Please try again.'));
           return;
         }
 
@@ -84,7 +92,7 @@ export default function AgentLoginPage() {
         setGoogleLoading(false);
       }
     },
-    [completeAuth]
+    [completeAuth],
   );
 
   useEffect(() => {
@@ -108,7 +116,7 @@ export default function AgentLoginPage() {
         text: 'continue_with',
         shape: 'rectangular',
         size: 'large',
-        width: 320,
+        width: 330,
       });
     };
 
@@ -122,9 +130,7 @@ export default function AgentLoginPage() {
 
     if (existingScript) {
       existingScript.addEventListener('load', renderButton);
-      return () => {
-        existingScript.removeEventListener('load', renderButton);
-      };
+      return () => existingScript.removeEventListener('load', renderButton);
     }
 
     const script = document.createElement('script');
@@ -140,29 +146,28 @@ export default function AgentLoginPage() {
     };
   }, [handleGoogleCredential]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setError(null);
 
-    if (!email || !password) {
-      setError('Please fill in all fields');
-      setLoading(false);
+    if (!email.trim() || !password) {
+      setError('Please provide email and password.');
       return;
     }
 
+    setLoading(true);
     try {
-      const response = await agentApi.login(email, password);
+      const response = await agentApi.login(email.trim(), password);
+      const data = await response.json().catch(() => ({}));
 
-      if (response.ok) {
-        const data = await response.json();
-        completeAuth({ token: data.token, agent: data.agent });
-      } else {
-        const data = await response.json();
-        setError(data.message || 'Invalid email or password. Please try again.');
+      if (!response.ok) {
+        setError(readMessage(data, 'Invalid email or password.'));
+        return;
       }
+
+      completeAuth({ token: data.token, agent: data.agent });
     } catch {
-      setError('An error occurred. Please try again.');
+      setError('Unable to sign in right now. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -170,79 +175,94 @@ export default function AgentLoginPage() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.glowPrimary} />
-      <div className={styles.glowSecondary} />
+      <div className={styles.noise} />
+      <div className={styles.orbA} />
+      <div className={styles.orbB} />
 
       <main className={styles.shell}>
-        <section className={`${styles.brandPanel} ${styles.reveal}`}>
-          <p className={styles.kicker}>Agent Network</p>
-          <h1 className={styles.heading}>Welcome back</h1>
-          <p className={styles.subheading}>
-            Sign in to track referrals, monitor commissions, and request payouts.
+        <section className={`${styles.storyPanel} ${styles.reveal}`}>
+          <p className={styles.storyKicker}>Agent Workspace</p>
+          <h1 className={styles.storyTitle}>
+            Welcome back. Keep your referral pipeline moving.
+          </h1>
+          <p className={styles.storyText}>
+            Sign in to monitor conversions, commission approvals, and payout readiness from one
+            focused workspace.
           </p>
 
-          <div className={styles.metrics}>
-            <article className={styles.metricCard}>
-              <p className={styles.metricLabel}>Approval Workflow</p>
-              <p className={styles.metricValue}>Structured onboarding</p>
+          <div className={styles.storyGrid}>
+            <article className={styles.storyCard}>
+              <h3>Referral Timeline</h3>
+              <p>Track each code from visit to registration to paid status.</p>
             </article>
-            <article className={styles.metricCard}>
-              <p className={styles.metricLabel}>Commission Tracking</p>
-              <p className={styles.metricValue}>Real-time updates</p>
+            <article className={styles.storyCard}>
+              <h3>Commission Clarity</h3>
+              <p>See pending, approved, and paid commissions without switching screens.</p>
             </article>
-            <article className={styles.metricCard}>
-              <p className={styles.metricLabel}>Payout Visibility</p>
-              <p className={styles.metricValue}>Transparent history</p>
+            <article className={styles.storyCard}>
+              <h3>Structured Payouts</h3>
+              <p>Request payout when threshold is met and follow each payout stage.</p>
             </article>
           </div>
+
+          <p className={styles.storyFoot}>
+            New here? <Link href="/agent/register">Create your agent account</Link>
+          </p>
         </section>
 
         <section className={`${styles.formPanel} ${styles.revealDelayed}`}>
           <div className={styles.formCard}>
-            <h2 className={styles.formTitle}>Agent Login</h2>
-            <p className={styles.formSubtitle}>Sign in with email/password or continue with Google.</p>
-
-            {error && (
-              <div className={styles.errorBox}>
-                <p>{error}</p>
+            <div className={styles.formHead}>
+              <div className={styles.mark}>A</div>
+              <div>
+                <p className={styles.eyebrow}>Sign In</p>
+                <h2 className={styles.formTitle}>Agent Login</h2>
               </div>
-            )}
+            </div>
+            <p className={styles.formSubtitle}>
+              Use your email and password, or continue with Google.
+            </p>
 
-            <form onSubmit={handleSubmit} className={styles.form}>
+            {error && <div className={styles.alertError}>{error}</div>}
+
+            <form className={styles.form} onSubmit={handleSubmit}>
               <div className={styles.field}>
                 <label htmlFor="email">Email Address</label>
                 <input
                   id="email"
                   type="email"
                   autoComplete="email"
+                  placeholder="you@example.com"
                   value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
+                  onChange={(event) => {
+                    setEmail(event.target.value);
                     setError(null);
                   }}
-                  placeholder="you@example.com"
                   disabled={loading || googleLoading}
+                  required
                 />
               </div>
 
               <div className={styles.field}>
                 <label htmlFor="password">Password</label>
-                <div className={styles.passwordWrap}>
+                <div className={styles.inputWrap}>
                   <input
                     id="password"
+                    className={styles.inputWithToggle}
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="current-password"
+                    placeholder="Enter your password"
                     value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
+                    onChange={(event) => {
+                      setPassword(event.target.value);
                       setError(null);
                     }}
-                    placeholder="Enter your password"
                     disabled={loading || googleLoading}
+                    required
                   />
                   <button
                     type="button"
-                    className={styles.toggleBtn}
+                    className={styles.toggle}
                     onClick={() => setShowPassword((value) => !value)}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
@@ -251,11 +271,13 @@ export default function AgentLoginPage() {
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={loading || googleLoading}
-                className={styles.submitBtn}
-              >
+              <div className={styles.helperRow}>
+                <Link href="/agent/forgot-password" className={styles.helperLink}>
+                  Forgot password?
+                </Link>
+              </div>
+
+              <button type="submit" className={styles.primaryButton} disabled={loading || googleLoading}>
                 {loading ? (
                   <span className={styles.loadingRow}>
                     <span className={styles.spinner} />
@@ -267,22 +289,25 @@ export default function AgentLoginPage() {
               </button>
             </form>
 
-            <div className={styles.oauthBlock}>
-              <p className={styles.oauthLabel}>Or continue with Google</p>
-              <div ref={googleButtonRef} className={styles.googleButtonWrap} />
-              {!GOOGLE_CLIENT_ID && (
-                <p className={styles.oauthHint}>
-                  Set <code>NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> to enable Google sign-in.
-                </p>
-              )}
-              {googleLoading && <p className={styles.oauthHint}>Signing in with Google...</p>}
+            <div className={styles.divider}>
+              <span>or continue with</span>
             </div>
 
-            <div className={styles.footer}>
+            <div className={styles.oauthCard}>
+              <p className={styles.oauthText}>Google Sign-In</p>
+              <div ref={googleButtonRef} className={styles.googleWrap} />
+              {!GOOGLE_CLIENT_ID && (
+                <p className={styles.hint}>
+                  Set <code>NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> to enable Google login.
+                </p>
+              )}
+              {googleLoading && <p className={styles.hint}>Signing in with Google...</p>}
+            </div>
+
+            <div className={styles.formFooter}>
               <p>
                 New agent? <Link href="/agent/register">Create an account</Link>
               </p>
-              <p className={styles.helpText}>Need access help? Contact admin support.</p>
             </div>
           </div>
         </section>

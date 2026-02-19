@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { agentApi } from '@/lib/agents';
-import styles from './page.module.css';
+import styles from '../auth.module.css';
 
 type GoogleCredentialResponse = {
   credential?: string;
@@ -21,7 +21,7 @@ declare global {
           }) => void;
           renderButton: (
             container: HTMLElement,
-            options: Record<string, unknown>
+            options: Record<string, unknown>,
           ) => void;
         };
       };
@@ -31,14 +31,28 @@ declare global {
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? '';
 
+const readMessage = (payload: unknown, fallback: string): string => {
+  if (typeof payload === 'object' && payload !== null) {
+    const record = payload as Record<string, unknown>;
+    if (typeof record.message === 'string' && record.message.trim() !== '') {
+      return record.message;
+    }
+
+    if (record.errors && typeof record.errors === 'object') {
+      const values = Object.values(record.errors as Record<string, unknown>);
+      for (const entry of values) {
+        if (Array.isArray(entry) && typeof entry[0] === 'string') {
+          return entry[0];
+        }
+      }
+    }
+  }
+  return fallback;
+};
+
 export default function AgentRegisterPage() {
   const router = useRouter();
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
-
-  const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -48,14 +62,12 @@ export default function AgentRegisterPage() {
     password_confirmation: '',
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-    setError(null);
-  };
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   const completeAuth = useCallback(
     (payload: { token?: string; agent?: unknown }) => {
@@ -63,17 +75,14 @@ export default function AgentRegisterPage() {
         localStorage.setItem('agentToken', payload.token);
         localStorage.setItem('agent_token', payload.token);
       }
-
       if (payload.agent) {
         localStorage.setItem('agent', JSON.stringify(payload.agent));
       }
 
       setSuccess(true);
-      setTimeout(() => {
-        router.push('/agent/dashboard');
-      }, 1200);
+      window.setTimeout(() => router.push('/agent/dashboard'), 1200);
     },
-    [router]
+    [router],
   );
 
   const handleGoogleCredential = useCallback(
@@ -88,10 +97,10 @@ export default function AgentRegisterPage() {
 
       try {
         const apiResponse = await agentApi.googleAuth(response.credential);
-        const data = await apiResponse.json();
+        const data = await apiResponse.json().catch(() => ({}));
 
         if (!apiResponse.ok) {
-          setError(data.message || 'Google sign-in failed. Please try again.');
+          setError(readMessage(data, 'Google sign-in failed. Please try again.'));
           return;
         }
 
@@ -102,7 +111,7 @@ export default function AgentRegisterPage() {
         setGoogleLoading(false);
       }
     },
-    [completeAuth]
+    [completeAuth],
   );
 
   useEffect(() => {
@@ -126,7 +135,7 @@ export default function AgentRegisterPage() {
         text: 'continue_with',
         shape: 'rectangular',
         size: 'large',
-        width: 340,
+        width: 330,
       });
     };
 
@@ -140,9 +149,7 @@ export default function AgentRegisterPage() {
 
     if (existingScript) {
       existingScript.addEventListener('load', renderButton);
-      return () => {
-        existingScript.removeEventListener('load', renderButton);
-      };
+      return () => existingScript.removeEventListener('load', renderButton);
     }
 
     const script = document.createElement('script');
@@ -158,40 +165,59 @@ export default function AgentRegisterPage() {
     };
   }, [handleGoogleCredential]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+    setError(null);
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setError(null);
 
     if (
-      !formData.full_name ||
-      !formData.email ||
-      !formData.whatsapp_number ||
+      !formData.full_name.trim() ||
+      !formData.email.trim() ||
+      !formData.whatsapp_number.trim() ||
       !formData.password ||
       !formData.password_confirmation
     ) {
-      setError('Please fill in all required fields');
-      setLoading(false);
+      setError('Please fill in all required fields.');
       return;
     }
 
     if (formData.password !== formData.password_confirmation) {
-      setError('Password confirmation does not match');
-      setLoading(false);
+      setError('Password confirmation does not match.');
       return;
     }
 
-    try {
-      const response = await agentApi.register(formData);
-      const data = await response.json();
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
 
-      if (response.ok) {
-        completeAuth({ token: data.token, agent: data.agent });
-      } else {
-        setError(data.message || 'Registration failed');
+    setLoading(true);
+    try {
+      const response = await agentApi.register({
+        full_name: formData.full_name.trim(),
+        email: formData.email.trim().toLowerCase(),
+        whatsapp_number: formData.whatsapp_number.trim(),
+        password: formData.password,
+        password_confirmation: formData.password_confirmation,
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setError(readMessage(data, 'Registration failed.'));
+        return;
       }
+
+      completeAuth({ token: data.token, agent: data.agent });
     } catch {
-      setError('An error occurred during registration');
+      setError('Unable to register right now. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -203,10 +229,7 @@ export default function AgentRegisterPage() {
         <div className={styles.successCard}>
           <div className={styles.successIcon}>✓</div>
           <h2>Registration Successful</h2>
-          <p>Your account has been created. Redirecting...</p>
-          <div className={styles.successBar}>
-            <div className={styles.successBarFill} />
-          </div>
+          <p>Your account has been created. Redirecting to your dashboard...</p>
         </div>
       </div>
     );
@@ -214,66 +237,74 @@ export default function AgentRegisterPage() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.glowPrimary} />
-      <div className={styles.glowSecondary} />
+      <div className={styles.noise} />
+      <div className={styles.orbA} />
+      <div className={styles.orbB} />
 
       <main className={styles.shell}>
-        <section className={`${styles.brandPanel} ${styles.reveal}`}>
-          <p className={styles.kicker}>Partner Program</p>
-          <h1 className={styles.heading}>Become a school growth agent</h1>
-          <p className={styles.subheading}>
-            Sign up in seconds and start earning from verified school referrals.
+        <section className={`${styles.storyPanel} ${styles.reveal}`}>
+          <p className={styles.storyKicker}>Partner Program</p>
+          <h1 className={styles.storyTitle}>
+            Become a growth agent for schools and earn from conversions.
+          </h1>
+          <p className={styles.storyText}>
+            Register once, get approved, generate referral links, and track your payouts in real
+            time.
           </p>
 
-          <div className={styles.benefits}>
-            <article className={styles.benefitCard}>
-              <h3>12% Commission</h3>
-              <p>Earn from qualifying school payments tied to your referral code.</p>
+          <div className={styles.storyGrid}>
+            <article className={styles.storyCard}>
+              <h3>Onboarding</h3>
+              <p>Fast registration with manual approval for quality control.</p>
             </article>
-            <article className={styles.benefitCard}>
-              <h3>Live Tracking</h3>
-              <p>Monitor referral progress, conversions, and earnings in one place.</p>
+            <article className={styles.storyCard}>
+              <h3>Referral Tracking</h3>
+              <p>Every generated code is tracked from first visit to first payment.</p>
             </article>
-            <article className={styles.benefitCard}>
-              <h3>Fast Onboarding</h3>
-              <p>Register with email or continue with Google in one click.</p>
+            <article className={styles.storyCard}>
+              <h3>Payout Visibility</h3>
+              <p>See thresholds, requests, and payout statuses in one place.</p>
             </article>
           </div>
 
-          <p className={styles.loginPrompt}>
+          <p className={styles.storyFoot}>
             Already registered? <Link href="/agent/login">Sign in here</Link>
           </p>
         </section>
 
         <section className={`${styles.formPanel} ${styles.revealDelayed}`}>
           <div className={styles.formCard}>
-            <h2 className={styles.formTitle}>Agent Registration</h2>
-            <p className={styles.formSubtitle}>Enter your profile, WhatsApp number, and password to continue.</p>
-
-            {error && (
-              <div className={styles.errorBox}>
-                <p>{error}</p>
+            <div className={styles.formHead}>
+              <div className={styles.mark}>A</div>
+              <div>
+                <p className={styles.eyebrow}>Create Account</p>
+                <h2 className={styles.formTitle}>Agent Registration</h2>
               </div>
-            )}
+            </div>
+            <p className={styles.formSubtitle}>
+              Provide your details and set a secure password to continue.
+            </p>
 
-            <form onSubmit={handleSubmit} className={styles.form}>
-              <section className={styles.formSection}>
-                <h3>Personal Information</h3>
-                <div className={styles.field}>
-                  <label htmlFor="full_name">
-                    Full Name <span>*</span>
-                  </label>
-                  <input
-                    id="full_name"
-                    type="text"
-                    name="full_name"
-                    value={formData.full_name}
-                    onChange={handleChange}
-                    placeholder="John Doe"
-                    required
-                  />
-                </div>
+            {error && <div className={styles.alertError}>{error}</div>}
 
+            <form className={styles.form} onSubmit={handleSubmit}>
+              <div className={styles.field}>
+                <label htmlFor="full_name">
+                  Full Name <span>*</span>
+                </label>
+                <input
+                  id="full_name"
+                  type="text"
+                  name="full_name"
+                  placeholder="Jane Doe"
+                  value={formData.full_name}
+                  onChange={handleInputChange}
+                  disabled={loading || googleLoading}
+                  required
+                />
+              </div>
+
+              <div className={styles.gridTwo}>
                 <div className={styles.field}>
                   <label htmlFor="email">
                     Email Address <span>*</span>
@@ -282,9 +313,10 @@ export default function AgentRegisterPage() {
                     id="email"
                     type="email"
                     name="email"
+                    placeholder="you@example.com"
                     value={formData.email}
-                    onChange={handleChange}
-                    placeholder="john@example.com"
+                    onChange={handleInputChange}
+                    disabled={loading || googleLoading}
                     required
                   />
                 </div>
@@ -297,58 +329,76 @@ export default function AgentRegisterPage() {
                     id="whatsapp_number"
                     type="tel"
                     name="whatsapp_number"
-                    value={formData.whatsapp_number}
-                    onChange={handleChange}
                     placeholder="+2348012345678"
+                    value={formData.whatsapp_number}
+                    onChange={handleInputChange}
+                    disabled={loading || googleLoading}
                     required
                   />
                 </div>
-              </section>
+              </div>
 
-              <section className={styles.formSection}>
-                <h3>Security</h3>
-                <div className={styles.gridTwo}>
-                  <div className={styles.field}>
-                    <label htmlFor="password">
-                      Password <span>*</span>
-                    </label>
+              <div className={styles.gridTwo}>
+                <div className={styles.field}>
+                  <label htmlFor="password">
+                    Password <span>*</span>
+                  </label>
+                  <div className={styles.inputWrap}>
                     <input
                       id="password"
-                      type="password"
+                      className={styles.inputWithToggle}
+                      type={showPassword ? 'text' : 'password'}
                       name="password"
-                      value={formData.password}
-                      onChange={handleChange}
                       placeholder="Minimum 8 characters"
-                      minLength={8}
+                      value={formData.password}
+                      onChange={handleInputChange}
                       autoComplete="new-password"
+                      minLength={8}
+                      disabled={loading || googleLoading}
                       required
                     />
-                  </div>
-
-                  <div className={styles.field}>
-                    <label htmlFor="password_confirmation">
-                      Confirm Password <span>*</span>
-                    </label>
-                    <input
-                      id="password_confirmation"
-                      type="password"
-                      name="password_confirmation"
-                      value={formData.password_confirmation}
-                      onChange={handleChange}
-                      placeholder="Repeat password"
-                      minLength={8}
-                      autoComplete="new-password"
-                      required
-                    />
+                    <button
+                      type="button"
+                      className={styles.toggle}
+                      onClick={() => setShowPassword((value) => !value)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
                   </div>
                 </div>
-              </section>
 
-              <button
-                type="submit"
-                disabled={loading || googleLoading}
-                className={styles.submitBtn}
-              >
+                <div className={styles.field}>
+                  <label htmlFor="password_confirmation">
+                    Confirm Password <span>*</span>
+                  </label>
+                  <div className={styles.inputWrap}>
+                    <input
+                      id="password_confirmation"
+                      className={styles.inputWithToggle}
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      name="password_confirmation"
+                      placeholder="Repeat password"
+                      value={formData.password_confirmation}
+                      onChange={handleInputChange}
+                      autoComplete="new-password"
+                      minLength={8}
+                      disabled={loading || googleLoading}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className={styles.toggle}
+                      onClick={() => setShowConfirmPassword((value) => !value)}
+                      aria-label={showConfirmPassword ? 'Hide password confirmation' : 'Show password confirmation'}
+                    >
+                      {showConfirmPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" className={styles.primaryButton} disabled={loading || googleLoading}>
                 {loading ? (
                   <span className={styles.loadingRow}>
                     <span className={styles.spinner} />
@@ -360,21 +410,24 @@ export default function AgentRegisterPage() {
               </button>
             </form>
 
-            <div className={styles.oauthBlock}>
-              <p className={styles.oauthLabel}>Or continue with Google</p>
-              <div ref={googleButtonRef} className={styles.googleButtonWrap} />
-              {!GOOGLE_CLIENT_ID && (
-                <p className={styles.oauthHint}>
-                  Set <code>NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> to enable Google sign-in.
-                </p>
-              )}
-              {googleLoading && <p className={styles.oauthHint}>Signing in with Google...</p>}
+            <div className={styles.divider}>
+              <span>or continue with</span>
             </div>
 
-            <div className={styles.footer}>
+            <div className={styles.oauthCard}>
+              <p className={styles.oauthText}>Google Registration</p>
+              <div ref={googleButtonRef} className={styles.googleWrap} />
+              {!GOOGLE_CLIENT_ID && (
+                <p className={styles.hint}>
+                  Set <code>NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> to enable Google registration.
+                </p>
+              )}
+              {googleLoading && <p className={styles.hint}>Signing in with Google...</p>}
+            </div>
+
+            <div className={styles.formFooter}>
               <p>
-                Already have an account?{' '}
-                <Link href="/agent/login">Sign in</Link>
+                Already have an account? <Link href="/agent/login">Sign in</Link>
               </p>
             </div>
           </div>
