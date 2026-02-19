@@ -4,11 +4,14 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiFetch } from '@/lib/apiClient';
+import { useAuth } from '@/contexts/AuthContext';
 import styles from './payment-center.module.css';
 
 interface Invoice {
   id: string;
   invoice_type: string;
+  student_count?: number;
+  price_per_student?: number;
   amount_due: number;
   amount_paid: number;
   payment_status: string;
@@ -24,7 +27,11 @@ interface Term {
   amount_due: number;
   amount_paid: number;
   outstanding_balance: number;
-  can_switch?: boolean;
+  student_count_snapshot: number;
+  midterm_student_count: number;
+  total_students_billed: number;
+  students_paid_estimate: number;
+  students_left_for_payment: number;
   start_date?: string;
   end_date?: string;
   invoices: Invoice[];
@@ -116,12 +123,29 @@ const loadTerms = async (): Promise<Term[]> => {
       return {
         id: asString(invoice.id),
         invoice_type: asString(invoice.invoice_type, 'original'),
+        student_count: asNumber(invoice.student_count, 0),
+        price_per_student: asNumber(invoice.price_per_student, 0),
         amount_due: asNumber(invoice.amount_due),
         amount_paid: asNumber(invoice.amount_paid),
         payment_status: asString(invoice.payment_status, asString(invoice.status, 'pending')),
         due_date: asString(invoice.due_date),
       };
     });
+
+    const studentCountSnapshot = asNumber(row.student_count_snapshot, 0);
+    const midtermStudentCount = asNumber(row.midterm_student_count, 0);
+    const totalStudentsBilled = asNumber(
+      row.total_students_billed,
+      Math.max(0, studentCountSnapshot + midtermStudentCount),
+    );
+    const studentsLeftForPayment = asNumber(
+      row.students_left_for_payment,
+      asNumber(row.outstanding_balance) > 0 ? totalStudentsBilled : 0,
+    );
+    const studentsPaidEstimate = asNumber(
+      row.students_paid_estimate,
+      Math.max(0, totalStudentsBilled - studentsLeftForPayment),
+    );
 
     return {
       id: asString(row.id),
@@ -132,7 +156,11 @@ const loadTerms = async (): Promise<Term[]> => {
       amount_due: asNumber(row.amount_due),
       amount_paid: asNumber(row.amount_paid),
       outstanding_balance: asNumber(row.outstanding_balance),
-      can_switch: Boolean(row.can_switch),
+      student_count_snapshot: studentCountSnapshot,
+      midterm_student_count: midtermStudentCount,
+      total_students_billed: totalStudentsBilled,
+      students_paid_estimate: studentsPaidEstimate,
+      students_left_for_payment: studentsLeftForPayment,
       start_date: asString(row.start_date),
       end_date: asString(row.end_date),
       invoices,
@@ -169,6 +197,7 @@ const loadPaymentHistory = async (): Promise<PaymentHistoryItem[]> => {
 export default function PaymentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, schoolContext } = useAuth();
 
   const [terms, setTerms] = useState<Term[]>([]);
   const [payments, setPayments] = useState<PaymentHistoryItem[]>([]);
@@ -294,6 +323,17 @@ export default function PaymentPage() {
     return { due, paid, outstanding };
   }, [terms]);
 
+  const totalStudents = useMemo(() => {
+    if (typeof user?.student_count === 'number') {
+      return user.student_count;
+    }
+
+    const school = asRecord(schoolContext.school);
+    const value = school.student_count ?? school.students_count;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }, [schoolContext.school, user?.student_count]);
+
   const visibleTerms = useMemo(() => {
     if (!selectedSessionId) {
       return terms;
@@ -363,21 +403,6 @@ export default function PaymentPage() {
     }
 
     await initializeTermPayment(selectedSessionTerm.id);
-  };
-
-  const switchTerm = async (termId: string) => {
-    setError(null);
-    setNotice(null);
-
-    try {
-      const payload = await apiFetch<{ message?: string }>('/api/v1/terms/' + termId + '/switch', {
-        method: 'POST',
-      });
-      setNotice(asString(payload?.message, 'Term switched successfully.'));
-      await refreshData();
-    } catch (err) {
-      setError(parseApiError(err, 'Unable to switch term.'));
-    }
   };
 
   const verifyPayment = useCallback(
@@ -466,6 +491,10 @@ export default function PaymentPage() {
             <article className={styles.heroStat}>
               <span>Outstanding</span>
               <strong>{formatNaira(totals.outstanding)}</strong>
+            </article>
+            <article className={styles.heroStat}>
+              <span>Total Students</span>
+              <strong>{totalStudents === null ? '-' : totalStudents.toLocaleString('en-NG')}</strong>
             </article>
           </div>
         </section>
@@ -609,6 +638,17 @@ export default function PaymentPage() {
                         </div>
                         <p className={styles.progressLabel}>{progress}% paid</p>
 
+                        <div className={styles.studentStats}>
+                          <div>
+                            <span>Students billed</span>
+                            <strong>{term.total_students_billed.toLocaleString('en-NG')}</strong>
+                          </div>
+                          <div>
+                            <span>Students left</span>
+                            <strong>{term.students_left_for_payment.toLocaleString('en-NG')}</strong>
+                          </div>
+                        </div>
+
                         <div className={styles.amounts}>
                           <div>
                             <span>Due</span>
@@ -638,15 +678,6 @@ export default function PaymentPage() {
                             <span className={styles.settled}>Settled</span>
                           )}
 
-                          {term.can_switch ? (
-                            <button
-                              type="button"
-                              className={styles.switchBtn}
-                              onClick={() => void switchTerm(term.id)}
-                            >
-                              Switch Term
-                            </button>
-                          ) : null}
                         </div>
 
                         {term.invoices.length > 0 ? (
