@@ -17,6 +17,63 @@
   font-size: 1.03rem;
 }
 
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(19, 34, 57, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.modalCard {
+  width: min(560px, 100%);
+  border-radius: 16px;
+  border: 1px solid #cfdded;
+  background: #ffffff;
+  box-shadow: 0 20px 48px rgba(13, 39, 71, 0.28);
+  padding: 20px;
+  display: grid;
+  gap: 12px;
+}
+
+.modalCard h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #1f2a3d;
+}
+
+.modalCard p {
+  margin: 0;
+  color: #445972;
+  font-size: 1rem;
+}
+
+.modalActions {
+  margin-top: 4px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modalActions button {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--brand);
+  color: #ffffff;
+}
+
+.modalActions button:hover {
+  background: var(--brand-dark);
+}
+
 .loaderWrap {
   min-height: 280px;
   display: flex;

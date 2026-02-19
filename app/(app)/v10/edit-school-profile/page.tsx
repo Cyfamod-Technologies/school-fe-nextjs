@@ -30,6 +30,14 @@ const initialFormState: FormState = {
   current_term_id: "",
 };
 
+const isPaymentGuardError = (message: string): boolean => {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("cannot switch to") &&
+    normalized.includes("payment")
+  );
+};
+
 export default function EditSchoolProfilePage() {
   const router = useRouter();
   const { schoolContext, refreshSchoolContext, refreshAuth } = useAuth();
@@ -174,6 +182,9 @@ export default function EditSchoolProfilePage() {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
+    const previousTermId = school?.current_term_id ? `${school.current_term_id}` : "";
+    const requestedTermSwitch =
+      form.current_term_id.trim() !== "" && form.current_term_id !== previousTermId;
     try {
       await updateSchoolProfile({
         ...form,
@@ -188,11 +199,30 @@ export default function EditSchoolProfilePage() {
       router.push("/v10/profile");
     } catch (err) {
       console.error("Failed to update school profile", err);
-      setError(
+      const message =
         err instanceof Error
           ? err.message
-          : "Unable to update school profile.",
-      );
+          : "Unable to update school profile.";
+
+      if (requestedTermSwitch && isPaymentGuardError(message)) {
+        const selectedTerm = currentSessionTerms.find(
+          (term) => `${term.id}` === form.current_term_id,
+        );
+        const params = new URLSearchParams({
+          switch_blocked: "1",
+          target_session_id: form.current_session_id,
+          target_term_id: form.current_term_id,
+          switch_message: message,
+        });
+        if (selectedTerm?.name) {
+          params.set("target_term_name", selectedTerm.name);
+        }
+
+        router.push(`/settings/payment?${params.toString()}`);
+        return;
+      }
+
+      setError(message);
     } finally {
       setSubmitting(false);
     }

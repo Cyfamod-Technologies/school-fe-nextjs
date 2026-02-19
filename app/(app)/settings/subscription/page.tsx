@@ -114,6 +114,23 @@ const badgeClassName = (status: string): string => {
   return styles.badgeNeutral;
 };
 
+const compareTermsByDisplayOrder = (left: Term, right: Term): number => {
+  const leftNumber = Number.isFinite(left.term_number) ? left.term_number : 0;
+  const rightNumber = Number.isFinite(right.term_number) ? right.term_number : 0;
+
+  if (leftNumber > 0 && rightNumber > 0 && leftNumber !== rightNumber) {
+    return leftNumber - rightNumber;
+  }
+
+  const leftDate = Date.parse(left.start_date ?? '');
+  const rightDate = Date.parse(right.start_date ?? '');
+  if (Number.isFinite(leftDate) && Number.isFinite(rightDate) && leftDate !== rightDate) {
+    return leftDate - rightDate;
+  }
+
+  return left.name.localeCompare(right.name);
+};
+
 const displayTermStatus = (term: Term): string => {
   if (term.is_free_trial_term && term.outstanding_balance <= 0) {
     return 'free trial';
@@ -238,11 +255,13 @@ export default function PaymentPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [payingTermId, setPayingTermId] = useState<string | null>(null);
+  const [payingCombinedTermId, setPayingCombinedTermId] = useState<string | null>(null);
   const [payingSessionId, setPayingSessionId] = useState<string | null>(null);
   const [verifyingRef, setVerifyingRef] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string>('');
   const [selectedTermId, setSelectedTermId] = useState<string>('');
   const [handledReference, setHandledReference] = useState<string | null>(null);
+  const [showSwitchBlockedModal, setShowSwitchBlockedModal] = useState(false);
 
   const refreshData = useCallback(async () => {
     try {
@@ -311,10 +330,11 @@ export default function PaymentPage() {
     [selectedSessionId, sessionSummaries],
   );
 
-  const selectedSessionTerms = useMemo(
-    () => terms.filter((term) => term.session_id === selectedSessionId),
-    [selectedSessionId, terms],
-  );
+  const selectedSessionTerms = useMemo(() => {
+    return terms
+      .filter((term) => term.session_id === selectedSessionId)
+      .sort(compareTermsByDisplayOrder);
+  }, [selectedSessionId, terms]);
 
   useEffect(() => {
     if (selectedSessionTerms.length === 0) {
@@ -403,10 +423,73 @@ export default function PaymentPage() {
 
   const visibleTerms = useMemo(() => {
     if (!selectedSessionId) {
-      return terms;
+      return [...terms].sort((left, right) => {
+        if (left.session_id !== right.session_id) {
+          return left.session_name.localeCompare(right.session_name);
+        }
+        return compareTermsByDisplayOrder(left, right);
+      });
     }
-    return terms.filter((term) => term.session_id === selectedSessionId);
-  }, [selectedSessionId, terms]);
+    return selectedSessionTerms;
+  }, [selectedSessionId, selectedSessionTerms, terms]);
+
+  const switchBlocked = searchParams.get('switch_blocked') === '1';
+  const switchBlockedMessageParam = asString(searchParams.get('switch_message'));
+  const switchBlockedTargetTermId = asString(searchParams.get('target_term_id'));
+  const switchBlockedTargetTermNameParam = asString(searchParams.get('target_term_name'));
+  const switchBlockedTargetSessionId = asString(searchParams.get('target_session_id'));
+
+  useEffect(() => {
+    if (!switchBlocked) {
+      return;
+    }
+
+    if (
+      switchBlockedTargetSessionId &&
+      sessionSummaries.some((session) => session.sessionId === switchBlockedTargetSessionId)
+    ) {
+      setSelectedSessionId(switchBlockedTargetSessionId);
+    }
+  }, [sessionSummaries, switchBlocked, switchBlockedTargetSessionId]);
+
+  useEffect(() => {
+    if (!switchBlocked || !switchBlockedTargetTermId) {
+      return;
+    }
+
+    const existsInCurrentSession = selectedSessionTerms.some((term) => term.id === switchBlockedTargetTermId);
+    if (existsInCurrentSession) {
+      setSelectedTermId(switchBlockedTargetTermId);
+    }
+  }, [selectedSessionTerms, switchBlocked, switchBlockedTargetTermId]);
+
+  useEffect(() => {
+    if (!switchBlocked) {
+      return;
+    }
+
+    setShowSwitchBlockedModal(true);
+  }, [switchBlocked]);
+
+  const switchBlockedTargetTermName = useMemo(() => {
+    if (switchBlockedTargetTermNameParam.trim() !== '') {
+      return switchBlockedTargetTermNameParam;
+    }
+
+    if (switchBlockedTargetTermId.trim() === '') {
+      return 'the selected term';
+    }
+
+    const term = terms.find((entry) => entry.id === switchBlockedTargetTermId);
+    return term?.name ?? 'the selected term';
+  }, [switchBlockedTargetTermId, switchBlockedTargetTermNameParam, terms]);
+
+  const switchBlockedMessage = useMemo(() => {
+    if (switchBlockedMessageParam.trim() !== '') {
+      return switchBlockedMessageParam;
+    }
+    return `Please make payment for ${switchBlockedTargetTermName} before switching term.`;
+  }, [switchBlockedMessageParam, switchBlockedTargetTermName]);
 
   const initializeTermPayment = async (termId: string) => {
     setError(null);
@@ -427,6 +510,38 @@ export default function PaymentPage() {
       setError(parseApiError(err, 'Unable to initialize term payment.'));
     } finally {
       setPayingTermId(null);
+    }
+  };
+
+  const initializeCombinedTermPayment = async (termId: string) => {
+    setError(null);
+    setNotice(null);
+    setPayingCombinedTermId(termId);
+
+    try {
+      const payload = await apiFetch<{ authorization_url?: string; purpose?: string }>(
+        '/api/v1/terms/' + termId + '/paystack/initialize',
+        {
+          method: 'POST',
+          body: JSON.stringify({ include_previous_unpaid: true }),
+        },
+      );
+
+      const authUrl = asString(payload?.authorization_url);
+      if (!authUrl) {
+        setError('Paystack did not return an authorization URL.');
+        return;
+      }
+
+      setNotice(
+        asString(payload?.purpose).trim() ||
+          'You are paying both outstanding terms and the selected term in one checkout.',
+      );
+      window.location.assign(authUrl);
+    } catch (err) {
+      setError(parseApiError(err, 'Unable to initialize combined payment.'));
+    } finally {
+      setPayingCombinedTermId(null);
     }
   };
 
@@ -500,6 +615,8 @@ export default function PaymentPage() {
         const scope = asString(payload?.scope, 'term');
         if (scope === 'session') {
           setNotice('Session payment verified successfully and applied.');
+        } else if (scope === 'outstanding_plus_term') {
+          setNotice('Outstanding + selected term payment verified successfully and applied.');
         } else {
           setNotice('Term payment verified successfully and applied.');
         }
@@ -556,6 +673,29 @@ export default function PaymentPage() {
       </div>
 
       <div className={styles.page}>
+        {showSwitchBlockedModal ? (
+          <div className={styles.modalBackdrop} role="dialog" aria-modal="true" aria-labelledby="switch-blocked-title">
+            <div className={styles.modalCard}>
+              <h2 id="switch-blocked-title">Term Switch Blocked</h2>
+              <p>{switchBlockedMessage}</p>
+              <p>
+                Complete payment for <strong>{switchBlockedTargetTermName}</strong> to continue switching.
+              </p>
+              <div className={styles.modalActions}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSwitchBlockedModal(false);
+                    router.replace('/settings/payment');
+                  }}
+                >
+                  Continue to Payment
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <section className={styles.hero}>
           <h1>Payment Center</h1>
           <p>Pay per term or settle a complete session from one place.</p>
@@ -681,12 +821,32 @@ export default function PaymentPage() {
                   disabled={
                     !selectedSessionTerm ||
                     selectedSessionTerm.outstanding_balance <= 0 ||
+                    selectedSessionTerm.can_pay_term === false ||
                     payingTermId === selectedTermId ||
+                    payingCombinedTermId === selectedTermId ||
                     verifyingRef !== null
                   }
                 >
                   {payingTermId === selectedTermId ? 'Preparing...' : 'Pay Selected Term'}
                 </button>
+
+                {selectedSessionTerm &&
+                selectedSessionTerm.outstanding_balance > 0 &&
+                selectedSessionTerm.can_pay_term === false ? (
+                  <button
+                    type="button"
+                    onClick={() => void initializeCombinedTermPayment(selectedSessionTerm.id)}
+                    disabled={
+                      payingCombinedTermId === selectedSessionTerm.id ||
+                      payingTermId === selectedSessionTerm.id ||
+                      verifyingRef !== null
+                    }
+                  >
+                    {payingCombinedTermId === selectedSessionTerm.id
+                      ? 'Preparing...'
+                      : 'Pay Outstanding + Selected Term'}
+                  </button>
+                ) : null}
               </div>
 
               {selectedSession ? (
@@ -709,6 +869,8 @@ export default function PaymentPage() {
                       <strong>Payment Locked:</strong>{' '}
                       {selectedSessionTerm.payment_lock_reason ??
                         'Please settle previous term before paying this term.'}
+                      <br />
+                      Use <strong>Pay Outstanding + Selected Term</strong> to clear both at once.
                     </>
                   ) : selectedSessionTerm.outstanding_balance > 0 ? (
                     <>
@@ -807,7 +969,19 @@ export default function PaymentPage() {
                               {payingTermId === term.id ? 'Preparing...' : 'Pay Now'}
                             </button>
                           ) : term.outstanding_balance > 0 && term.can_pay_term === false ? (
-                            <span className={styles.lockedChip}>Locked</span>
+                            <>
+                              <span className={styles.lockedChip}>Locked</span>
+                              <button
+                                type="button"
+                                className={styles.payBtn}
+                                onClick={() => void initializeCombinedTermPayment(term.id)}
+                                disabled={payingCombinedTermId === term.id || verifyingRef !== null}
+                              >
+                                {payingCombinedTermId === term.id
+                                  ? 'Preparing...'
+                                  : 'Pay Outstanding + This Term'}
+                              </button>
+                            </>
                           ) : displayPaymentStatus === 'free trial' ? (
                             <span className={styles.trialChip}>Free Trial</span>
                           ) : displayPaymentStatus === 'pending' ? (
@@ -866,10 +1040,18 @@ export default function PaymentPage() {
                         <tr key={payment.id}>
                           <td>{formatDate(payment.created_at)}</td>
                           <td>{payment.reference}</td>
-                          <td>{payment.scope === 'session' ? 'Session' : 'Term'}</td>
+                          <td>
+                            {payment.scope === 'session'
+                              ? 'Session'
+                              : payment.scope === 'outstanding_plus_term'
+                              ? 'Combined'
+                              : 'Term'}
+                          </td>
                           <td>
                             {payment.scope === 'session'
                               ? `${payment.session_name} (${payment.term_count} terms)`
+                              : payment.scope === 'outstanding_plus_term'
+                              ? `Outstanding + selected term (${payment.term_count} terms)`
                               : payment.term_name}
                           </td>
                           <td>{formatNaira(payment.amount)}</td>
