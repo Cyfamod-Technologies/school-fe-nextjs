@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { agentApi } from '@/lib/agents';
@@ -27,6 +27,14 @@ interface DashboardData {
     can_request_payout: boolean;
   };
   recent_referrals: unknown[];
+}
+
+interface RecentReferral {
+  id: string;
+  referralCode: string;
+  schoolName: string;
+  status: string;
+  createdAt: string;
 }
 
 const DEFAULT_DASHBOARD: DashboardData = {
@@ -63,8 +71,7 @@ const asRecord = (value: unknown): Record<string, unknown> =>
 
 const normalizeDashboard = (payload: unknown): DashboardData => {
   const root = asRecord(payload);
-  const possibleData = root.data;
-  const source = asRecord(possibleData ?? root);
+  const source = asRecord(root.data ?? root);
 
   const agent = asRecord(source.agent);
   const referrals = asRecord(source.referrals);
@@ -97,7 +104,7 @@ const normalizeDashboard = (payload: unknown): DashboardData => {
       available_for_payout: toNumber(earnings.available_for_payout),
       min_payout_threshold: toNumber(
         earnings.min_payout_threshold,
-        DEFAULT_DASHBOARD.earnings.min_payout_threshold
+        DEFAULT_DASHBOARD.earnings.min_payout_threshold,
       ),
       can_request_payout: Boolean(earnings.can_request_payout),
     },
@@ -109,22 +116,10 @@ const normalizeDashboard = (payload: unknown): DashboardData => {
   };
 };
 
-type Tone = 'blue' | 'emerald' | 'amber' | 'cyan';
+const formatNumber = (value: number): string => value.toLocaleString('en-NG');
 
-interface StatCardProps {
-  title: string;
-  value: string;
-  subtitle: string;
-  tone: Tone;
-}
-
-interface RecentReferral {
-  id: string;
-  referralCode: string;
-  schoolName: string;
-  status: string;
-  createdAt: string;
-}
+const formatNaira = (value: number): string =>
+  `₦${value.toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
 
 const statusLabel = (value: string): string =>
   value
@@ -132,20 +127,14 @@ const statusLabel = (value: string): string =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(' ');
 
-const compactNaira = (amount: number): string =>
-  `₦${new Intl.NumberFormat('en-NG', {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(amount)}`;
-
-const safeDate = (value: string): string => {
+const formatDate = (value: string): string => {
   if (!value) {
-    return 'Unknown date';
+    return 'N/A';
   }
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return 'Unknown date';
+    return 'N/A';
   }
 
   return new Intl.DateTimeFormat('en-NG', {
@@ -155,57 +144,60 @@ const safeDate = (value: string): string => {
   }).format(date);
 };
 
-const calcRate = (value: number, total: number): number => {
-  if (total <= 0) {
+const percentage = (part: number, whole: number): number => {
+  if (whole <= 0) {
     return 0;
   }
-  return Math.max(0, Math.min(100, (value / total) * 100));
+  return Math.max(0, Math.min(100, (part / whole) * 100));
 };
 
-const toneClasses: Record<Tone, { ring: string; chip: string; value: string }> = {
-  blue: {
-    ring: 'border-sky-200',
-    chip: 'bg-sky-100 text-sky-700',
-    value: 'text-sky-700',
-  },
-  emerald: {
-    ring: 'border-emerald-200',
-    chip: 'bg-emerald-100 text-emerald-700',
-    value: 'text-emerald-700',
-  },
-  amber: {
-    ring: 'border-amber-200',
-    chip: 'bg-amber-100 text-amber-700',
-    value: 'text-amber-700',
-  },
-  cyan: {
-    ring: 'border-cyan-200',
-    chip: 'bg-cyan-100 text-cyan-700',
-    value: 'text-cyan-700',
-  },
+const badgeClassForStatus = (status: string): string => {
+  const value = status.toLowerCase();
+  if (value === 'paid' || value === 'approved' || value === 'active') {
+    return 'badge badge-success';
+  }
+  if (value === 'registered' || value === 'visited') {
+    return 'badge badge-info';
+  }
+  if (value === 'rejected' || value === 'suspended' || value === 'inactive') {
+    return 'badge badge-danger';
+  }
+  return 'badge badge-warning';
 };
 
-function StatCard({ title, value, subtitle, tone }: StatCardProps) {
-  const toneStyle = toneClasses[tone];
-  return (
-    <article className={`rounded-2xl border bg-white p-6 shadow-sm ${toneStyle.ring}`}>
-      <div className="mb-4 flex items-center justify-between">
-        <p className="text-sm font-semibold text-slate-600">{title}</p>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${toneStyle.chip}`}>
-          Live
-        </span>
-      </div>
-      <p className={`text-3xl font-bold ${toneStyle.value}`}>{value}</p>
-      <p className="mt-2 text-xs text-slate-500">{subtitle}</p>
-    </article>
-  );
-}
-
-export default function AgentDashboard() {
+export default function AgentDashboardPage() {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const recentReferrals = useMemo<RecentReferral[]>(
+    () =>
+      (data?.recent_referrals ?? []).map((entry, index) => {
+        const row = asRecord(entry);
+        const school = asRecord(row.school);
+        const code = row.referral_code;
+        const schoolName = school.name;
+        const createdAt = row.created_at;
+        const id = row.id;
+        const status = row.status;
+
+        return {
+          id:
+            typeof id === 'string' && id.trim() !== '' ? id : `referral-${index + 1}`,
+          referralCode:
+            typeof code === 'string' && code.trim() !== '' ? code : 'N/A',
+          schoolName:
+            typeof schoolName === 'string' && schoolName.trim() !== ''
+              ? schoolName
+              : 'School not attached',
+          status:
+            typeof status === 'string' && status.trim() !== '' ? status : 'pending',
+          createdAt: typeof createdAt === 'string' ? createdAt : '',
+        };
+      }),
+    [data?.recent_referrals],
+  );
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -219,43 +211,46 @@ export default function AgentDashboard() {
         }
 
         const response = await agentApi.getDashboard();
+
         if (response.ok) {
           const result = await response.json();
           setData(normalizeDashboard(result));
-        } else if (response.status === 401) {
+          return;
+        }
+
+        if (response.status === 401) {
           localStorage.removeItem('agentToken');
           localStorage.removeItem('agent_token');
           localStorage.removeItem('agent');
           router.replace('/agent/login');
           return;
-        } else {
-          let message = 'Failed to load dashboard';
-          try {
-            const result = await response.json();
-            if (typeof result?.message === 'string' && result.message.trim() !== '') {
-              message = result.message;
-            }
-          } catch {
-            // ignore parse error and keep fallback message
-          }
-          setError(message);
         }
+
+        let message = 'Failed to load dashboard data.';
+        try {
+          const result = await response.json();
+          if (typeof result?.message === 'string' && result.message.trim() !== '') {
+            message = result.message;
+          }
+        } catch {
+          // keep fallback message
+        }
+        setError(message);
       } catch {
-        setError('An error occurred');
+        setError('An error occurred while loading dashboard.');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchDashboard();
+    void fetchDashboard();
   }, [router]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
-        <div className="text-center">
-          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-sky-200 border-t-sky-600" />
-          <p className="font-medium text-slate-600">Loading your dashboard...</p>
+      <div className="d-flex align-items-center justify-content-center min-vh-100">
+        <div className="spinner-border text-primary" role="status">
+          <span className="sr-only">Loading...</span>
         </div>
       </div>
     );
@@ -263,358 +258,305 @@ export default function AgentDashboard() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 px-4 py-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="rounded-lg border-l-4 border-red-500 bg-red-50 p-6">
-            <p className="font-medium text-red-700">{error}</p>
-            {error.toLowerCase().includes('log in') && (
+      <>
+        <div className="breadcrumbs-area">
+          <h3>Agent Dashboard</h3>
+          <ul>
+            <li>
+              <Link href="/agent/dashboard">Home</Link>
+            </li>
+            <li>Agent</li>
+          </ul>
+        </div>
+
+        <div className="card height-auto">
+          <div className="card-body">
+            <div className="alert alert-danger mb-0 d-flex justify-content-between align-items-center">
+              <span>{error}</span>
               <button
                 type="button"
+                className="btn btn-sm btn-outline-danger"
                 onClick={() => router.push('/agent/login')}
-                className="mt-4 inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
               >
-                Go to login
+                Go to Login
               </button>
-            )}
+            </div>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-gray-50 px-4 py-8">
-        <div className="mx-auto max-w-7xl text-center text-gray-600">
-          No data available
+      <div className="card height-auto">
+        <div className="card-body">
+          <p className="text-muted mb-0">No dashboard data available.</p>
         </div>
       </div>
     );
   }
 
-  const conversionRate = toNumber(data.referrals.conversion_rate);
   const agentStatus = data.agent.status.toLowerCase();
   const isApproved = agentStatus === 'approved';
-  const payoutReady =
+  const conversionRate = toNumber(data.referrals.conversion_rate);
+  const payoutUnlocked =
     data.earnings.available_for_payout >= data.earnings.min_payout_threshold;
-
-  const recentReferrals = useMemo<RecentReferral[]>(
-    () =>
-      data.recent_referrals.map((entry, index) => {
-        const row = asRecord(entry);
-        const school = asRecord(row.school);
-
-        const idValue = row.id;
-        const referralCodeValue = row.referral_code;
-        const schoolNameValue = school.name;
-        const statusValue = row.status;
-        const createdAtValue = row.created_at;
-
-        return {
-          id:
-            typeof idValue === 'string' && idValue.trim() !== ''
-              ? idValue
-              : `row-${index}`,
-          referralCode:
-            typeof referralCodeValue === 'string' && referralCodeValue.trim() !== ''
-              ? referralCodeValue
-              : 'N/A',
-          schoolName:
-            typeof schoolNameValue === 'string' && schoolNameValue.trim() !== ''
-              ? schoolNameValue
-              : 'School not attached',
-          status:
-            typeof statusValue === 'string' && statusValue.trim() !== ''
-              ? statusValue
-              : 'pending',
-          createdAt: typeof createdAtValue === 'string' ? createdAtValue : '',
-        };
-      }),
-    [data.recent_referrals]
+  const payoutGap = Math.max(
+    data.earnings.min_payout_threshold - data.earnings.available_for_payout,
+    0,
   );
+
+  const summaryCards = [
+    {
+      key: 'referrals',
+      iconWrap: 'bg-light-blue',
+      iconClass: 'flaticon-classmates text-blue',
+      title: 'Total Referrals',
+      value: formatNumber(data.referrals.total),
+      note: `${formatNumber(data.referrals.registered)} schools registered`,
+    },
+    {
+      key: 'conversion',
+      iconWrap: 'bg-light-yellow',
+      iconClass: 'flaticon-percentage-discount text-orange',
+      title: 'Conversion Rate',
+      value: `${conversionRate.toFixed(1)}%`,
+      note: `${formatNumber(data.referrals.paid)} paying schools`,
+    },
+    {
+      key: 'earnings',
+      iconWrap: 'bg-light-green',
+      iconClass: 'flaticon-money text-green',
+      title: 'Total Earnings',
+      value: formatNaira(data.earnings.total),
+      note: 'Lifetime commissions',
+    },
+    {
+      key: 'payout',
+      iconWrap: payoutUnlocked ? 'bg-light-green' : 'bg-light-red',
+      iconClass: payoutUnlocked ? 'flaticon-script text-green' : 'flaticon-script text-red',
+      title: 'Available Balance',
+      value: formatNaira(data.earnings.available_for_payout),
+      note: payoutUnlocked
+        ? 'Ready for payout request'
+        : `Need ${formatNaira(payoutGap)} more`,
+    },
+  ];
 
   const funnelRows = [
     {
+      key: 'visited',
       label: 'Visited',
       value: data.referrals.visited,
-      rate: calcRate(data.referrals.visited, data.referrals.total),
-      barClass: 'bg-sky-500',
+      rate: percentage(data.referrals.visited, data.referrals.total),
+      barClass: 'bg-info',
     },
     {
+      key: 'registered',
       label: 'Registered',
       value: data.referrals.registered,
-      rate: calcRate(data.referrals.registered, data.referrals.visited),
-      barClass: 'bg-amber-500',
+      rate: percentage(data.referrals.registered, data.referrals.visited),
+      barClass: 'bg-warning',
     },
     {
+      key: 'paid',
       label: 'Paid',
       value: data.referrals.paid,
-      rate: calcRate(data.referrals.paid, data.referrals.registered),
-      barClass: 'bg-emerald-500',
+      rate: percentage(data.referrals.paid, data.referrals.registered),
+      barClass: 'bg-success',
     },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 px-4 py-8 md:px-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-2xl border border-sky-200 bg-white p-6 shadow-sm md:p-8">
-          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-sky-700">
-                Agent Workspace
-              </p>
-              <h1 className="mb-2 text-slate-900">Welcome back, {data.agent.full_name}</h1>
-              <p className="max-w-2xl text-slate-600">
-                View referral pipeline health, monitor commissions, and request payouts from one place.
-              </p>
-            </div>
-
-            <div className="flex flex-col items-start gap-3 md:items-end">
-              <span
-                className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                  isApproved
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : 'bg-amber-100 text-amber-700'
-                }`}
-              >
-                {statusLabel(agentStatus)}
-              </span>
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  href="/agent/referrals"
-                  className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100"
-                >
-                  Referrals
-                </Link>
-                <Link
-                  href="/agent/earnings"
-                  className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                >
-                  Earnings
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          {!isApproved && (
-            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              Your account is currently pending approval. Referral tracking is visible, but payout and full operations unlock after approval.
-            </div>
-          )}
-        </section>
-
-        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            title="Total Referrals"
-            value={String(data.referrals.total)}
-            subtitle={`${data.referrals.visited} visited • ${data.referrals.registered} registered`}
-            tone="blue"
-          />
-          <StatCard
-            title="Conversion Rate"
-            value={`${conversionRate.toFixed(1)}%`}
-            subtitle={`${data.referrals.paid} paid schools`}
-            tone="amber"
-          />
-          <StatCard
-            title="Total Earnings"
-            value={compactNaira(data.earnings.total)}
-            subtitle="All-time commissions"
-            tone="emerald"
-          />
-          <StatCard
-            title="Available Payout"
-            value={compactNaira(data.earnings.available_for_payout)}
-            subtitle={`Minimum payout: ${compactNaira(data.earnings.min_payout_threshold)}`}
-            tone="cyan"
-          />
-        </section>
-
-        <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="space-y-6 lg:col-span-2">
-            <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="mb-6 flex items-center justify-between">
-                <h2 className="text-slate-900">Referral Funnel</h2>
-                <p className="text-sm text-slate-500">Performance by stage</p>
-              </div>
-
-              <div className="space-y-4">
-                {funnelRows.map((row) => (
-                  <div key={row.label}>
-                    <div className="mb-1 flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-700">{row.label}</p>
-                      <p className="text-sm font-semibold text-slate-800">
-                        {row.value} <span className="text-slate-500">({row.rate.toFixed(0)}%)</span>
-                      </p>
-                    </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className={`h-full rounded-full ${row.barClass}`}
-                        style={{ width: `${row.rate}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </article>
-
-            <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="mb-6 flex items-center justify-between">
-                <h2 className="text-slate-900">Earnings Breakdown</h2>
-                <p className="text-sm text-slate-500">Commission status</p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                  <p className="text-sm font-semibold text-amber-700">Pending</p>
-                  <p className="mt-2 text-2xl font-bold text-amber-800">
-                    {compactNaira(data.earnings.pending)}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
-                  <p className="text-sm font-semibold text-sky-700">Approved</p>
-                  <p className="mt-2 text-2xl font-bold text-sky-800">
-                    {compactNaira(data.earnings.approved)}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                  <p className="text-sm font-semibold text-emerald-700">Paid Out</p>
-                  <p className="mt-2 text-2xl font-bold text-emerald-800">
-                    {compactNaira(data.earnings.paid)}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-4">
-                  <p className="text-sm font-semibold text-cyan-700">Total Earnings</p>
-                  <p className="mt-2 text-2xl font-bold text-cyan-800">
-                    {compactNaira(data.earnings.total)}
-                  </p>
-                </div>
-              </div>
-            </article>
-          </div>
-
-          <aside className="space-y-6 lg:sticky lg:top-6 lg:h-fit">
-            <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="mb-4 text-slate-900">Quick Actions</h2>
-              <div className="space-y-3">
-                <Link
-                  href="/agent/referrals"
-                  className="block rounded-xl border border-sky-200 bg-sky-50 p-4 transition hover:bg-sky-100"
-                >
-                  <p className="font-semibold text-sky-800">Manage Referrals</p>
-                  <p className="text-sm text-sky-700">Create and track referral links.</p>
-                </Link>
-
-                <Link
-                  href="/agent/earnings"
-                  className="block rounded-xl border border-emerald-200 bg-emerald-50 p-4 transition hover:bg-emerald-100"
-                >
-                  <p className="font-semibold text-emerald-800">View Earnings</p>
-                  <p className="text-sm text-emerald-700">Inspect commission history.</p>
-                </Link>
-
-                {payoutReady ? (
-                  <Link
-                    href="/agent/payouts"
-                    className="block rounded-xl border border-cyan-200 bg-cyan-50 p-4 transition hover:bg-cyan-100"
-                  >
-                    <p className="font-semibold text-cyan-800">Request Payout</p>
-                    <p className="text-sm text-cyan-700">You can request payout right now.</p>
-                  </Link>
-                ) : (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="font-semibold text-slate-700">Payout Locked</p>
-                    <p className="text-sm text-slate-600">
-                      Minimum required: {compactNaira(data.earnings.min_payout_threshold)}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </article>
-
-            <article
-              className={`rounded-2xl border p-6 shadow-sm ${
-                isApproved
-                  ? 'border-emerald-200 bg-emerald-50'
-                  : 'border-amber-200 bg-amber-50'
-              }`}
-            >
-              <p
-                className={`text-sm font-semibold ${
-                  isApproved ? 'text-emerald-700' : 'text-amber-700'
-                }`}
-              >
-                Account Status
-              </p>
-              <p
-                className={`mt-2 ${
-                  isApproved ? 'text-emerald-800' : 'text-amber-800'
-                }`}
-              >
-                {isApproved
-                  ? 'Your account is active. Keep growing your referral network.'
-                  : 'Awaiting admin approval before full access is enabled.'}
-              </p>
-            </article>
-          </aside>
-        </section>
-
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-slate-900">Recent Referrals</h2>
-            <Link href="/agent/referrals" className="text-sm font-semibold text-sky-700 hover:underline">
-              View all
-            </Link>
-          </div>
-
-          {recentReferrals.length === 0 ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
-              No recent referrals yet. Create your first referral link to get started.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-separate border-spacing-0 text-left">
-                <thead>
-                  <tr>
-                    <th className="border-b border-slate-200 pb-3 pr-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Referral Code
-                    </th>
-                    <th className="border-b border-slate-200 pb-3 pr-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      School
-                    </th>
-                    <th className="border-b border-slate-200 pb-3 pr-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Status
-                    </th>
-                    <th className="border-b border-slate-200 pb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Created
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentReferrals.slice(0, 6).map((referral) => (
-                    <tr key={referral.id}>
-                      <td className="border-b border-slate-100 py-3 pr-4 font-semibold text-slate-800">
-                        {referral.referralCode}
-                      </td>
-                      <td className="border-b border-slate-100 py-3 pr-4 text-slate-700">
-                        {referral.schoolName}
-                      </td>
-                      <td className="border-b border-slate-100 py-3 pr-4">
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                          {statusLabel(referral.status)}
-                        </span>
-                      </td>
-                      <td className="border-b border-slate-100 py-3 text-slate-600">
-                        {safeDate(referral.createdAt)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+    <>
+      <div className="breadcrumbs-area">
+        <h3>Agent Dashboard</h3>
+        <ul>
+          <li>
+            <Link href="/agent/dashboard">Home</Link>
+          </li>
+          <li>Agent</li>
+        </ul>
       </div>
-    </div>
+
+      {!isApproved && (
+        <div className="card height-auto mg-b-20">
+          <div className="card-body">
+            <div className="alert alert-warning mb-0">
+              <strong>Account Under Review:</strong> Your account is being verified. You
+              can continue generating referrals, but payout requests will open after
+              approval.
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="row gutters-20">
+        {summaryCards.map((card) => (
+          <div key={card.key} className="col-xl-3 col-sm-6 col-12">
+            <div className="dashboard-summery-one mg-b-20">
+              <div className="row align-items-center">
+                <div className="col-5">
+                  <div className={`item-icon ${card.iconWrap}`}>
+                    <i className={card.iconClass} />
+                  </div>
+                </div>
+                <div className="col-7">
+                  <div className="item-content">
+                    <div className="item-title">{card.title}</div>
+                    <div className="item-number">
+                      <span>{card.value}</span>
+                    </div>
+                    <small className="d-block text-muted mt-1">{card.note}</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="row gutters-20">
+        <div className="col-12 col-xl-8 col-6-xxxl">
+          <div className="card dashboard-card-one pd-b-20 mg-b-20">
+            <div className="card-body">
+              <div className="heading-layout1 mg-b-17">
+                <div className="item-title">
+                  <h3>Referral Funnel</h3>
+                </div>
+                <span className={badgeClassForStatus(data.agent.status)}>
+                  {statusLabel(data.agent.status)}
+                </span>
+              </div>
+
+              <p className="text-muted mb-4">
+                Track the movement from referral visits to paid conversions.
+              </p>
+
+              {funnelRows.map((row) => (
+                  <div key={row.key} className="mg-b-20">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="text-dark-medium">{row.label}</span>
+                    <span>
+                      {formatNumber(row.value)} ({row.rate.toFixed(0)}%)
+                    </span>
+                  </div>
+                  <div className="progress" style={{ height: '9px' }}>
+                    <div
+                      className={`progress-bar ${row.barClass}`}
+                      role="progressbar"
+                      style={{ width: `${row.rate}%` }}
+                      aria-valuenow={row.rate}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card dashboard-card-one pd-b-20">
+            <div className="card-body">
+              <div className="heading-layout1 mg-b-17">
+                <div className="item-title">
+                  <h3>Recent Referrals</h3>
+                </div>
+                <Link href="/agent/referrals" className="text-orange-peel">
+                  View All
+                </Link>
+              </div>
+
+              <div className="table-responsive">
+                <table className="table display data-table text-nowrap">
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>School</th>
+                      <th>Status</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentReferrals.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="text-center text-muted">
+                          No referrals yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      recentReferrals.slice(0, 6).map((referral) => (
+                        <tr key={referral.id}>
+                          <td>{referral.referralCode}</td>
+                          <td>{referral.schoolName}</td>
+                          <td>
+                            <span className={badgeClassForStatus(referral.status)}>
+                              {statusLabel(referral.status)}
+                            </span>
+                          </td>
+                          <td>{formatDate(referral.createdAt)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-12 col-xl-4 col-3-xxxl">
+          <div className="card dashboard-card-three pd-b-20 mg-b-20">
+            <div className="card-body">
+              <div className="heading-layout1 mg-b-17">
+                <div className="item-title">
+                  <h3>Quick Actions</h3>
+                </div>
+              </div>
+
+              <div className="d-flex flex-column">
+                <Link href="/agent/referrals" className="btn-fill-md bg-orange-peel text-light mb-3 text-center">
+                  Manage Referrals
+                </Link>
+                <Link href="/agent/earnings" className="btn-fill-md bg-light-sea-green text-light mb-3 text-center">
+                  View Earnings
+                </Link>
+                <Link
+                  href="/agent/payouts"
+                  className={`btn-fill-md text-light mb-3 text-center ${
+                    payoutUnlocked ? 'bg-dark-pastel-green' : 'bg-secondary'
+                  }`}
+                  aria-disabled={!payoutUnlocked}
+                >
+                  {payoutUnlocked ? 'Request Payout' : 'Payout Locked'}
+                </Link>
+              </div>
+
+              <hr />
+
+              <p className="mb-2">
+                <strong>Status:</strong>{' '}
+                <span className={badgeClassForStatus(data.agent.status)}>
+                  {statusLabel(data.agent.status)}
+                </span>
+              </p>
+              <p className="text-muted mb-0">
+                {isApproved
+                  ? 'Your account is active and ready to earn.'
+                  : 'Awaiting admin approval before payouts become available.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer className="footer-wrap-layout1" style={{ marginTop: '3rem' }}>
+        <div className="copyright">
+          © Copyrights <a href="#">Cyfamod Technologies</a> 2026. All rights
+          reserved.
+        </div>
+      </footer>
+    </>
   );
 }
