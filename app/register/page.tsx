@@ -113,8 +113,8 @@ export default function RegisterPage() {
   if (!registrationEnabled) {
     return (
       <>
-        <div className="login-page-wrap">
-          <div className="login-page-content">
+        <div className="login-page-wrap register-page-wrap">
+          <div className="login-page-content register-page-content">
             <div className="login-box text-center py-5 px-4">
               <div className="item-logo mb-4">
                 <Image
@@ -145,8 +145,8 @@ export default function RegisterPage() {
 
   return (
     <>
-      <div className="login-page-wrap">
-        <div className="login-page-content">
+      <div className="login-page-wrap register-page-wrap">
+        <div className="login-page-content register-page-content">
           <div className="register-login-cta mb-4 p-3 d-flex align-items-center justify-content-between flex-wrap">
             <div className="d-flex align-items-center">
               <span className="register-login-icon d-inline-flex align-items-center justify-content-center mr-3">
@@ -165,7 +165,7 @@ export default function RegisterPage() {
               Go to Login
             </Link>
           </div>
-          <div className="login-box">
+          <div className="login-box register-login-box">
             <div className="item-logo">
               <Image
                 src="/assets/img/logo2.png"
@@ -357,6 +357,34 @@ export default function RegisterPage() {
 const passthroughLoader: ImageLoader = ({ src }) => src;
 
 const styles = `
+.register-page-wrap {
+  position: relative;
+  min-height: 100vh;
+  height: auto;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.register-page-content {
+  min-height: 100vh;
+  height: auto;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 30px 24px 48px;
+}
+
+.register-page-content .register-login-cta,
+.register-page-content .register-login-box,
+.register-page-content .register-login-footer {
+  width: min(100%, 1040px);
+}
+
+.register-page-content .register-login-box {
+  min-width: 0;
+  padding: 3rem 2.5rem;
+}
+
 .register-login-cta {
   background: linear-gradient(135deg, #4076ff 0%, #6cc5ff 100%);
   border-radius: 18px;
@@ -414,5 +442,38 @@ const styles = `
 .register-login-footer .register-login-footer-link:hover {
   color: #0f4fe0;
   border-color: rgba(15, 79, 224, 0.6);
+}
+
+@media only screen and (max-width: 991px) {
+  .register-page-content {
+    padding: 24px 16px 32px;
+  }
+
+  .register-page-content .register-login-box {
+    padding: 2.25rem 1.5rem;
+  }
+}
+
+@media only screen and (max-width: 575px) {
+  .register-page-wrap {
+    min-height: 100dvh;
+    background-size: cover;
+    background-position: center top;
+  }
+
+  .register-page-content {
+    min-height: 100dvh;
+    padding: 18px 14px 28px;
+  }
+
+  .register-login-cta {
+    border-radius: 14px;
+    margin-bottom: 0.85rem !important;
+  }
+
+  .register-login-action {
+    width: 100%;
+    margin-top: 0.7rem;
+  }
 }
 `;
