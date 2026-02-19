@@ -14,6 +14,7 @@
   display: grid;
   gap: 18px;
   color: var(--text-main);
+  font-size: 1.03rem;
 }
 
 .loaderWrap {
@@ -41,7 +42,7 @@
 .hero p {
   margin: 8px 0 0;
   color: var(--text-muted);
-  font-size: 1rem;
+  font-size: 1.08rem;
 }
 
 .heroStats {
@@ -62,12 +63,12 @@
 
 .heroStat span {
   color: var(--text-muted);
-  font-size: 0.92rem;
+  font-size: 0.98rem;
   font-weight: 600;
 }
 
 .heroStat strong {
-  font-size: 1.4rem;
+  font-size: 1.52rem;
   font-weight: 800;
 }
 
@@ -124,7 +125,7 @@
 .trialStatus p {
   margin: 0;
   color: #2e5a4d;
-  font-size: 0.94rem;
+  font-size: 1rem;
 }
 
 .reauthLink {
@@ -216,6 +217,7 @@
 .empty {
   margin: 0;
   color: var(--text-muted);
+  font-size: 1rem;
 }
 
 .trialMeta {
@@ -246,7 +248,7 @@
   background: #ffffff;
   padding: 10px 12px;
   color: var(--text-main);
-  font-size: 0.98rem;
+  font-size: 1.04rem;
   font-weight: 600;
 }
 
@@ -256,7 +258,7 @@
   border: 1px solid transparent;
   border-radius: 10px;
   padding: 9px 14px;
-  font-size: 0.94rem;
+  font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
   transition: 0.18s ease;
@@ -296,7 +298,7 @@
   color: #385372;
   border-radius: 999px;
   padding: 5px 12px;
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 700;
 }
 
@@ -324,7 +326,7 @@
 
 .termCard h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.18rem;
   font-weight: 800;
 }
 
@@ -334,7 +336,7 @@
   justify-content: center;
   border-radius: 999px;
   padding: 4px 10px;
-  font-size: 0.76rem;
+  font-size: 0.84rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -375,7 +377,7 @@
 }
 
 .progressLabel {
-  font-size: 0.83rem;
+  font-size: 0.92rem;
   font-weight: 700;
 }
 
@@ -395,13 +397,13 @@
 }
 
 .studentStats span {
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   color: var(--text-muted);
   font-weight: 600;
 }
 
 .studentStats strong {
-  font-size: 1rem;
+  font-size: 1.08rem;
   font-weight: 800;
 }
 
@@ -421,13 +423,13 @@
 }
 
 .amounts span {
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   color: var(--text-muted);
   font-weight: 600;
 }
 
 .amounts strong {
-  font-size: 1rem;
+  font-size: 1.08rem;
   font-weight: 800;
 }
 
@@ -438,7 +440,7 @@
   flex-wrap: wrap;
 }
 
-.settled {
+.paidChip {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
@@ -447,7 +449,31 @@
   border: 1px solid #b6e5cb;
   padding: 7px 12px;
   font-weight: 700;
-  font-size: 0.84rem;
+  font-size: 0.9rem;
+}
+
+.pendingChip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #fff7e6;
+  color: #a06400;
+  border: 1px solid #f0d4a1;
+  padding: 7px 12px;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.lockedChip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #ffefef;
+  color: #b42318;
+  border: 1px solid #f5b5b2;
+  padding: 7px 12px;
+  font-weight: 700;
+  font-size: 0.9rem;
 }
 
 .trialChip {
@@ -459,7 +485,7 @@
   border: 1px solid #b9e6d3;
   padding: 7px 12px;
   font-weight: 700;
-  font-size: 0.84rem;
+  font-size: 0.9rem;
 }
 
 .invoiceDetails {
@@ -470,7 +496,7 @@
 .invoiceDetails summary {
   cursor: pointer;
   list-style: none;
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: #244466;
 }
@@ -493,7 +519,7 @@
   display: grid;
   grid-template-columns: 1.2fr 1fr 1fr;
   gap: 8px;
-  font-size: 0.84rem;
+  font-size: 0.92rem;
   color: #35506d;
 }
 
@@ -507,7 +533,7 @@
   min-width: 760px;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 0.88rem;
+  font-size: 0.96rem;
 }
 
 .table thead th {

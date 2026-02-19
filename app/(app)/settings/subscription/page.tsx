@@ -23,6 +23,7 @@ interface Term {
   name: string;
   session_id: string;
   session_name: string;
+  term_number: number;
   payment_status: string;
   amount_due: number;
   amount_paid: number;
@@ -34,6 +35,8 @@ interface Term {
   total_students_billed: number;
   students_paid_estimate: number;
   students_left_for_payment: number;
+  can_pay_term: boolean;
+  payment_lock_reason?: string;
   start_date?: string;
   end_date?: string;
   invoices: Invoice[];
@@ -111,6 +114,29 @@ const badgeClassName = (status: string): string => {
   return styles.badgeNeutral;
 };
 
+const displayTermStatus = (term: Term): string => {
+  if (term.is_free_trial_term && term.outstanding_balance <= 0) {
+    return 'free trial';
+  }
+
+  if (term.outstanding_balance > 0) {
+    return term.amount_paid > 0 ? 'partial' : 'unpaid';
+  }
+
+  if (term.amount_due <= 0 && term.amount_paid <= 0) {
+    return 'pending';
+  }
+
+  return 'paid';
+};
+
+const formatTermStatusLabel = (status: string): string => {
+  return status
+    .split(' ')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+
 const loadTerms = async (): Promise<Term[]> => {
   const payload = await apiFetch<unknown>('/api/v1/terms/school/all');
   const root = asRecord(payload);
@@ -154,6 +180,7 @@ const loadTerms = async (): Promise<Term[]> => {
       name: asString(row.name, 'Term'),
       session_id: asString(row.session_id),
       session_name: asString(row.session_name, 'Session'),
+      term_number: asNumber(row.term_number, 0),
       payment_status: asString(row.payment_status, 'pending'),
       amount_due: asNumber(row.amount_due),
       amount_paid: asNumber(row.amount_paid),
@@ -165,6 +192,8 @@ const loadTerms = async (): Promise<Term[]> => {
       total_students_billed: totalStudentsBilled,
       students_paid_estimate: studentsPaidEstimate,
       students_left_for_payment: studentsLeftForPayment,
+      can_pay_term: typeof row.can_pay_term === 'boolean' ? Boolean(row.can_pay_term) : true,
+      payment_lock_reason: asString(row.payment_lock_reason).trim() || undefined,
       start_date: asString(row.start_date),
       end_date: asString(row.end_date),
       invoices,
@@ -306,8 +335,32 @@ export default function PaymentPage() {
     [selectedSessionTerms, selectedTermId],
   );
 
+  const selectedSessionLockReason = useMemo(() => {
+    if (selectedSessionTerms.length === 0) {
+      return null;
+    }
+
+    const sortedTerms = [...selectedSessionTerms].sort((left, right) => {
+      const leftDate = Date.parse(left.start_date ?? '');
+      const rightDate = Date.parse(right.start_date ?? '');
+
+      if (Number.isFinite(leftDate) && Number.isFinite(rightDate) && leftDate !== rightDate) {
+        return leftDate - rightDate;
+      }
+
+      return (left.term_number ?? 0) - (right.term_number ?? 0);
+    });
+
+    const blockedTerm = sortedTerms.find((term) => term.can_pay_term === false);
+    if (!blockedTerm) {
+      return null;
+    }
+
+    return blockedTerm.payment_lock_reason ?? 'Please settle previous term before making this payment.';
+  }, [selectedSessionTerms]);
+
   const freeTrialTerms = useMemo(
-    () => terms.filter((term) => term.is_free_trial_term),
+    () => terms.filter((term) => term.is_free_trial_term && term.outstanding_balance <= 0),
     [terms],
   );
 
@@ -383,6 +436,11 @@ export default function PaymentPage() {
       return;
     }
 
+    if (selectedSessionLockReason) {
+      setError(selectedSessionLockReason);
+      return;
+    }
+
     setError(null);
     setNotice(null);
     setPayingSessionId(selectedSessionId);
@@ -411,14 +469,16 @@ export default function PaymentPage() {
       return;
     }
 
-    if (selectedSessionTerm.is_free_trial_term) {
-      setError(null);
-      setNotice('Selected term is on free trial. No payment is required for this term.');
+    if (selectedSessionTerm.can_pay_term === false) {
+      setError(
+        selectedSessionTerm.payment_lock_reason ??
+          'Please settle previous term before paying this term.',
+      );
       return;
     }
 
     if (selectedSessionTerm.outstanding_balance <= 0) {
-      setError('The selected term is already settled. Choose an unpaid term.');
+      setError('The selected term is already paid or pending billing. Choose an unpaid term.');
       return;
     }
 
@@ -592,6 +652,7 @@ export default function PaymentPage() {
                   disabled={
                     !selectedSession ||
                     selectedSession.totalOutstanding <= 0 ||
+                    selectedSessionLockReason !== null ||
                     payingSessionId !== null ||
                     verifyingRef !== null
                   }
@@ -609,7 +670,7 @@ export default function PaymentPage() {
                   {selectedSessionTerms.length === 0 ? <option>No terms in selected session</option> : null}
                   {selectedSessionTerms.map((term) => (
                     <option key={term.id} value={term.id}>
-                      {term.name} ({term.is_free_trial_term ? 'Free Trial' : term.outstanding_balance > 0 ? 'Unpaid' : 'Paid'})
+                      {term.name} ({formatTermStatusLabel(displayTermStatus(term))})
                     </option>
                   ))}
                 </select>
@@ -635,16 +696,36 @@ export default function PaymentPage() {
                 </p>
               ) : null}
 
+              {selectedSessionLockReason ? (
+                <p className={styles.sessionMeta}>
+                  <strong>Payment Locked:</strong> {selectedSessionLockReason}
+                </p>
+              ) : null}
+
               {selectedSessionTerm ? (
                 <p className={styles.sessionMeta}>
-                  {selectedSessionTerm.is_free_trial_term ? (
+                  {selectedSessionTerm.can_pay_term === false ? (
                     <>
-                      Selected term <strong>{selectedSessionTerm.name}</strong> is on free trial. Payment is not required.
+                      <strong>Payment Locked:</strong>{' '}
+                      {selectedSessionTerm.payment_lock_reason ??
+                        'Please settle previous term before paying this term.'}
                     </>
-                  ) : (
+                  ) : selectedSessionTerm.outstanding_balance > 0 ? (
                     <>
                       Selected term: <strong>{selectedSessionTerm.name}</strong> with outstanding{' '}
                       <strong>{formatNaira(selectedSessionTerm.outstanding_balance)}</strong>.
+                    </>
+                  ) : selectedSessionTerm.is_free_trial_term ? (
+                    <>
+                      Selected term <strong>{selectedSessionTerm.name}</strong> is on free trial. Payment is not required.
+                    </>
+                  ) : selectedSessionTerm.amount_due <= 0 && selectedSessionTerm.amount_paid <= 0 ? (
+                    <>
+                      Selected term <strong>{selectedSessionTerm.name}</strong> is pending billing.
+                    </>
+                  ) : (
+                    <>
+                      Selected term <strong>{selectedSessionTerm.name}</strong> is already paid.
                     </>
                   )}
                 </p>
@@ -666,11 +747,12 @@ export default function PaymentPage() {
                 <div className={styles.termGrid}>
                   {visibleTerms.map((term) => {
                     const progress = term.amount_due > 0 ? Math.min(100, Math.round((term.amount_paid / term.amount_due) * 100)) : 0;
+                    const displayPaymentStatus = displayTermStatus(term);
                     return (
                       <article key={term.id} className={styles.termCard}>
                         <header>
                           <h3>{term.name}</h3>
-                          <span className={`${styles.badge} ${badgeClassName(term.payment_status)}`}>{term.payment_status}</span>
+                          <span className={`${styles.badge} ${badgeClassName(displayPaymentStatus)}`}>{displayPaymentStatus}</span>
                         </header>
 
                         <p className={styles.termMeta}>
@@ -679,7 +761,7 @@ export default function PaymentPage() {
                           {term.end_date ? ` to ${formatDate(term.end_date)}` : ''}
                         </p>
 
-                        {term.is_free_trial_term ? (
+                        {term.is_free_trial_term && term.outstanding_balance <= 0 ? (
                           <p className={styles.trialMeta}>Free trial applied for this term.</p>
                         ) : null}
 
@@ -715,7 +797,7 @@ export default function PaymentPage() {
                         </div>
 
                         <div className={styles.actions}>
-                          {term.outstanding_balance > 0 ? (
+                          {term.outstanding_balance > 0 && term.can_pay_term !== false ? (
                             <button
                               type="button"
                               className={styles.payBtn}
@@ -724,10 +806,14 @@ export default function PaymentPage() {
                             >
                               {payingTermId === term.id ? 'Preparing...' : 'Pay Now'}
                             </button>
-                          ) : term.is_free_trial_term ? (
+                          ) : term.outstanding_balance > 0 && term.can_pay_term === false ? (
+                            <span className={styles.lockedChip}>Locked</span>
+                          ) : displayPaymentStatus === 'free trial' ? (
                             <span className={styles.trialChip}>Free Trial</span>
+                          ) : displayPaymentStatus === 'pending' ? (
+                            <span className={styles.pendingChip}>Pending Billing</span>
                           ) : (
-                            <span className={styles.settled}>Settled</span>
+                            <span className={styles.paidChip}>Paid</span>
                           )}
 
                         </div>
