@@ -20,6 +20,7 @@
     radial-gradient(circle at 94% 100%, rgba(249, 115, 22, 0.24), transparent 35%),
     linear-gradient(150deg, var(--ink-950), var(--ink-900));
   font-family: "Sora", "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 19px;
 }
 
 .noise {
@@ -81,7 +82,7 @@
   margin: 0;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  font-size: 0.78rem;
+  font-size: 0.92rem;
   font-weight: 700;
   color: #8ddde8;
 }
@@ -90,7 +91,7 @@
   margin: 0.72rem 0 0.24rem;
   line-height: 1.08;
   letter-spacing: -0.02em;
-  font-size: clamp(1.95rem, 4.1vw, 2.85rem);
+  font-size: clamp(2.2rem, 4.45vw, 3.1rem);
   font-weight: 800;
 }
 
@@ -116,7 +117,7 @@
 
 .storyCard h3 {
   margin: 0 0 0.22rem;
-  font-size: 1rem;
+  font-size: 1.15rem;
   color: #f4f9ff;
 }
 
@@ -124,13 +125,13 @@
   margin: 0;
   color: rgba(234, 244, 255, 0.82);
   line-height: 1.52;
-  font-size: 0.9rem;
+  font-size: 1.02rem;
 }
 
 .storyFoot {
   margin-top: 1rem;
   color: rgba(234, 244, 255, 0.76);
-  font-size: 0.88rem;
+  font-size: 1rem;
 }
 
 .storyFoot a {
@@ -176,7 +177,7 @@
   color: #5f778c;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  font-size: 0.72rem;
+  font-size: 0.84rem;
   font-weight: 700;
 }
 
@@ -184,13 +185,13 @@
   margin: 0.08rem 0 0;
   color: var(--text-strong);
   letter-spacing: -0.01em;
-  font-size: 1.55rem;
+  font-size: 1.8rem;
 }
 
 .formSubtitle {
   margin: 0.44rem 0 0;
   color: var(--text-muted);
-  font-size: 0.93rem;
+  font-size: 1.04rem;
 }
 
 .alertError,
@@ -198,7 +199,7 @@
   margin-top: 0.9rem;
   border-radius: 12px;
   padding: 0.72rem 0.84rem;
-  font-size: 0.9rem;
+  font-size: 1.02rem;
   line-height: 1.45;
 }
 
@@ -233,7 +234,7 @@
 
 .field label {
   color: var(--text-strong);
-  font-size: 0.86rem;
+  font-size: 0.99rem;
   font-weight: 700;
 }
 
@@ -251,7 +252,7 @@
   border: 1px solid var(--panel-border);
   background: #ffffff;
   color: var(--text-strong);
-  font-size: 0.95rem;
+  font-size: 1.06rem;
   line-height: 1.46;
   padding: 0.74rem 0.82rem;
   outline: none;
@@ -280,7 +281,7 @@
   border-radius: 8px;
   background: transparent;
   color: #35566f;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   font-weight: 700;
   padding: 0.24rem 0.45rem;
   cursor: pointer;
@@ -298,7 +299,7 @@
 
 .helperLink {
   color: #0c63b6;
-  font-size: 0.86rem;
+  font-size: 0.99rem;
   font-weight: 600;
   text-decoration: none;
 }
@@ -313,7 +314,7 @@
   background: linear-gradient(95deg, var(--accent), var(--accent-strong));
   color: #fff;
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 1.06rem;
   padding: 0.86rem 0.9rem;
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.2s ease;
@@ -349,7 +350,7 @@
   position: relative;
   text-align: center;
   color: #657f94;
-  font-size: 0.82rem;
+  font-size: 0.94rem;
   font-weight: 600;
 }
 
@@ -379,7 +380,7 @@
   margin: 0 0 0.52rem;
   text-align: center;
   color: #41627a;
-  font-size: 0.89rem;
+  font-size: 1rem;
   font-weight: 600;
 }
 
@@ -393,7 +394,7 @@
   margin: 0.48rem 0 0;
   text-align: center;
   color: #5f788d;
-  font-size: 0.82rem;
+  font-size: 0.94rem;
 }
 
 .hint code {
@@ -411,7 +412,7 @@
 .formFooter p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.88rem;
+  font-size: 0.99rem;
 }
 
 .formFooter a {
@@ -459,12 +460,13 @@
 .successCard h2 {
   margin: 0;
   color: #10283d;
-  font-size: 1.42rem;
+  font-size: 1.64rem;
 }
 
 .successCard p {
   margin: 0.42rem 0 0;
   color: #4d6478;
+  font-size: 1.04rem;
 }
 
 .successAction {
@@ -539,6 +541,7 @@
 
 @media (max-width: 640px) {
   .page {
+    font-size: 18px;
     padding: 0.85rem 0.68rem;
   }
 

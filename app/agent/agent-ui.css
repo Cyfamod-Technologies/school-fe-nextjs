@@ -6,7 +6,7 @@
   --agent-muted: #4d6478;
   --agent-card: #ffffff;
   --agent-brand: #ff9d01;
-  font-size: 17px;
+  font-size: 19px;
   color: var(--agent-ink);
 }
 
@@ -46,7 +46,7 @@
 
 .agent-sidebar-kicker {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.84rem;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: #7f8fa3;
@@ -54,7 +54,7 @@
 
 .agent-sidebar-brand h3 {
   margin: 4px 0 0;
-  font-size: 1.15rem !important;
+  font-size: 1.3rem !important;
   color: var(--agent-ink);
 }
 
@@ -73,6 +73,7 @@
   padding: 10px 12px;
   border-radius: 10px;
   color: #334b62;
+  font-size: 1.06rem;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
@@ -141,7 +142,7 @@
 }
 
 .agent-main-content .dashboard-summery-one .item-content .item-number {
-  font-size: 18px;
+  font-size: 21px;
 }
 
 .agent-mobile-header {
@@ -153,19 +154,19 @@
 }
 
 .agent-ui h1 {
-  font-size: clamp(2.2rem, 3.5vw, 2.95rem) !important;
+  font-size: clamp(2.45rem, 3.85vw, 3.2rem) !important;
   line-height: 1.15;
   letter-spacing: -0.02em;
 }
 
 .agent-ui h2 {
-  font-size: clamp(1.6rem, 2.1vw, 2rem) !important;
+  font-size: clamp(1.82rem, 2.35vw, 2.22rem) !important;
   line-height: 1.2;
   letter-spacing: -0.015em;
 }
 
 .agent-ui h3 {
-  font-size: clamp(1.15rem, 1.5vw, 1.4rem) !important;
+  font-size: clamp(1.3rem, 1.7vw, 1.56rem) !important;
   line-height: 1.25;
 }
 
@@ -176,36 +177,36 @@
 .agent-ui td,
 .agent-ui a,
 .agent-ui button {
-  font-size: 1.03rem;
+  font-size: 1.15rem;
   line-height: 1.55;
 }
 
 .agent-ui .text-xs {
-  font-size: 0.92rem !important;
+  font-size: 1.02rem !important;
 }
 
 .agent-ui .text-sm {
-  font-size: 1rem !important;
+  font-size: 1.12rem !important;
 }
 
 .agent-ui .text-base {
-  font-size: 1.08rem !important;
+  font-size: 1.2rem !important;
 }
 
 .agent-ui .text-lg {
-  font-size: 1.2rem !important;
+  font-size: 1.32rem !important;
 }
 
 .agent-ui input,
 .agent-ui textarea,
 .agent-ui select {
-  font-size: 1rem !important;
+  font-size: 1.12rem !important;
   line-height: 1.45;
   border-color: var(--agent-border) !important;
 }
 
 .agent-ui button {
-  font-size: 1rem;
+  font-size: 1.1rem;
 }
 
 .agent-ui table thead th {
@@ -213,7 +214,7 @@
 }
 
 .agent-ui table tbody td {
-  font-size: 0.97rem;
+  font-size: 1.08rem;
 }
 
 .agent-ui .bg-white {
@@ -240,7 +241,7 @@
 
 @media (max-width: 768px) {
   .agent-ui {
-    font-size: 16px;
+    font-size: 18px;
   }
 
   .agent-shell {
@@ -326,10 +327,10 @@
   }
 
   .agent-ui h1 {
-    font-size: clamp(1.9rem, 7vw, 2.35rem) !important;
+    font-size: clamp(2.14rem, 7.8vw, 2.6rem) !important;
   }
 
   .agent-ui h2 {
-    font-size: clamp(1.35rem, 5.5vw, 1.7rem) !important;
+    font-size: clamp(1.58rem, 6.2vw, 1.96rem) !important;
   }
 }

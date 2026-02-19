@@ -68,6 +68,8 @@ export default function AgentRegisterPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [awaitingVerification, setAwaitingVerification] = useState(false);
 
   const completeAuth = useCallback(
     (payload: { token?: string; agent?: unknown }) => {
@@ -79,6 +81,8 @@ export default function AgentRegisterPage() {
         localStorage.setItem('agent', JSON.stringify(payload.agent));
       }
 
+      setAwaitingVerification(false);
+      setSuccessMessage('Registration successful. Redirecting to your dashboard...');
       setSuccess(true);
       window.setTimeout(() => router.push('/agent/dashboard'), 1200);
     },
@@ -215,6 +219,18 @@ export default function AgentRegisterPage() {
         return;
       }
 
+      if (data?.verification_required || !data?.token) {
+        setAwaitingVerification(true);
+        setSuccessMessage(
+          readMessage(
+            data,
+            'Registration successful. Check your inbox/SPAM folder to verify your email before signing in.',
+          ),
+        );
+        setSuccess(true);
+        return;
+      }
+
       completeAuth({ token: data.token, agent: data.agent });
     } catch {
       setError('Unable to register right now. Please try again.');
@@ -228,8 +244,15 @@ export default function AgentRegisterPage() {
       <div className={styles.successPage}>
         <div className={styles.successCard}>
           <div className={styles.successIcon}>✓</div>
-          <h2>Registration Successful</h2>
-          <p>Your account has been created. Redirecting to your dashboard...</p>
+          <h2>{awaitingVerification ? 'Check Your Email' : 'Registration Successful'}</h2>
+          <p>{successMessage}</p>
+          {awaitingVerification && (
+            <div className={styles.formFooter}>
+              <p>
+                <Link href="/agent/login">Go to Login</Link>
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );

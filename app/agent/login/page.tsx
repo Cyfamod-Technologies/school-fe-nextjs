@@ -37,6 +37,18 @@ const readMessage = (payload: unknown, fallback: string): string => {
     if (typeof record.message === 'string' && record.message.trim() !== '') {
       return record.message;
     }
+
+    if (record.errors && typeof record.errors === 'object') {
+      const values = Object.values(record.errors as Record<string, unknown>);
+      for (const entry of values) {
+        if (Array.isArray(entry) && typeof entry[0] === 'string') {
+          return entry[0];
+        }
+        if (typeof entry === 'string' && entry.trim() !== '') {
+          return entry;
+        }
+      }
+    }
   }
   return fallback;
 };
