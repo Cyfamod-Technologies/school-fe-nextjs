@@ -27,6 +27,9 @@ interface ReferralRegistrationTableRow {
   school_name: string;
   students_count: number;
   registered_at: string;
+  payment_count: number;
+  paid_at: string;
+  active_at: string;
   has_school_registration: boolean;
   school_id: string;
 }
@@ -75,6 +78,24 @@ const formatDate = (dateString: string): string => {
     month: 'short',
     day: '2-digit',
   }).format(date);
+};
+
+const resolveRegistrationStatus = (registration: Record<string, unknown>, fallback: string): string => {
+  const activeAt = asString(registration.active_at).trim();
+  const paidAt = asString(registration.paid_at).trim();
+  const paymentCount = asNumber(registration.payment_count, 0);
+  const normalizedFallback = asString(fallback, 'registered').toLowerCase();
+
+  if (activeAt !== '') {
+    return 'active';
+  }
+  if (paidAt !== '' || paymentCount > 0) {
+    return 'paid';
+  }
+  if (normalizedFallback === 'visited') {
+    return 'visited';
+  }
+  return 'registered';
 };
 
 export default function AgentReferralsPage() {
@@ -256,27 +277,55 @@ export default function AgentReferralsPage() {
           const registrationId = asString(registration.id, `${referral.id}-reg-${index + 1}`);
           const schoolName = asString(school.name, '').trim();
           const schoolId = asString(school.id, asString(registration.school_id, '')).trim();
+          const paymentCount = asNumber(registration.payment_count, 0);
+          const paidAt = asString(registration.paid_at, '');
+          const activeAt = asString(registration.active_at, '');
+          const registrationFirstPaymentAmount = asNumber(
+            registration.first_payment_amount,
+            referral.first_payment_amount,
+          );
+          const status = resolveRegistrationStatus(registration, referral.status);
 
           return {
             id: `${referral.id}:${registrationId}`,
             referral_id: referral.id,
             referral_code: referral.referral_code,
             referral_link: referral.referral_link,
-            status: referral.status,
-            first_payment_amount: referral.first_payment_amount,
+            status,
+            first_payment_amount: registrationFirstPaymentAmount,
             school_name: schoolName || 'Unnamed school',
             students_count: asNumber(school.students_count, 0),
             registered_at: asString(
               registration.registered_at,
               asString(registration.created_at, referral.created_at),
             ),
+            payment_count: paymentCount,
+            paid_at: paidAt,
+            active_at: activeAt,
             has_school_registration: true,
             school_id: schoolId,
           };
         });
 
+        const dedupedBySchool = new Map<string, ReferralRegistrationTableRow>();
+        normalizedRows.forEach((row) => {
+          const dedupeKey = `${referral.id}:${row.school_id || row.id}`;
+          const existing = dedupedBySchool.get(dedupeKey);
+          if (!existing) {
+            dedupedBySchool.set(dedupeKey, row);
+            return;
+          }
+
+          const existingDate = Date.parse(existing.registered_at || '');
+          const currentDate = Date.parse(row.registered_at || '');
+          if (Number.isFinite(currentDate) && (!Number.isFinite(existingDate) || currentDate > existingDate)) {
+            dedupedBySchool.set(dedupeKey, row);
+          }
+        });
+        const dedupedRows = Array.from(dedupedBySchool.values());
+
         const schoolIds = new Set(
-          normalizedRows.map((row) => row.school_id).filter((value) => value !== ''),
+          dedupedRows.map((row) => row.school_id).filter((value) => value !== ''),
         );
         const legacySchool = asRecord(referral.school);
         const legacySchoolId = asString(legacySchool.id, '').trim();
@@ -287,7 +336,7 @@ export default function AgentReferralsPage() {
           !schoolIds.has(legacySchoolId) &&
           legacySchoolName !== ''
         ) {
-          normalizedRows.push({
+          dedupedRows.push({
             id: `${referral.id}:legacy-${legacySchoolId}`,
             referral_id: referral.id,
             referral_code: referral.referral_code,
@@ -297,12 +346,15 @@ export default function AgentReferralsPage() {
             school_name: legacySchoolName,
             students_count: asNumber(legacySchool.students_count, 0),
             registered_at: referral.created_at,
+            payment_count: asNumber(referral.first_payment_amount, 0) > 0 ? 1 : 0,
+            paid_at: asNumber(referral.first_payment_amount, 0) > 0 ? asString(referral.created_at, '') : '',
+            active_at: '',
             has_school_registration: true,
             school_id: legacySchoolId,
           });
         }
 
-        if (normalizedRows.length === 0) {
+        if (dedupedRows.length === 0) {
           return [
             {
               id: `${referral.id}-empty`,
@@ -314,13 +366,16 @@ export default function AgentReferralsPage() {
               school_name: 'No school registration yet',
               students_count: 0,
               registered_at: '',
+              payment_count: 0,
+              paid_at: '',
+              active_at: '',
               has_school_registration: false,
               school_id: '',
             },
           ];
         }
 
-        return normalizedRows;
+        return dedupedRows;
       }),
     [referrals],
   );
@@ -349,8 +404,14 @@ export default function AgentReferralsPage() {
   );
 
   const totalFirstPayments = useMemo(
-    () => referrals.reduce((sum, item) => sum + asNumber(item.first_payment_amount, 0), 0),
-    [referrals],
+    () =>
+      registrationRows.reduce((sum, row) => {
+        if (!row.has_school_registration) {
+          return sum;
+        }
+        return sum + asNumber(row.first_payment_amount, 0);
+      }, 0),
+    [registrationRows],
   );
 
   return (
