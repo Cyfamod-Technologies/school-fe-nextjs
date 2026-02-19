@@ -511,34 +511,28 @@ export default function AgentDashboardPage() {
             <div className="card-body">
               <div className="heading-layout1 mg-b-17">
                 <div className="item-title">
-                  <h3>Quick Actions</h3>
+                  <h3>Account Snapshot</h3>
                 </div>
               </div>
-
-              <div className="d-flex flex-column">
-                <Link href="/agent/referrals" className="btn-fill-md bg-orange-peel text-light mb-3 text-center">
-                  Manage Referrals
-                </Link>
-                <Link href="/agent/earnings" className="btn-fill-md bg-light-sea-green text-light mb-3 text-center">
-                  View Earnings
-                </Link>
-                <Link
-                  href="/agent/payouts"
-                  className={`btn-fill-md text-light mb-3 text-center ${
-                    payoutUnlocked ? 'bg-dark-pastel-green' : 'bg-secondary'
-                  }`}
-                  aria-disabled={!payoutUnlocked}
-                >
-                  {payoutUnlocked ? 'Request Payout' : 'Payout Locked'}
-                </Link>
-              </div>
-
-              <hr />
 
               <p className="mb-2">
                 <strong>Status:</strong>{' '}
                 <span className={badgeClassForStatus(data.agent.status)}>
                   {statusLabel(data.agent.status)}
+                </span>
+              </p>
+              <p className="mb-2">
+                <strong>Available for payout:</strong>{' '}
+                {formatNaira(data.earnings.available_for_payout)}
+              </p>
+              <p className="mb-2">
+                <strong>Minimum threshold:</strong>{' '}
+                {formatNaira(data.earnings.min_payout_threshold)}
+              </p>
+              <p className="mb-2">
+                <strong>Payout access:</strong>{' '}
+                <span className={`badge ${payoutUnlocked ? 'badge-success' : 'badge-warning'}`}>
+                  {payoutUnlocked ? 'Unlocked' : 'Locked'}
                 </span>
               </p>
               <p className="text-muted mb-0">
