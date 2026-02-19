@@ -189,6 +189,26 @@ export const subscriptionApi = {
   sendPaymentReminder: async (termId: string) => {
     return apiClient.post(`/api/v1/terms/${termId}/send-reminder`, {});
   },
+
+  initializePaystackPayment: async (termId: string) => {
+    return apiClient.post(`/api/v1/terms/${termId}/paystack/initialize`, {});
+  },
+
+  initializeSessionPaystackPayment: async (sessionId: string) => {
+    return apiClient.post('/api/v1/terms/paystack/initialize-session', {
+      session_id: sessionId,
+    });
+  },
+
+  verifyPaystackPayment: async (reference: string) => {
+    return apiClient.post('/api/v1/terms/paystack/verify', {
+      reference,
+    });
+  },
+
+  getPaymentHistory: async (page = 1, perPage = 20) => {
+    return apiClient.get(`/api/v1/terms/payments/history?page=${page}&per_page=${perPage}`);
+  },
 };
 
 export const adminApi = {

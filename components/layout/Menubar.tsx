@@ -95,6 +95,7 @@ export function Menubar() {
       [/\b(assessment\s*component|components|assessment settings)\b/, "/v19/assessment-components"],
       [/\b(grade\s*scale|grading)\b/, "/v19/grade-scales"],
       [/\b(attendance)\b/, "/v21/student-attendance"],
+      [/\b(payment|subscription|paystack)\b/, "/settings/payment"],
     ];
 
     for (const [re, route] of patterns) {

@@ -1,7 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { subscriptionApi } from '@/lib/agents';
+import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { apiFetch } from '@/lib/apiClient';
+import styles from './payment-center.module.css';
 
 interface Invoice {
   id: string;
@@ -15,363 +18,706 @@ interface Invoice {
 interface Term {
   id: string;
   name: string;
-  start_date: string;
-  end_date: string;
+  session_id: string;
+  session_name: string;
   payment_status: string;
   amount_due: number;
   amount_paid: number;
   outstanding_balance: number;
+  can_switch?: boolean;
+  start_date?: string;
+  end_date?: string;
   invoices: Invoice[];
 }
 
-export default function SubscriptionPage() {
+interface PaymentHistoryItem {
+  id: string;
+  reference: string;
+  amount: number;
+  status: string;
+  scope: string;
+  session_name: string;
+  term_name: string;
+  term_count: number;
+  created_at: string;
+  paid_at: string;
+}
+
+interface SessionSummary {
+  sessionId: string;
+  sessionName: string;
+  termCount: number;
+  outstandingTermsCount: number;
+  totalOutstanding: number;
+}
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+
+const asString = (value: unknown, fallback = ''): string =>
+  typeof value === 'string' ? value : fallback;
+
+const asNumber = (value: unknown, fallback = 0): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const formatNaira = (amount: number): string =>
+  `₦${amount.toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
+
+const formatDate = (value: string): string => {
+  if (!value) {
+    return '-';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '-';
+  }
+  return new Intl.DateTimeFormat('en-NG', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+};
+
+const parseApiError = (error: unknown, fallback: string): string => {
+  if (!(error instanceof Error) || error.message.trim() === '') {
+    return fallback;
+  }
+
+  const message = error.message.trim();
+  const lower = message.toLowerCase();
+  if (lower.includes('unauthenticated') || lower.includes('session expired')) {
+    return 'Your session has expired. Please sign in again to continue.';
+  }
+
+  return message;
+};
+
+const badgeClassName = (status: string): string => {
+  const value = status.toLowerCase();
+  if (value === 'success' || value === 'paid') return styles.badgeSuccess;
+  if (value === 'pending' || value === 'partial' || value === 'initialized') return styles.badgeWarning;
+  if (value === 'failed' || value === 'abandoned' || value === 'unpaid') return styles.badgeDanger;
+  return styles.badgeNeutral;
+};
+
+const loadTerms = async (): Promise<Term[]> => {
+  const payload = await apiFetch<unknown>('/api/v1/terms/school/all');
+  const root = asRecord(payload);
+  const terms = Array.isArray(root.terms) ? root.terms : Array.isArray(root.data) ? root.data : [];
+
+  return terms.map((entry) => {
+    const row = asRecord(entry);
+    const invoicesRaw = Array.isArray(row.invoices) ? row.invoices : [];
+
+    const invoices = invoicesRaw.map((invoiceEntry) => {
+      const invoice = asRecord(invoiceEntry);
+      return {
+        id: asString(invoice.id),
+        invoice_type: asString(invoice.invoice_type, 'original'),
+        amount_due: asNumber(invoice.amount_due),
+        amount_paid: asNumber(invoice.amount_paid),
+        payment_status: asString(invoice.payment_status, asString(invoice.status, 'pending')),
+        due_date: asString(invoice.due_date),
+      };
+    });
+
+    return {
+      id: asString(row.id),
+      name: asString(row.name, 'Term'),
+      session_id: asString(row.session_id),
+      session_name: asString(row.session_name, 'Session'),
+      payment_status: asString(row.payment_status, 'pending'),
+      amount_due: asNumber(row.amount_due),
+      amount_paid: asNumber(row.amount_paid),
+      outstanding_balance: asNumber(row.outstanding_balance),
+      can_switch: Boolean(row.can_switch),
+      start_date: asString(row.start_date),
+      end_date: asString(row.end_date),
+      invoices,
+    };
+  });
+};
+
+const loadPaymentHistory = async (): Promise<PaymentHistoryItem[]> => {
+  const payload = await apiFetch<unknown>('/api/v1/terms/payments/history?per_page=50');
+  const root = asRecord(payload);
+  const payments = Array.isArray(root.payments)
+    ? root.payments
+    : Array.isArray(root.data)
+    ? root.data
+    : [];
+
+  return payments.map((entry) => {
+    const row = asRecord(entry);
+    return {
+      id: asString(row.id),
+      reference: asString(row.reference),
+      amount: asNumber(row.amount),
+      status: asString(row.status, 'pending'),
+      scope: asString(row.scope, 'term'),
+      session_name: asString(row.session_name, '-'),
+      term_name: asString(row.term_name, '-'),
+      term_count: Math.max(1, asNumber(row.term_count, 1)),
+      created_at: asString(row.created_at),
+      paid_at: asString(row.paid_at),
+    };
+  });
+};
+
+export default function PaymentPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [terms, setTerms] = useState<Term[]>([]);
+  const [payments, setPayments] = useState<PaymentHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedTerm, setExpandedTerm] = useState<string | null>(null);
-  const [recentPayment, setRecentPayment] = useState<{
-    term?: string;
-    amount?: number;
-  } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [payingTermId, setPayingTermId] = useState<string | null>(null);
+  const [payingSessionId, setPayingSessionId] = useState<string | null>(null);
+  const [verifyingRef, setVerifyingRef] = useState<string | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string>('');
+  const [selectedTermId, setSelectedTermId] = useState<string>('');
+  const [handledReference, setHandledReference] = useState<string | null>(null);
 
-  const fetchTerms = async () => {
+  const refreshData = useCallback(async () => {
     try {
-      const response = await subscriptionApi.getSchoolTerms();
-      if (response.ok) {
-        const data = await response.json();
-        setTerms(data.terms || []);
-      } else {
-        setError('Failed to load terms');
-      }
+      setError(null);
+      const [loadedTerms, loadedPayments] = await Promise.all([
+        loadTerms(),
+        loadPaymentHistory(),
+      ]);
+      setTerms(loadedTerms);
+      setPayments(loadedPayments);
     } catch (err) {
-      setError('An error occurred');
+      setError(parseApiError(err, 'Failed to load payment data.'));
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchTerms();
   }, []);
 
-  const handleSwitchTerm = async (termId: string) => {
-    const term = terms.find((t) => t.id === termId);
-    if (!term) return;
+  useEffect(() => {
+    void refreshData();
+  }, [refreshData]);
 
-    if (term.outstanding_balance > 0) {
-      const message = `You have an outstanding balance of ₦${(
-        term.outstanding_balance / 1000
-      ).toFixed(1)}k. Please pay all fees before switching terms.`;
-      alert(message);
+  const sessionSummaries = useMemo<SessionSummary[]>(() => {
+    const map = new Map<string, SessionSummary>();
+
+    for (const term of terms) {
+      if (!term.session_id) {
+        continue;
+      }
+
+      const existing = map.get(term.session_id) ?? {
+        sessionId: term.session_id,
+        sessionName: term.session_name || 'Session',
+        termCount: 0,
+        outstandingTermsCount: 0,
+        totalOutstanding: 0,
+      };
+
+      existing.termCount += 1;
+      existing.totalOutstanding += term.outstanding_balance;
+      if (term.outstanding_balance > 0) {
+        existing.outstandingTermsCount += 1;
+      }
+
+      map.set(term.session_id, existing);
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.sessionName.localeCompare(a.sessionName));
+  }, [terms]);
+
+  useEffect(() => {
+    if (sessionSummaries.length === 0) {
+      setSelectedSessionId('');
       return;
     }
 
-    try {
-      const response = await subscriptionApi.switchTerm(termId);
-      if (response.ok) {
-        alert('Successfully switched to this term!');
-        fetchTerms();
-      } else {
-        const data = await response.json();
-        setError(data.message || 'Failed to switch term');
-      }
-    } catch (err) {
-      setError('An error occurred');
+    if (sessionSummaries.some((session) => session.sessionId === selectedSessionId)) {
+      return;
     }
-  };
 
-  const handleSendReminder = async (termId: string) => {
-    try {
-      const response = await subscriptionApi.sendPaymentReminder(termId);
-      if (response.ok) {
-        alert('Payment reminder has been sent to all students!');
-      } else {
-        setError('Failed to send reminder');
-      }
-    } catch (err) {
-      setError('An error occurred');
+    const outstandingSession = sessionSummaries.find((session) => session.totalOutstanding > 0);
+    setSelectedSessionId(outstandingSession?.sessionId ?? sessionSummaries[0].sessionId);
+  }, [selectedSessionId, sessionSummaries]);
+
+  const selectedSession = useMemo(
+    () => sessionSummaries.find((session) => session.sessionId === selectedSessionId) ?? null,
+    [selectedSessionId, sessionSummaries],
+  );
+
+  const selectedSessionTerms = useMemo(
+    () => terms.filter((term) => term.session_id === selectedSessionId),
+    [selectedSessionId, terms],
+  );
+
+  useEffect(() => {
+    if (selectedSessionTerms.length === 0) {
+      setSelectedTermId('');
+      return;
     }
-  };
 
-  const getPaymentStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'paid':
-        return 'text-green-600 bg-green-50';
-      case 'partial':
-        return 'text-yellow-600 bg-yellow-50';
-      case 'unpaid':
-        return 'text-red-600 bg-red-50';
-      default:
-        return 'text-gray-600 bg-gray-50';
+    if (selectedSessionTerms.some((term) => term.id === selectedTermId)) {
+      return;
     }
-  };
 
-  const getPaymentBadge = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'paid':
-        return 'bg-green-100 text-green-800';
-      case 'partial':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'unpaid':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+    const outstandingTerm = selectedSessionTerms.find((term) => term.outstanding_balance > 0);
+    setSelectedTermId(outstandingTerm?.id ?? selectedSessionTerms[0].id);
+  }, [selectedSessionTerms, selectedTermId]);
+
+  const selectedSessionTerm = useMemo(
+    () => selectedSessionTerms.find((term) => term.id === selectedTermId) ?? null,
+    [selectedSessionTerms, selectedTermId],
+  );
+
+  const needsLogin = useMemo(() => {
+    if (!error) {
+      return false;
     }
-  };
+    return error.toLowerCase().includes('sign in again');
+  }, [error]);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
+  const totals = useMemo(() => {
+    let due = 0;
+    let paid = 0;
+    let outstanding = 0;
+
+    terms.forEach((term) => {
+      due += term.amount_due;
+      paid += term.amount_paid;
+      outstanding += term.outstanding_balance;
     });
+
+    return { due, paid, outstanding };
+  }, [terms]);
+
+  const visibleTerms = useMemo(() => {
+    if (!selectedSessionId) {
+      return terms;
+    }
+    return terms.filter((term) => term.session_id === selectedSessionId);
+  }, [selectedSessionId, terms]);
+
+  const initializeTermPayment = async (termId: string) => {
+    setError(null);
+    setNotice(null);
+    setPayingTermId(termId);
+
+    try {
+      const payload = await apiFetch<{ authorization_url?: string }>('/api/v1/terms/' + termId + '/paystack/initialize', {
+        method: 'POST',
+      });
+      const authUrl = asString(payload?.authorization_url);
+      if (!authUrl) {
+        setError('Paystack did not return an authorization URL.');
+        return;
+      }
+      window.location.assign(authUrl);
+    } catch (err) {
+      setError(parseApiError(err, 'Unable to initialize term payment.'));
+    } finally {
+      setPayingTermId(null);
+    }
   };
 
-  const calculatePaymentPercentage = (paid: number, due: number) => {
-    if (due === 0) return 0;
-    return Math.round((paid / due) * 100);
+  const initializeSessionPayment = async () => {
+    if (!selectedSessionId) {
+      setError('Select a session to continue.');
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    setPayingSessionId(selectedSessionId);
+
+    try {
+      const payload = await apiFetch<{ authorization_url?: string }>('/api/v1/terms/paystack/initialize-session', {
+        method: 'POST',
+        body: JSON.stringify({ session_id: selectedSessionId }),
+      });
+      const authUrl = asString(payload?.authorization_url);
+      if (!authUrl) {
+        setError('Paystack did not return an authorization URL.');
+        return;
+      }
+      window.location.assign(authUrl);
+    } catch (err) {
+      setError(parseApiError(err, 'Unable to initialize session payment.'));
+    } finally {
+      setPayingSessionId(null);
+    }
   };
+
+  const initializeSelectedTermPayment = async () => {
+    if (!selectedSessionTerm) {
+      setError('Select a term to continue.');
+      return;
+    }
+
+    if (selectedSessionTerm.outstanding_balance <= 0) {
+      setError('The selected term is already settled. Choose an unpaid term.');
+      return;
+    }
+
+    await initializeTermPayment(selectedSessionTerm.id);
+  };
+
+  const switchTerm = async (termId: string) => {
+    setError(null);
+    setNotice(null);
+
+    try {
+      const payload = await apiFetch<{ message?: string }>('/api/v1/terms/' + termId + '/switch', {
+        method: 'POST',
+      });
+      setNotice(asString(payload?.message, 'Term switched successfully.'));
+      await refreshData();
+    } catch (err) {
+      setError(parseApiError(err, 'Unable to switch term.'));
+    }
+  };
+
+  const verifyPayment = useCallback(
+    async (reference: string) => {
+      setVerifyingRef(reference);
+      setError(null);
+      setNotice(null);
+
+      try {
+        const payload = await apiFetch<{ scope?: string; message?: string }>('/api/v1/terms/paystack/verify', {
+          method: 'POST',
+          body: JSON.stringify({ reference }),
+        });
+
+        const scope = asString(payload?.scope, 'term');
+        if (scope === 'session') {
+          setNotice('Session payment verified successfully and applied.');
+        } else {
+          setNotice('Term payment verified successfully and applied.');
+        }
+
+        await refreshData();
+      } catch (err) {
+        setError(parseApiError(err, 'Unable to verify payment.'));
+      } finally {
+        setVerifyingRef(null);
+        router.replace('/settings/payment');
+      }
+    },
+    [refreshData, router],
+  );
+
+  useEffect(() => {
+    const reference =
+      searchParams.get('reference') ??
+      searchParams.get('trxref') ??
+      searchParams.get('payment_reference');
+
+    if (!reference || reference.trim() === '') {
+      return;
+    }
+
+    if (reference === handledReference) {
+      return;
+    }
+
+    setHandledReference(reference);
+    void verifyPayment(reference);
+  }, [handledReference, searchParams, verifyPayment]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-600">Loading subscription details...</p>
+      <div className={styles.loaderWrap}>
+        <div className="spinner-border text-primary" role="status">
+          <span className="sr-only">Loading...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Subscription</h1>
-          <p className="text-gray-600">
-            Manage your school subscription and term payments
-          </p>
-        </div>
+    <>
+      <div className="breadcrumbs-area">
+        <h3>Payment</h3>
+        <ul>
+          <li>
+            <Link href="/v10/dashboard">Home</Link>
+          </li>
+          <li>Payment</li>
+        </ul>
+      </div>
 
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-red-800">{error}</p>
+      <div className={styles.page}>
+        <section className={styles.hero}>
+          <h1>Payment Center</h1>
+          <p>Pay per term or settle a complete session from one place.</p>
+          <div className={styles.heroStats}>
+            <article className={styles.heroStat}>
+              <span>Total Due</span>
+              <strong>{formatNaira(totals.due)}</strong>
+            </article>
+            <article className={styles.heroStat}>
+              <span>Total Paid</span>
+              <strong>{formatNaira(totals.paid)}</strong>
+            </article>
+            <article className={styles.heroStat}>
+              <span>Outstanding</span>
+              <strong>{formatNaira(totals.outstanding)}</strong>
+            </article>
           </div>
-        )}
+        </section>
 
-        {recentPayment && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
-            <p className="text-green-800">
-              ✓ Payment of ₦{(recentPayment.amount! / 1000).toFixed(1)}k recorded for {recentPayment.term}
-            </p>
+        {error ? (
+          <div className={styles.alertError}>
+            <span>{error}</span>
+            {needsLogin ? (
+              <Link href="/login?next=%2Fsettings%2Fpayment" className={styles.reauthLink}>
+                Sign in
+              </Link>
+            ) : null}
           </div>
-        )}
+        ) : null}
+        {notice ? <div className={styles.alertSuccess}>{notice}</div> : null}
+        {verifyingRef ? (
+          <div className={styles.alertInfo}>
+            Verifying payment reference <strong>{verifyingRef}</strong>...
+          </div>
+        ) : null}
 
-        {/* Terms List */}
-        <div className="space-y-4">
-          {terms.length === 0 ? (
-            <div className="bg-white rounded-lg shadow p-8 text-center">
-              <p className="text-gray-600">No terms available</p>
-            </div>
-          ) : (
-            terms.map((term) => (
-              <div
-                key={term.id}
-                className="bg-white rounded-lg shadow overflow-hidden"
-              >
-                {/* Term Header */}
-                <div
-                  className="p-6 cursor-pointer hover:bg-gray-50 transition"
-                  onClick={() =>
-                    setExpandedTerm(
-                      expandedTerm === term.id ? null : term.id
-                    )
+        {needsLogin ? (
+          <section className={styles.authGate}>
+            <h2>Sign in required</h2>
+            <p>Your admin session has expired. Sign in again to continue managing school payments.</p>
+            <Link href="/login?next=%2Fsettings%2Fpayment" className={styles.authGateAction}>
+              Go to Sign in
+            </Link>
+          </section>
+        ) : null}
+
+        {!needsLogin ? (
+          <>
+            <section className={styles.sessionPanel}>
+              <div>
+                <h2>Pay Complete Session</h2>
+                <p>One checkout for all outstanding terms in a selected session.</p>
+              </div>
+
+              <div className={styles.sessionControl}>
+                <select
+                  value={selectedSessionId}
+                  onChange={(event) => setSelectedSessionId(event.target.value)}
+                  disabled={payingSessionId !== null || verifyingRef !== null || sessionSummaries.length === 0}
+                >
+                  {sessionSummaries.length === 0 ? <option>No sessions available</option> : null}
+                  {sessionSummaries.map((session) => (
+                    <option key={session.sessionId} value={session.sessionId}>
+                      {session.sessionName} ({session.termCount} terms)
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => void initializeSessionPayment()}
+                  disabled={
+                    !selectedSession ||
+                    selectedSession.totalOutstanding <= 0 ||
+                    payingSessionId !== null ||
+                    verifyingRef !== null
                   }
                 >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-xl font-bold text-gray-900">
-                          {term.name}
-                        </h3>
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-semibold ${getPaymentBadge(
-                            term.payment_status
-                          )}`}
-                        >
-                          {term.payment_status?.charAt(0).toUpperCase() +
-                            term.payment_status?.slice(1)}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600">
-                        {formatDate(term.start_date)} to {formatDate(term.end_date)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-3xl font-bold text-gray-900 mb-1">
-                        {calculatePaymentPercentage(term.amount_paid, term.amount_due)}%
-                      </div>
-                      <p className="text-sm text-gray-600">Complete</p>
-                    </div>
-                    <div className="text-2xl">
-                      {expandedTerm === term.id ? '▼' : '▶'}
-                    </div>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="mt-4 bg-gray-200 rounded-full h-3 overflow-hidden">
-                    <div
-                      className={`h-full transition-all ${
-                        term.payment_status?.toLowerCase() === 'paid'
-                          ? 'bg-green-500'
-                          : term.payment_status?.toLowerCase() === 'partial'
-                          ? 'bg-yellow-500'
-                          : 'bg-red-500'
-                      }`}
-                      style={{
-                        width: `${calculatePaymentPercentage(
-                          term.amount_paid,
-                          term.amount_due
-                        )}%`,
-                      }}
-                    ></div>
-                  </div>
-
-                  {/* Summary Stats */}
-                  <div className="mt-4 grid grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-xs text-gray-600 mb-1">Amount Due</p>
-                      <p className="text-lg font-semibold text-gray-900">
-                        ₦{(term.amount_due / 1000).toFixed(1)}k
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-600 mb-1">Amount Paid</p>
-                      <p className="text-lg font-semibold text-green-600">
-                        ₦{(term.amount_paid / 1000).toFixed(1)}k
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-600 mb-1">Outstanding</p>
-                      <p
-                        className={`text-lg font-semibold ${
-                          term.outstanding_balance > 0
-                            ? 'text-red-600'
-                            : 'text-green-600'
-                        }`}
-                      >
-                        ₦{(term.outstanding_balance / 1000).toFixed(1)}k
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Expanded Content */}
-                {expandedTerm === term.id && (
-                  <div className="border-t border-gray-200 p-6 bg-gray-50">
-                    {/* Invoices */}
-                    <div className="mb-6">
-                      <h4 className="font-semibold text-gray-900 mb-4">
-                        Invoices
-                      </h4>
-                      <div className="space-y-3">
-                        {term.invoices?.map((invoice) => (
-                          <div
-                            key={invoice.id}
-                            className="bg-white rounded-lg p-4"
-                          >
-                            <div className="flex items-center justify-between gap-4">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <p className="font-medium text-gray-900">
-                                    {invoice.invoice_type === 'original'
-                                      ? 'Original Invoice'
-                                      : 'Mid-term Addition'}
-                                  </p>
-                                  <span
-                                    className={`px-2 py-1 rounded text-xs font-semibold ${getPaymentBadge(
-                                      invoice.payment_status
-                                    )}`}
-                                  >
-                                    {invoice.payment_status}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-gray-600">
-                                  Due: {formatDate(invoice.due_date || '')}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="font-semibold text-gray-900">
-                                  ₦{(invoice.amount_due / 1000).toFixed(1)}k
-                                </p>
-                                <p className="text-xs text-gray-600">
-                                  Paid: ₦{(invoice.amount_paid / 1000).toFixed(1)}k
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-3">
-                      {term.outstanding_balance > 0 && (
-                        <div className="flex-1 p-4 bg-red-50 border border-red-200 rounded-lg">
-                          <p className="text-red-800 text-sm font-medium mb-2">
-                            📌 Cannot switch term yet
-                          </p>
-                          <p className="text-red-700 text-xs">
-                            You have ₦{(term.outstanding_balance / 1000).toFixed(1)}k
-                            outstanding. Complete payment before switching terms.
-                          </p>
-                        </div>
-                      )}
-                      {term.outstanding_balance === 0 && (
-                        <button
-                          onClick={() => handleSwitchTerm(term.id)}
-                          className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
-                        >
-                          ✓ Switch to {term.name}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleSendReminder(term.id)}
-                        className="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg hover:bg-gray-300 transition"
-                      >
-                        Send Reminder
-                      </button>
-                    </div>
-                  </div>
-                )}
+                  {payingSessionId === selectedSessionId ? 'Preparing...' : 'Pay Session'}
+                </button>
               </div>
-            ))
-          )}
-        </div>
 
-        {/* Info Section */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="font-semibold text-blue-900 mb-2">
-            How School Subscription Works
-          </h3>
-          <ul className="text-blue-800 text-sm space-y-1">
-            <li>
-              • <strong>Per-Student Billing:</strong> You're charged based on the
-              number of students in your school per term
-            </li>
-            <li>
-              • <strong>Term Switching:</strong> All fees must be paid before
-              switching to a new term
-            </li>
-            <li>
-              • <strong>Mid-term Additions:</strong> New students admitted during
-              a term are billed separately at a prorated rate
-            </li>
-            <li>
-              • <strong>Payment Tracking:</strong> Monitor all payments and
-              invoices in real-time
-            </li>
-          </ul>
-        </div>
+              <div className={styles.sessionTermControl}>
+                <select
+                  value={selectedTermId}
+                  onChange={(event) => setSelectedTermId(event.target.value)}
+                  disabled={payingSessionId !== null || verifyingRef !== null || selectedSessionTerms.length === 0}
+                >
+                  {selectedSessionTerms.length === 0 ? <option>No terms in selected session</option> : null}
+                  {selectedSessionTerms.map((term) => (
+                    <option key={term.id} value={term.id}>
+                      {term.name} ({term.outstanding_balance > 0 ? 'Unpaid' : 'Paid'})
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => void initializeSelectedTermPayment()}
+                  disabled={
+                    !selectedSessionTerm ||
+                    selectedSessionTerm.outstanding_balance <= 0 ||
+                    payingTermId === selectedTermId ||
+                    verifyingRef !== null
+                  }
+                >
+                  {payingTermId === selectedTermId ? 'Preparing...' : 'Pay Selected Term'}
+                </button>
+              </div>
+
+              {selectedSession ? (
+                <p className={styles.sessionMeta}>
+                  {selectedSession.sessionName}: {selectedSession.outstandingTermsCount} unpaid term(s), total outstanding{' '}
+                  <strong>{formatNaira(selectedSession.totalOutstanding)}</strong>.
+                </p>
+              ) : null}
+
+              {selectedSessionTerm ? (
+                <p className={styles.sessionMeta}>
+                  Selected term: <strong>{selectedSessionTerm.name}</strong> with outstanding{' '}
+                  <strong>{formatNaira(selectedSessionTerm.outstanding_balance)}</strong>.
+                </p>
+              ) : null}
+            </section>
+
+            <section className={styles.termSection}>
+              <div className={styles.sectionHead}>
+                <h2>Term Payments</h2>
+                <span>
+                  {selectedSession ? `${selectedSession.sessionName} • ` : ''}
+                  {visibleTerms.length} terms
+                </span>
+              </div>
+
+              {selectedSessionId && visibleTerms.length === 0 ? (
+                <p className={styles.empty}>No terms found for the selected session.</p>
+              ) : (
+                <div className={styles.termGrid}>
+                  {visibleTerms.map((term) => {
+                    const progress = term.amount_due > 0 ? Math.min(100, Math.round((term.amount_paid / term.amount_due) * 100)) : 0;
+                    return (
+                      <article key={term.id} className={styles.termCard}>
+                        <header>
+                          <h3>{term.name}</h3>
+                          <span className={`${styles.badge} ${badgeClassName(term.payment_status)}`}>{term.payment_status}</span>
+                        </header>
+
+                        <p className={styles.termMeta}>
+                          {term.session_name}
+                          {term.start_date ? ` • ${formatDate(term.start_date)}` : ''}
+                          {term.end_date ? ` to ${formatDate(term.end_date)}` : ''}
+                        </p>
+
+                        <div className={styles.progressTrack}>
+                          <div className={styles.progressFill} style={{ width: `${progress}%` }} />
+                        </div>
+                        <p className={styles.progressLabel}>{progress}% paid</p>
+
+                        <div className={styles.amounts}>
+                          <div>
+                            <span>Due</span>
+                            <strong>{formatNaira(term.amount_due)}</strong>
+                          </div>
+                          <div>
+                            <span>Paid</span>
+                            <strong>{formatNaira(term.amount_paid)}</strong>
+                          </div>
+                          <div>
+                            <span>Outstanding</span>
+                            <strong>{formatNaira(term.outstanding_balance)}</strong>
+                          </div>
+                        </div>
+
+                        <div className={styles.actions}>
+                          {term.outstanding_balance > 0 ? (
+                            <button
+                              type="button"
+                              className={styles.payBtn}
+                              onClick={() => void initializeTermPayment(term.id)}
+                              disabled={payingTermId === term.id || verifyingRef !== null}
+                            >
+                              {payingTermId === term.id ? 'Preparing...' : 'Pay Now'}
+                            </button>
+                          ) : (
+                            <span className={styles.settled}>Settled</span>
+                          )}
+
+                          {term.can_switch ? (
+                            <button
+                              type="button"
+                              className={styles.switchBtn}
+                              onClick={() => void switchTerm(term.id)}
+                            >
+                              Switch Term
+                            </button>
+                          ) : null}
+                        </div>
+
+                        {term.invoices.length > 0 ? (
+                          <details className={styles.invoiceDetails}>
+                            <summary>Invoices ({term.invoices.length})</summary>
+                            <div className={styles.invoiceList}>
+                              {term.invoices.map((invoice) => (
+                                <div key={invoice.id} className={styles.invoiceRow}>
+                                  <span>{invoice.invoice_type === 'original' ? 'Original' : 'Mid-term'}</span>
+                                  <span>{formatNaira(invoice.amount_due)}</span>
+                                  <span>{formatDate(invoice.due_date ?? '')}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            <section className={styles.historySection}>
+              <div className={styles.sectionHead}>
+                <h2>Payments Made</h2>
+                <span>{payments.length}</span>
+              </div>
+
+              {payments.length === 0 ? (
+                <p className={styles.empty}>No payment transactions yet.</p>
+              ) : (
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Reference</th>
+                        <th>Scope</th>
+                        <th>Details</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Paid At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payments.map((payment) => (
+                        <tr key={payment.id}>
+                          <td>{formatDate(payment.created_at)}</td>
+                          <td>{payment.reference}</td>
+                          <td>{payment.scope === 'session' ? 'Session' : 'Term'}</td>
+                          <td>
+                            {payment.scope === 'session'
+                              ? `${payment.session_name} (${payment.term_count} terms)`
+                              : payment.term_name}
+                          </td>
+                          <td>{formatNaira(payment.amount)}</td>
+                          <td>
+                            <span className={`${styles.badge} ${badgeClassName(payment.status)}`}>{payment.status}</span>
+                          </td>
+                          <td>{formatDate(payment.paid_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </>
+        ) : null}
       </div>
-    </div>
+    </>
   );
 }
