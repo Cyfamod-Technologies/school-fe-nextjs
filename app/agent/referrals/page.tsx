@@ -9,6 +9,7 @@ interface ReferralRow {
   id: string;
   referral_code: string;
   referral_link: string;
+  school_name: string;
   status: string;
   first_payment_amount: number;
   created_at: string;
@@ -112,10 +113,15 @@ export default function AgentReferralsPage() {
 
       const parsedRows = rows.map((entry, index) => {
         const row = asRecord(entry);
+        const school = asRecord(row.school);
+        const schoolName =
+          asString(school.name) !== '' ? asString(school.name) : asString(row.school_name);
+
         return {
           id: asString(row.id, `referral-${index + 1}`),
           referral_code: asString(row.referral_code, 'N/A'),
           referral_link: asString(row.referral_link, ''),
+          school_name: schoolName !== '' ? schoolName : 'Not registered yet',
           status: asString(row.status, 'pending'),
           first_payment_amount: asNumber(row.first_payment_amount, 0),
           created_at: asString(row.created_at, ''),
@@ -184,6 +190,7 @@ export default function AgentReferralsPage() {
         id: asString(row.id, `referral-${Date.now()}`),
         referral_code: asString(row.referral_code, 'N/A'),
         referral_link: asString(row.referral_link, ''),
+        school_name: 'Not registered yet',
         status: asString(row.status, 'visited'),
         first_payment_amount: asNumber(row.first_payment_amount, 0),
         created_at: asString(row.created_at, ''),
@@ -370,6 +377,7 @@ export default function AgentReferralsPage() {
                 <thead>
                   <tr>
                     <th>Code</th>
+                    <th>Registered School</th>
                     <th>Referral Link</th>
                     <th>Status</th>
                     <th>First Payment</th>
@@ -380,7 +388,7 @@ export default function AgentReferralsPage() {
                 <tbody>
                   {referrals.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center text-muted">
+                      <td colSpan={7} className="text-center text-muted">
                         No referrals yet. Generate your first code to begin.
                       </td>
                     </tr>
@@ -390,6 +398,7 @@ export default function AgentReferralsPage() {
                         <td>
                           <code>{referral.referral_code}</code>
                         </td>
+                        <td>{referral.school_name}</td>
                         <td>
                           {referral.referral_link ? (
                             <a

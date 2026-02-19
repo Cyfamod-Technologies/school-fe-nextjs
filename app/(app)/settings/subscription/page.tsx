@@ -27,6 +27,8 @@ interface Term {
   amount_due: number;
   amount_paid: number;
   outstanding_balance: number;
+  is_free_trial_term: boolean;
+  free_trial_enabled_for_school: boolean;
   student_count_snapshot: number;
   midterm_student_count: number;
   total_students_billed: number;
@@ -156,6 +158,8 @@ const loadTerms = async (): Promise<Term[]> => {
       amount_due: asNumber(row.amount_due),
       amount_paid: asNumber(row.amount_paid),
       outstanding_balance: asNumber(row.outstanding_balance),
+      is_free_trial_term: Boolean(row.is_free_trial_term),
+      free_trial_enabled_for_school: Boolean(row.free_trial_enabled_for_school),
       student_count_snapshot: studentCountSnapshot,
       midterm_student_count: midtermStudentCount,
       total_students_billed: totalStudentsBilled,
@@ -632,6 +636,10 @@ export default function PaymentPage() {
                           {term.start_date ? ` • ${formatDate(term.start_date)}` : ''}
                           {term.end_date ? ` to ${formatDate(term.end_date)}` : ''}
                         </p>
+
+                        {term.is_free_trial_term ? (
+                          <p className={styles.trialMeta}>Free trial applied for this term.</p>
+                        ) : null}
 
                         <div className={styles.progressTrack}>
                           <div className={styles.progressFill} style={{ width: `${progress}%` }} />

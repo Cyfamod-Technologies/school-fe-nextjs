@@ -186,11 +186,17 @@
 
 .sessionPanel p,
 .termMeta,
+.trialMeta,
 .progressLabel,
 .sessionMeta,
 .empty {
   margin: 0;
   color: var(--text-muted);
+}
+
+.trialMeta {
+  color: #0d7a56;
+  font-weight: 700;
 }
 
 .sessionControl {
