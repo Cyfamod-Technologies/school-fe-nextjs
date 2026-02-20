@@ -14,7 +14,7 @@
   display: grid;
   gap: 18px;
   color: var(--text-main);
-  font-size: 1.03rem;
+  font-size: 1.3rem;
 }
 
 .modalBackdrop {
@@ -91,7 +91,7 @@
 
 .hero h1 {
   margin: 0;
-  font-size: 2rem;
+  font-size: 2.2rem;
   line-height: 1.15;
   font-weight: 800;
 }
@@ -99,7 +99,7 @@
 .hero p {
   margin: 8px 0 0;
   color: var(--text-muted);
-  font-size: 1.08rem;
+  font-size: 1.16rem;
 }
 
 .heroStats {
@@ -120,12 +120,12 @@
 
 .heroStat span {
   color: var(--text-muted);
-  font-size: 0.98rem;
+  font-size: 1.06rem;
   font-weight: 600;
 }
 
 .heroStat strong {
-  font-size: 1.52rem;
+  font-size: 1.66rem;
   font-weight: 800;
 }
 
@@ -261,7 +261,7 @@
 .termSection h2,
 .historySection h2 {
   margin: 0;
-  font-size: 1.55rem;
+  font-size: 1.72rem;
   line-height: 1.2;
   font-weight: 800;
 }
@@ -274,7 +274,7 @@
 .empty {
   margin: 0;
   color: var(--text-muted);
-  font-size: 1rem;
+  font-size: 1.08rem;
 }
 
 .trialMeta {
@@ -305,7 +305,7 @@
   background: #ffffff;
   padding: 10px 12px;
   color: var(--text-main);
-  font-size: 1.04rem;
+  font-size: 1.1rem;
   font-weight: 600;
 }
 
@@ -315,7 +315,7 @@
   border: 1px solid transparent;
   border-radius: 10px;
   padding: 9px 14px;
-  font-size: 1rem;
+  font-size: 1.08rem;
   font-weight: 700;
   cursor: pointer;
   transition: 0.18s ease;
@@ -355,7 +355,7 @@
   color: #385372;
   border-radius: 999px;
   padding: 5px 12px;
-  font-size: 0.9rem;
+  font-size: 0.98rem;
   font-weight: 700;
 }
 
@@ -383,7 +383,7 @@
 
 .termCard h3 {
   margin: 0;
-  font-size: 1.18rem;
+  font-size: 1.3rem;
   font-weight: 800;
 }
 
@@ -393,7 +393,7 @@
   justify-content: center;
   border-radius: 999px;
   padding: 4px 10px;
-  font-size: 0.84rem;
+  font-size: 0.92rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -434,7 +434,7 @@
 }
 
 .progressLabel {
-  font-size: 0.92rem;
+  font-size: 1rem;
   font-weight: 700;
 }
 
@@ -454,13 +454,13 @@
 }
 
 .studentStats span {
-  font-size: 0.9rem;
+  font-size: 0.98rem;
   color: var(--text-muted);
   font-weight: 600;
 }
 
 .studentStats strong {
-  font-size: 1.08rem;
+  font-size: 1.18rem;
   font-weight: 800;
 }
 
@@ -480,13 +480,13 @@
 }
 
 .amounts span {
-  font-size: 0.9rem;
+  font-size: 0.98rem;
   color: var(--text-muted);
   font-weight: 600;
 }
 
 .amounts strong {
-  font-size: 1.08rem;
+  font-size: 1.18rem;
   font-weight: 800;
 }
 
@@ -506,7 +506,7 @@
   border: 1px solid #b6e5cb;
   padding: 7px 12px;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.98rem;
 }
 
 .pendingChip {
@@ -518,7 +518,7 @@
   border: 1px solid #f0d4a1;
   padding: 7px 12px;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.98rem;
 }
 
 .lockedChip {
@@ -530,7 +530,7 @@
   border: 1px solid #f5b5b2;
   padding: 7px 12px;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.98rem;
 }
 
 .trialChip {
@@ -542,7 +542,7 @@
   border: 1px solid #b9e6d3;
   padding: 7px 12px;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.98rem;
 }
 
 .invoiceDetails {
@@ -553,7 +553,7 @@
 .invoiceDetails summary {
   cursor: pointer;
   list-style: none;
-  font-size: 0.95rem;
+  font-size: 1.03rem;
   font-weight: 700;
   color: #244466;
 }
@@ -576,7 +576,7 @@
   display: grid;
   grid-template-columns: 1.2fr 1fr 1fr;
   gap: 8px;
-  font-size: 0.92rem;
+  font-size: 1rem;
   color: #35506d;
 }
 
@@ -590,7 +590,7 @@
   min-width: 760px;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 0.96rem;
+  font-size: 1.03rem;
 }
 
 .table thead th {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { agentApi } from '@/lib/agents';
@@ -25,7 +25,7 @@ const readMessage = (payload: unknown, fallback: string): string => {
   return fallback;
 };
 
-export default function AgentResetPasswordPage() {
+function AgentResetPasswordPageContent() {
   const searchParams = useSearchParams();
 
   const token = useMemo(() => searchParams.get('token') ?? '', [searchParams]);
@@ -225,5 +225,13 @@ export default function AgentResetPasswordPage() {
         </section>
       </main>
     </div>
+  );
+}
+
+export default function AgentResetPasswordPage() {
+  return (
+    <Suspense fallback={<div className={styles.page}>Loading...</div>}>
+      <AgentResetPasswordPageContent />
+    </Suspense>
   );
 }

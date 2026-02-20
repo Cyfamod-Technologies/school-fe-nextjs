@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import Image, { type ImageLoader } from "next/image";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BACKEND_URL, EMAIL_VERIFICATION_ENABLED, SCHOOL_REGISTRATION_ENABLED } from "@/lib/config";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default function RegisterPage() {
+function RegisterPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registrationEnabled = SCHOOL_REGISTRATION_ENABLED;
@@ -351,6 +351,14 @@ export default function RegisterPage() {
       </div>
       <style jsx>{styles}</style>
     </>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="login-page-wrap register-page-wrap">Loading...</div>}>
+      <RegisterPageContent />
+    </Suspense>
   );
 }
 
