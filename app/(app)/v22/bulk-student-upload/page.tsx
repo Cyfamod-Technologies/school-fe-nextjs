@@ -69,7 +69,7 @@ export default function BulkStudentUploadPage() {
   const previewCardRef = useRef<HTMLDivElement | null>(null);
 
   // Derived state
-  const canDownloadTemplate = !!selectedSessionId && !!selectedClassId && !!selectedClassArmId;
+  const canDownloadTemplate = !!selectedSessionId && !!selectedClassId;
   const currentStep = useMemo(() => {
     if (!canDownloadTemplate) return 1;
     if (!selectedFile && !preview) return 2;
@@ -196,13 +196,6 @@ export default function BulkStudentUploadPage() {
     }
   }, []);
 
-  const resetAllState = useCallback(() => {
-    resetUploadState();
-    setSelectedSessionId("");
-    setSelectedClassId("");
-    setSelectedClassArmId("");
-  }, [resetUploadState]);
-
   const getUploadParams = useCallback((): BulkUploadParams => ({
     session_id: selectedSessionId || undefined,
     class_id: selectedClassId || undefined,
@@ -222,7 +215,7 @@ export default function BulkStudentUploadPage() {
       // Create descriptive filename
       const sessionName = selectedSession?.name?.replace(/[^a-zA-Z0-9]/g, "-") || "session";
       const className = selectedClass?.name?.replace(/[^a-zA-Z0-9]/g, "-") || "class";
-      const armName = selectedClassArm?.name?.replace(/[^a-zA-Z0-9]/g, "-") || "arm";
+      const armName = selectedClassArm?.name?.replace(/[^a-zA-Z0-9]/g, "-") || "all-arms";
       anchor.download = `student-upload-${sessionName}-${className}-${armName}-${new Date().toISOString().slice(0, 10)}.csv`;
       
       document.body.appendChild(anchor);
@@ -478,7 +471,7 @@ export default function BulkStudentUploadPage() {
                 <div className="step-badge">Step 1</div>
                 <h4>Select Target Class</h4>
                 <p className="text-muted mb-0">
-                  Choose the session, class, and arm where students will be enrolled.
+                  Choose the session and class. Class arm is optional.
                 </p>
               </div>
 
@@ -531,7 +524,7 @@ export default function BulkStudentUploadPage() {
               <div className="form-group mb-0">
                 <label htmlFor="arm-select" className="form-label-lg">
                   <i className="fas fa-users mr-2" />
-                  Class Arm
+                  Class Arm (Optional)
                 </label>
                 <select
                   id="arm-select"
@@ -541,7 +534,7 @@ export default function BulkStudentUploadPage() {
                   disabled={loadingClassArms || !selectedClassId}
                 >
                   <option value="">
-                    {loadingClassArms ? "Loading arms..." : "-- Select Arm --"}
+                    {loadingClassArms ? "Loading arms..." : "-- All Arms --"}
                   </option>
                   {classArms.map((arm) => (
                     <option key={arm.id} value={String(arm.id)}>
@@ -568,7 +561,7 @@ export default function BulkStudentUploadPage() {
                     </div>
                     <div className="summary-item">
                       <span className="label">Arm:</span>
-                      <span className="value">{selectedClassArm?.name}</span>
+                      <span className="value">{selectedClassArm?.name ?? "All Arms"}</span>
                     </div>
                   </div>
                 </div>
@@ -588,7 +581,7 @@ export default function BulkStudentUploadPage() {
                 </div>
               </div>
               <ol className="bulk-upload-steps">
-                <li>Select the session, class, and arm above.</li>
+                <li>Select the session and class above.</li>
                 <li>Download the pre-configured template.</li>
                 <li>Fill in student &amp; guardian details.</li>
                 <li>Upload the file to validate.</li>
@@ -596,7 +589,7 @@ export default function BulkStudentUploadPage() {
               </ol>
               <div className="alert alert-info small mb-0">
                 <i className="fas fa-info-circle mr-2" />
-                The template is customized for your selected class. No need to fill in session or class IDs!
+                The template is customized for your selected session and class.
               </div>
             </div>
           </div>
@@ -618,7 +611,7 @@ export default function BulkStudentUploadPage() {
                   </div>
                   <h5>Select a Class First</h5>
                   <p className="text-muted">
-                    Please complete Step 1 by selecting a session, class, and arm to unlock the template download.
+                    Please complete Step 1 by selecting a session and class to unlock the template download.
                   </p>
                 </div>
               ) : (
@@ -641,7 +634,7 @@ export default function BulkStudentUploadPage() {
                       <div className="template-details">
                         <h5>Student Upload Template</h5>
                         <p className="text-muted mb-0">
-                          Pre-configured for <strong>{selectedClass?.name} - {selectedClassArm?.name}</strong> 
+                          Pre-configured for <strong>{selectedClass?.name}{selectedClassArm?.name ? ` - ${selectedClassArm.name}` : ""}</strong>
                           {" "}({selectedSession?.name})
                         </p>
                       </div>
@@ -750,7 +743,7 @@ export default function BulkStudentUploadPage() {
                 <div className="step-badge step-badge-success">Step 3</div>
                 <h4>Review & Confirm</h4>
                 <p className="text-muted mb-0">
-                  Review the parsed data below. Click "Confirm Upload" to create all students.
+                  Review the parsed data below. Click &quot;Confirm Upload&quot; to create all students.
                 </p>
               </div>
               <div className="d-flex align-items-center">
