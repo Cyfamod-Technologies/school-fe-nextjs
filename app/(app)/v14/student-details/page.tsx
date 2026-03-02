@@ -1201,7 +1201,7 @@ export default function StudentDetailsPage() {
     }
     if (
       !window.confirm(
-        "Delete this student and all related records? This action cannot be undone.",
+        "Delete this student? This will fail if the student has dependent records (results, attendance, etc.).",
       )
     ) {
       return;
