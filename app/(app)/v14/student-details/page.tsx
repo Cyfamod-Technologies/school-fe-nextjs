@@ -223,6 +223,7 @@ export default function StudentDetailsPage() {
   const ratingOptions = ["0", "1", "2", "3", "4", "5"];
   const skillAutoSaveTimersRef = useRef<Record<string, number>>({});
   const lastSkillSaveKeyRef = useRef<Record<string, string>>({});
+  const skillRatingsLoadRequestRef = useRef(0);
   const skillsScrollRangeRef = useRef<HTMLInputElement | null>(null);
   const skillsScrollBodyRef = useRef<HTMLDivElement | null>(null);
 
@@ -347,18 +348,32 @@ export default function StudentDetailsPage() {
 
   const loadSkillRatings = useCallback(async () => {
     if (!student?.id || !selectedSession || !selectedTerm) {
+      skillRatingsLoadRequestRef.current += 1;
+      setSkillLoading(false);
+      setSkillError(null);
       setSkillRatings([]);
       return;
     }
+
+    const requestId = skillRatingsLoadRequestRef.current + 1;
+    skillRatingsLoadRequestRef.current = requestId;
+
     setSkillLoading(true);
     setSkillError(null);
+    setSkillRatings([]);
     try {
       const ratings = await listStudentSkillRatings(student.id, {
         session_id: selectedSession,
         term_id: selectedTerm,
       });
+      if (skillRatingsLoadRequestRef.current !== requestId) {
+        return;
+      }
       setSkillRatings(ratings);
     } catch (err) {
+      if (skillRatingsLoadRequestRef.current !== requestId) {
+        return;
+      }
       console.error("Unable to load skill ratings", err);
       setSkillError(
         err instanceof Error
@@ -367,7 +382,9 @@ export default function StudentDetailsPage() {
       );
       setSkillRatings([]);
     } finally {
-      setSkillLoading(false);
+      if (skillRatingsLoadRequestRef.current === requestId) {
+        setSkillLoading(false);
+      }
     }
   }, [student?.id, selectedSession, selectedTerm]);
 
@@ -554,7 +571,10 @@ export default function StudentDetailsPage() {
       setSkillError(null);
       try {
         const existing = skillRatings.find(
-          (rating) => String(rating.skill_type_id) === String(skillTypeId),
+          (rating) =>
+            String(rating.skill_type_id) === String(skillTypeId) &&
+            String(rating.session_id) === String(selectedSession) &&
+            String(rating.term_id) === String(selectedTerm),
         );
         const payload = {
           session_id: selectedSession,
@@ -1104,15 +1124,19 @@ export default function StudentDetailsPage() {
     if (!student) {
       return;
     }
-    if (schoolContext.current_session_id != null) {
-      setSelectedSession(String(schoolContext.current_session_id));
-    } else if (!selectedSession && student.current_session_id != null) {
-      setSelectedSession(String(student.current_session_id));
+    if (!selectedSession) {
+      if (schoolContext.current_session_id != null) {
+        setSelectedSession(String(schoolContext.current_session_id));
+      } else if (student.current_session_id != null) {
+        setSelectedSession(String(student.current_session_id));
+      }
     }
-    if (schoolContext.current_term_id != null) {
-      setSelectedTerm(String(schoolContext.current_term_id));
-    } else if (!selectedTerm && student.current_term_id != null) {
-      setSelectedTerm(String(student.current_term_id));
+    if (!selectedTerm) {
+      if (schoolContext.current_term_id != null) {
+        setSelectedTerm(String(schoolContext.current_term_id));
+      } else if (student.current_term_id != null) {
+        setSelectedTerm(String(student.current_term_id));
+      }
     }
   }, [
     student,

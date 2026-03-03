@@ -509,6 +509,7 @@ export default function ClassSkillRatingsPage() {
     selectedSection,
     selectedSession,
     selectedTerm,
+    skillTypes,
   ]);
 
   const autoSaveCell = useCallback(
@@ -876,7 +877,13 @@ export default function ClassSkillRatingsPage() {
                 type="button"
                 className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
                 onClick={handleLoadGrid}
-                disabled={loadingGrid || !selectedSession || !selectedTerm || !selectedClass}
+                disabled={
+                  loadingGrid ||
+                  !selectedSession ||
+                  !selectedTerm ||
+                  !selectedClass ||
+                  !skillTypes.length
+                }
               >
                 {loadingGrid ? "Loading…" : "Load Students & Skills"}
               </button>
