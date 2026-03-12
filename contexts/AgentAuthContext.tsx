@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { apiClient } from '@/lib/apiClient';
 
 interface Agent {
   id: string;
@@ -48,7 +49,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const response = await fetch('/api/v1/agents/dashboard', {
+      const response = await apiClient.get('/api/v1/agents/dashboard', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -72,13 +73,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
-      const response = await fetch('/api/v1/agents/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      const response = await apiClient.post('/api/v1/agents/login', { email, password });
 
       if (!response.ok) {
         throw new Error('Login failed');
@@ -96,8 +91,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
     try {
       const token = localStorage.getItem('agent_token');
       if (token) {
-        await fetch('/api/v1/agents/logout', {
-          method: 'POST',
+        await apiClient.post('/api/v1/agents/logout', undefined, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -112,13 +106,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   const register = async (data: any) => {
     setLoading(true);
     try {
-      const response = await fetch('/api/v1/agents/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
+      const response = await apiClient.post('/api/v1/agents/register', data);
 
       if (!response.ok) {
         throw new Error('Registration failed');

@@ -238,7 +238,7 @@ export default function AgentDashboardPage() {
     const fetchDashboard = async () => {
       try {
         const token =
-          localStorage.getItem('agentToken') ?? localStorage.getItem('agent_token');
+          localStorage.getItem('agent_token') ?? localStorage.getItem('agent_token');
 
         if (!token) {
           setError('Please log in to view your dashboard.');
@@ -254,7 +254,7 @@ export default function AgentDashboardPage() {
         }
 
         if (response.status === 401) {
-          localStorage.removeItem('agentToken');
+          localStorage.removeItem('agent_token');
           localStorage.removeItem('agent_token');
           localStorage.removeItem('agent');
           router.replace('/agent/login');

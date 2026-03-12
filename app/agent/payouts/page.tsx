@@ -124,7 +124,7 @@ export default function AgentPayoutsPage() {
       ]);
 
       if (dashboardResponse.status === 401 || payoutResponse.status === 401) {
-        localStorage.removeItem('agentToken');
+        localStorage.removeItem('agent_token');
         localStorage.removeItem('agent_token');
         localStorage.removeItem('agent');
         router.replace('/agent/login');

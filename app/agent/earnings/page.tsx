@@ -74,7 +74,7 @@ export default function AgentEarningsPage() {
       const response = await agentApi.getCommissionHistory();
 
       if (response.status === 401) {
-        localStorage.removeItem('agentToken');
+        localStorage.removeItem('agent_token');
         localStorage.removeItem('agent_token');
         localStorage.removeItem('agent');
         router.replace('/agent/login');

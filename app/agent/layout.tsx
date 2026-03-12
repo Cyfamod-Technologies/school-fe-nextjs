@@ -30,7 +30,7 @@ export default function AgentLayout({ children }: { children: ReactNode }) {
 
   const handleLogout = () => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('agentToken');
+      localStorage.removeItem('agent_token');
       localStorage.removeItem('agent_token');
       localStorage.removeItem('agent');
     }
