@@ -16,6 +16,7 @@ interface FormState {
   phone: string;
   address: string;
   student_portal_link: string;
+  term_school_opened_days: string;
   current_session_id: string;
   current_term_id: string;
 }
@@ -26,6 +27,7 @@ const initialFormState: FormState = {
   phone: "",
   address: "",
   student_portal_link: "",
+  term_school_opened_days: "",
   current_session_id: "",
   current_term_id: "",
 };
@@ -111,6 +113,11 @@ export default function EditSchoolProfilePage() {
       phone: `${school.phone ?? ""}`,
       address: school.address ?? "",
       student_portal_link: school.student_portal_link ?? "",
+      term_school_opened_days:
+        school.term_school_opened_days !== null &&
+        school.term_school_opened_days !== undefined
+          ? `${school.term_school_opened_days}`
+          : "",
       current_session_id: school.current_session_id
         ? `${school.current_session_id}`
         : "",
@@ -323,6 +330,29 @@ export default function EditSchoolProfilePage() {
                     />
                     <small className="form-text text-muted">
                       This link is shown on result scratch cards.
+                    </small>
+                  </div>
+                  <div className="col-lg-6 col-12 form-group">
+                    <label htmlFor="term-school-opened-days">
+                      No. of School Days in Term
+                    </label>
+                    <input
+                      id="term-school-opened-days"
+                      type="number"
+                      min="1"
+                      max="366"
+                      className="form-control"
+                      value={form.term_school_opened_days}
+                      onChange={(event) =>
+                        handleFieldChange(
+                          "term_school_opened_days",
+                          event.target.value,
+                        )
+                      }
+                      placeholder="e.g. 92"
+                    />
+                    <small className="form-text text-muted">
+                      If left empty, this will not show on result pages.
                     </small>
                   </div>
                   <div className="col-lg-6 col-12 form-group">

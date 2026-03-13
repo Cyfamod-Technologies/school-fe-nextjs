@@ -8,6 +8,8 @@ export interface ResultPageSettings {
   show_lowest: boolean;
   show_highest: boolean;
   show_remarks: boolean;
+  hide_student_identity: boolean;
+  allow_shared_pin_access: boolean;
   comment_mode: "manual" | "range";
 }
 
@@ -18,6 +20,8 @@ const defaultSettings: ResultPageSettings = {
   show_lowest: true,
   show_highest: true,
   show_remarks: true,
+  hide_student_identity: false,
+  allow_shared_pin_access: false,
   comment_mode: "manual",
 };
 
@@ -84,6 +88,14 @@ function normalizeSettings(payload: ResultPageSettingsResponse): ResultPageSetti
     show_remarks: parseBoolean(
       settings.show_remarks,
       defaultSettings.show_remarks,
+    ),
+    hide_student_identity: parseBoolean(
+      settings.hide_student_identity,
+      defaultSettings.hide_student_identity,
+    ),
+    allow_shared_pin_access: parseBoolean(
+      settings.allow_shared_pin_access,
+      defaultSettings.allow_shared_pin_access,
     ),
     comment_mode: commentMode,
   };

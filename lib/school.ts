@@ -7,6 +7,7 @@ export interface UpdateSchoolPayload {
   phone?: string;
   address?: string;
   student_portal_link?: string;
+  term_school_opened_days?: string | number | null;
   current_session_id?: string | number | null;
   current_term_id?: string | number | null;
   logo?: File | null;
@@ -46,6 +47,12 @@ export async function updateSchoolProfile(
   }
   if (payload.student_portal_link !== undefined) {
     formData.append("student_portal_link", `${payload.student_portal_link}`);
+  }
+  if (payload.term_school_opened_days !== undefined) {
+    formData.append(
+      "term_school_opened_days",
+      payload.term_school_opened_days === null ? "" : `${payload.term_school_opened_days}`,
+    );
   }
   if (payload.current_session_id) {
     formData.append("current_session_id", `${payload.current_session_id}`);

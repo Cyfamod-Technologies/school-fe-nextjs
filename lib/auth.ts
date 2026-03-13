@@ -60,6 +60,7 @@ export interface School {
   address?: string | null;
   signature_url?: string | null;
   student_portal_link?: string | null;
+  term_school_opened_days?: number | null;
   current_session_id?: number | null;
   current_term_id?: number | null;
   current_session?: Session | null;
