@@ -15,6 +15,8 @@ const defaultSettings: ResultPageSettings = {
   show_lowest: true,
   show_highest: true,
   show_remarks: true,
+  hide_student_identity: false,
+  allow_shared_pin_access: false,
   comment_mode: "manual",
 };
 
@@ -86,11 +88,23 @@ export default function ResultPageSettingsPage() {
         label: "Remarks",
         hint: "Show remarks derived from the grading scale.",
       },
+      {
+        key: "hide_student_identity" as const,
+        label: "Hide Scratch Card Identity",
+        hint: "Remove student name, admission number, gender, and class from printed scratch cards.",
+      },
+      {
+        key: "allow_shared_pin_access" as const,
+        label: "Shared Scratch Cards",
+        hint: "Allow any active scratch card for the same session and term to unlock the logged-in student's own result.",
+      },
     ],
     [],
   );
 
-  const handleToggle = (key: keyof ResultPageSettings) => {
+  const handleToggle = (
+    key: Exclude<keyof ResultPageSettings, "comment_mode">,
+  ) => {
     setSettings((prev) => ({
       ...prev,
       [key]: !prev[key],
@@ -146,7 +160,7 @@ export default function ResultPageSettingsPage() {
             </button>
           </div>
           <p className="text-muted mb-3">
-            Toggle what appears on the printed result page for this school.
+            Control scratch-card identity details and how result scratch cards can be used for this school.
           </p>
           {infoMessage ? (
             <div className="alert alert-info">{infoMessage}</div>
