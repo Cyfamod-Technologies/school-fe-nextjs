@@ -137,7 +137,7 @@ export default function AgentProfilePage() {
       const response = await agentApi.getProfile();
 
       if (response.status === 401) {
-        localStorage.removeItem('agentToken');
+        localStorage.removeItem('agent_token');
         localStorage.removeItem('agent_token');
         localStorage.removeItem('agent');
         router.replace('/agent/login');

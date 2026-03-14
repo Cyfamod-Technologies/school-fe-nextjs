@@ -67,7 +67,7 @@ export default function AgentLoginPage() {
   const completeAuth = useCallback(
     (payload: { token?: string; agent?: unknown }) => {
       if (payload.token) {
-        localStorage.setItem('agentToken', payload.token);
+        localStorage.setItem('agent_token', payload.token);
         localStorage.setItem('agent_token', payload.token);
       }
       if (payload.agent) {

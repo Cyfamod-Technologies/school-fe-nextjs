@@ -50,8 +50,7 @@ const getAgentAuthHeaders = (): Record<string, string> => {
     return {};
   }
 
-  const token =
-    localStorage.getItem('agentToken') ?? localStorage.getItem('agent_token');
+  const token = localStorage.getItem('agent_token');
 
   if (!token) {
     return {};
