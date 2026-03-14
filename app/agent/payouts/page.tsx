@@ -105,7 +105,7 @@ const parsePaymentDetails = (
 export default function AgentPayoutsPage() {
   const router = useRouter();
   const [payouts, setPayouts] = useState<PayoutRow[]>([]);
-  const [agentStatus, setAgentStatus] = useState('pending');
+  const [agentStatus, setAgentStatus] = useState<string | null>(null);
   const [earnings, setEarnings] = useState<EarningsSnapshot>({
     available_for_payout: 0,
     min_payout_threshold: 5000,
@@ -125,7 +125,6 @@ export default function AgentPayoutsPage() {
       ]);
 
       if (dashboardResponse.status === 401 || payoutResponse.status === 401) {
-        localStorage.removeItem('agent_token');
         localStorage.removeItem('agent_token');
         localStorage.removeItem('agent');
         router.replace('/agent/login');
@@ -188,23 +187,27 @@ export default function AgentPayoutsPage() {
     () => payouts.some((row) => ['pending', 'approved', 'processing'].includes(row.status.toLowerCase())),
     [payouts],
   );
+  
   const thresholdGap = Math.max(
     earnings.min_payout_threshold - earnings.available_for_payout,
     0,
   );
+  
   const meetsPayoutThreshold =
     earnings.can_request_payout ||
     earnings.available_for_payout >= earnings.min_payout_threshold;
   
   const isApproved = agentStatus === 'approved';
-  const canRequestPayout = isApproved && meetsPayoutThreshold && !hasOpenPayoutRequest;
+  
+  // Logic: Only block final confirmation, allow opening the modal to see status
+  const canConfirmPayout = isApproved && meetsPayoutThreshold && !hasOpenPayoutRequest;
   
   const requestDisabledReason = !isApproved
-    ? 'Your account is under review. Payouts will be enabled once your profile is approved.'
+    ? 'Your account is under review. Payouts will be enabled once your profile is approved by an administrator.'
     : hasOpenPayoutRequest
     ? 'You already have a payout request in progress. Wait until it is completed or failed.'
     : !meetsPayoutThreshold
-    ? `Below payout threshold. You need ${formatNaira(thresholdGap)} more.`
+    ? `Minimum threshold not met. You need ${formatNaira(thresholdGap)} more in your available balance.`
     : null;
 
   const pendingAndProcessingTotal = useMemo(
@@ -224,6 +227,8 @@ export default function AgentPayoutsPage() {
   );
 
   const handleRequestPayout = async () => {
+    if (!canConfirmPayout) return;
+    
     setRequesting(true);
     setError(null);
 
@@ -258,7 +263,7 @@ export default function AgentPayoutsPage() {
         </ul>
       </div>
 
-      {agentStatus !== 'approved' && (
+      {agentStatus === 'pending' && (
         <div className="alert alert-warning mg-b-20">
           <i className="fa fa-exclamation-triangle mr-2" />
           <strong>Account Under Review:</strong> Your profile is being verified. Payout requests will be enabled as soon as your account is approved by our administrators.
@@ -355,9 +360,8 @@ export default function AgentPayoutsPage() {
             </div>
             <button
               type="button"
-              className={`btn-fill-lmd text-light ${canRequestPayout ? 'bg-dark-pastel-green' : 'bg-secondary'}`}
+              className="btn-fill-lmd text-light bg-dark-pastel-green"
               onClick={() => setShowRequestModal(true)}
-              disabled={!canRequestPayout}
             >
               Request Payout
             </button>
@@ -366,11 +370,6 @@ export default function AgentPayoutsPage() {
           <p className="text-muted mb-4">
             Submit payout requests once your available balance reaches the required threshold.
           </p>
-          {requestDisabledReason && (
-            <p className="text-muted mb-3">
-              <small>{requestDisabledReason}</small>
-            </p>
-          )}
 
           {error && (
             <div className="alert alert-danger" role="alert">
@@ -476,13 +475,16 @@ export default function AgentPayoutsPage() {
               <p className="mb-4">
                 <strong>Minimum required:</strong> {formatNaira(earnings.min_payout_threshold)}
               </p>
+              
               {requestDisabledReason && (
-                <div className="alert alert-warning py-2" role="alert">
+                <div className="alert alert-warning py-2 mb-4" role="alert" style={{ fontSize: '1.3rem' }}>
+                  <i className="fa fa-info-circle mr-2" />
                   {requestDisabledReason}
                 </div>
               )}
+              
               {error && (
-                <div className="alert alert-danger py-2" role="alert">
+                <div className="alert alert-danger py-2 mb-4" role="alert">
                   {error}
                 </div>
               )}
@@ -490,7 +492,8 @@ export default function AgentPayoutsPage() {
               <div className="d-flex justify-content-end">
                 <button
                   type="button"
-                  className="btn btn-outline-secondary mr-2"
+                  className="btn-fill-lmd text-light bg-gradient-gplus mr-3"
+                  style={{ border: 'none', cursor: 'pointer' }}
                   onClick={() => setShowRequestModal(false)}
                   disabled={requesting}
                 >
@@ -498,9 +501,10 @@ export default function AgentPayoutsPage() {
                 </button>
                 <button
                   type="button"
-                  className="btn btn-warning"
+                  className={`btn-fill-lmd text-light ${canConfirmPayout ? 'bg-dark-pastel-green' : 'bg-secondary'}`}
+                  style={{ border: 'none', cursor: canConfirmPayout ? 'pointer' : 'not-allowed' }}
                   onClick={handleRequestPayout}
-                  disabled={requesting || !canRequestPayout}
+                  disabled={requesting || !canConfirmPayout}
                 >
                   {requesting ? 'Submitting...' : 'Confirm Request'}
                 </button>
