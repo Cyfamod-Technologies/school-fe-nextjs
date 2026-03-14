@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { adminApi } from '@/lib/agents';
 import { useAuth } from '@/contexts/AuthContext';
+import { userHasRole } from '@/lib/roleChecks';
 import { useRouter } from 'next/navigation';
 
 interface Agent {
@@ -29,8 +30,8 @@ export default function AdminAgentsPage() {
   const [reviewingAgent, setReviewingAgent] = useState<Agent | null>(null);
 
   useEffect(() => {
-    const userRole = (user?.role || '').toLowerCase();
-    if (!authLoading && user && userRole !== 'super_admin' && userRole !== 'admin') {
+    const isAdminUser = userHasRole(user, 'super_admin') || userHasRole(user, 'admin');
+    if (!authLoading && user && !isAdminUser) {
       router.replace('/v10/dashboard');
     }
   }, [user, authLoading, router]);
