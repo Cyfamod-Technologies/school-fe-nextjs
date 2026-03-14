@@ -1,4 +1,21 @@
 import { apiClient } from './apiClient';
+import { getCookie } from './cookies';
+
+const getAdminAuthHeaders = (): Record<string, string> => {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  const token = getCookie('token');
+
+  if (!token) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+};
 
 export interface AgentProfile {
   id: string;
@@ -212,59 +229,60 @@ export const adminApi = {
   // Agents
   getPendingAgents: async (page = 1, perPage = 20) => {
     return apiClient.get(
-      `/api/v1/admin/agents/pending?page=${page}&per_page=${perPage}`
+      `/api/v1/admin/agents/pending?page=${page}&per_page=${perPage}`,
+      { headers: getAdminAuthHeaders() }
     );
   },
 
   approveAgent: async (agentId: string) => {
-    return apiClient.post(`/api/v1/admin/agents/${agentId}/approve`, {});
+    return apiClient.post(`/api/v1/admin/agents/${agentId}/approve`, {}, { headers: getAdminAuthHeaders() });
   },
 
   rejectAgent: async (agentId: string, reason?: string) => {
     return apiClient.post(`/api/v1/admin/agents/${agentId}/reject`, {
       reason: reason || 'No reason provided',
-    });
+    }, { headers: getAdminAuthHeaders() });
   },
 
   suspendAgent: async (agentId: string) => {
-    return apiClient.post(`/api/v1/admin/agents/${agentId}/suspend`, {});
+    return apiClient.post(`/api/v1/admin/agents/${agentId}/suspend`, {}, { headers: getAdminAuthHeaders() });
   },
 
   // Commissions
   getCommissions: async (status?: string, page = 1, perPage = 20) => {
     let url = `/api/v1/admin/commissions?page=${page}&per_page=${perPage}`;
     if (status) url += `&status=${status}`;
-    return apiClient.get(url);
+    return apiClient.get(url, { headers: getAdminAuthHeaders() });
   },
 
   approveCommission: async (commissionId: string) => {
-    return apiClient.post(`/api/v1/admin/commissions/${commissionId}/approve`, {});
+    return apiClient.post(`/api/v1/admin/commissions/${commissionId}/approve`, {}, { headers: getAdminAuthHeaders() });
   },
 
   bulkApproveCommissions: async (commissionIds: string[]) => {
     return apiClient.post('/api/v1/admin/commissions/bulk-approve', {
       commission_ids: commissionIds,
-    });
+    }, { headers: getAdminAuthHeaders() });
   },
 
   // Payouts
   getPayouts: async (status?: string, page = 1, perPage = 20) => {
     let url = `/api/v1/admin/payouts?page=${page}&per_page=${perPage}`;
     if (status) url += `&status=${status}`;
-    return apiClient.get(url);
+    return apiClient.get(url, { headers: getAdminAuthHeaders() });
   },
 
   approvePayout: async (payoutId: string) => {
-    return apiClient.post(`/api/v1/admin/payouts/${payoutId}/approve`, {});
+    return apiClient.post(`/api/v1/admin/payouts/${payoutId}/approve`, {}, { headers: getAdminAuthHeaders() });
   },
 
   processPayout: async (payoutId: string) => {
-    return apiClient.post(`/api/v1/admin/payouts/${payoutId}/process`, {});
+    return apiClient.post(`/api/v1/admin/payouts/${payoutId}/process`, {}, { headers: getAdminAuthHeaders() });
   },
 
   bulkApprovePayouts: async (payoutIds: string[]) => {
     return apiClient.post('/api/v1/admin/payouts/bulk-approve', {
       payout_ids: payoutIds,
-    });
+    }, { headers: getAdminAuthHeaders() });
   },
 };

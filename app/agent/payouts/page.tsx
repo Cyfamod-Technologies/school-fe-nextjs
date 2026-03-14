@@ -105,6 +105,7 @@ const parsePaymentDetails = (
 export default function AgentPayoutsPage() {
   const router = useRouter();
   const [payouts, setPayouts] = useState<PayoutRow[]>([]);
+  const [agentStatus, setAgentStatus] = useState('pending');
   const [earnings, setEarnings] = useState<EarningsSnapshot>({
     available_for_payout: 0,
     min_payout_threshold: 5000,
@@ -136,7 +137,9 @@ export default function AgentPayoutsPage() {
         const root = asRecord(payload);
         const source = asRecord(root.data ?? root);
         const earningsData = asRecord(source.earnings);
+        const agentData = asRecord(source.agent);
 
+        setAgentStatus(asString(agentData.status, 'pending').toLowerCase());
         setEarnings({
           available_for_payout: asNumber(earningsData.available_for_payout, 0),
           min_payout_threshold: asNumber(earningsData.min_payout_threshold, 5000),
@@ -192,8 +195,13 @@ export default function AgentPayoutsPage() {
   const meetsPayoutThreshold =
     earnings.can_request_payout ||
     earnings.available_for_payout >= earnings.min_payout_threshold;
-  const canRequestPayout = meetsPayoutThreshold && !hasOpenPayoutRequest;
-  const requestDisabledReason = hasOpenPayoutRequest
+  
+  const isApproved = agentStatus === 'approved';
+  const canRequestPayout = isApproved && meetsPayoutThreshold && !hasOpenPayoutRequest;
+  
+  const requestDisabledReason = !isApproved
+    ? 'Your account is under review. Payouts will be enabled once your profile is approved.'
+    : hasOpenPayoutRequest
     ? 'You already have a payout request in progress. Wait until it is completed or failed.'
     : !meetsPayoutThreshold
     ? `Below payout threshold. You need ${formatNaira(thresholdGap)} more.`
@@ -249,6 +257,13 @@ export default function AgentPayoutsPage() {
           <li>Payouts</li>
         </ul>
       </div>
+
+      {agentStatus !== 'approved' && (
+        <div className="alert alert-warning mg-b-20">
+          <i className="fa fa-exclamation-triangle mr-2" />
+          <strong>Account Under Review:</strong> Your profile is being verified. Payout requests will be enabled as soon as your account is approved by our administrators.
+        </div>
+      )}
 
       <div className="row gutters-20">
         <div className="col-xl-3 col-sm-6 col-12">

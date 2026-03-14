@@ -225,6 +225,22 @@ export const menuSections: MenuSection[] = [
   //   ],
   // },
   {
+    label: "Partner Program",
+    icon: "flaticon-planet-earth",
+    links: [
+      {
+        label: "Agents",
+        href: "/admin/agents",
+        requiredRoles: ["super_admin"],
+      },
+      {
+        label: "Payout Requests",
+        href: "/admin/payouts",
+        requiredRoles: ["super_admin"],
+      },
+    ],
+  },
+  {
     label: "School Settings",
     icon: "flaticon-settings",
     links: [

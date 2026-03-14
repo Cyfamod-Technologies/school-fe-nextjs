@@ -451,6 +451,14 @@ export default function AgentDashboardPage() {
         ))}
       </div>
 
+      {data.earnings.pending > 0 && (
+        <div className="alert alert-info mg-b-20">
+          <i className="fa fa-info-circle mr-2" />
+          You have <strong>{formatNaira(data.earnings.pending)}</strong> in pending commissions. 
+          New commissions undergo a mandatory <strong>72-hour verification window</strong> before they move to your available balance.
+        </div>
+      )}
+
       <div className="row gutters-20">
         <div className="col-12 col-xl-6">
           <div className="card dashboard-card-one pd-b-20 mg-b-20">
