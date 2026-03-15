@@ -73,6 +73,7 @@ export default function AdminAgentsPage() {
       if (action === 'approve') response = await adminApi.approveAgent(agentId);
       else if (action === 'reject') response = await adminApi.rejectAgent(agentId, rejectionReason);
       else if (action === 'suspend') response = await adminApi.suspendAgent(agentId);
+      else if (action === 'reset-pending') response = await adminApi.resetPending(agentId);
 
       if (response?.ok) {
         const payload = await response.json();
@@ -270,14 +271,24 @@ export default function AdminAgentsPage() {
                     {(selectedAgent.status?.toLowerCase() === 'suspended' || 
                       selectedAgent.status?.toLowerCase() === 'rejected' || 
                       selectedAgent.status?.toLowerCase() === 'inactive') && (
-                      <button 
-                        className="btn-fill-lg font-mg text-light bg-dodger-blue"
-                        style={{ border: 'none' }}
-                        onClick={() => handleAction(selectedAgent.id, 'approve')}
-                        disabled={!!processingId}
-                      >
-                        <i className="fas fa-play mr-2" /> Re-Activate Account
-                      </button>
+                      <>
+                        <button 
+                          className="btn-fill-lg font-mg text-light bg-dodger-blue mr-3"
+                          style={{ border: 'none' }}
+                          onClick={() => handleAction(selectedAgent.id, 'approve')}
+                          disabled={!!processingId}
+                        >
+                          <i className="fas fa-play mr-2" /> Re-Activate
+                        </button>
+                        <button 
+                          className="btn-fill-lg font-mg text-light bg-light-sea-green"
+                          style={{ border: 'none' }}
+                          onClick={() => handleAction(selectedAgent.id, 'reset-pending')}
+                          disabled={!!processingId}
+                        >
+                          <i className="fas fa-undo mr-2" /> Move to Review
+                        </button>
+                      </>
                     )}
                   </div>
                 ) : (

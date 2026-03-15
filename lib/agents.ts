@@ -256,6 +256,10 @@ export const adminApi = {
     return apiClient.post(`/api/v1/admin/agents/${agentId}/suspend`, {}, { headers: getAdminAuthHeaders() });
   },
 
+  resetPending: async (agentId: string) => {
+    return apiClient.post(`/api/v1/admin/agents/${agentId}/reset-pending`, {}, { headers: getAdminAuthHeaders() });
+  },
+
   // Commissions
   getCommissions: async (status?: string, page = 1, perPage = 20) => {
     let url = `/api/v1/admin/commissions?page=${page}&per_page=${perPage}`;
