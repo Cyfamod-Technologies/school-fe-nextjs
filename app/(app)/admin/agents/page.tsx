@@ -25,34 +25,11 @@ export default function AdminAgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState('pending'); // pending, approved, rejected, suspended, all
+  const [filter, setFilter] = useState('pending'); // pending, approved, suspended, all
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [reviewingAgent, setReviewingAgent] = useState<Agent | null>(null);
-
-  // Define valid state transitions for the modern State-Action UI
-  const getAvailableActions = (status: string) => {
-    const s = status?.toLowerCase();
-    switch (s) {
-      case 'pending':
-        return [
-          { label: 'Approve', action: 'approve', color: 'btn-success', icon: 'fas fa-check' },
-          { label: 'Reject', action: 'reject', color: 'btn-danger', icon: 'fas fa-times' }
-        ];
-      case 'approved':
-        return [
-          { label: 'Suspend', action: 'suspend', color: 'btn-warning', icon: 'fas fa-pause' },
-          { label: 'Mark Inactive', action: 'reject', color: 'btn-secondary', icon: 'fas fa-user-slash' }
-        ];
-      case 'suspended':
-      case 'inactive':
-      case 'rejected':
-        return [
-          { label: 'Re-Activate', action: 'approve', color: 'btn-success', icon: 'fas fa-play' }
-        ];
-      default:
-        return [];
-    }
-  };
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [showRejectionInput, setShowRejectionInput] = useState(false);
 
   useEffect(() => {
     const userRole = (user?.role || '').toLowerCase();
@@ -62,8 +39,9 @@ export default function AdminAgentsPage() {
   }, [user, authLoading, router]);
 
   const fetchAgents = async () => {
+    setLoading(true);
     try {
-      const response = await adminApi.getPendingAgents(); // Note: backend pending endpoint usually returns all for admin filter
+      const response = await adminApi.listAgents(filter);
       if (response.ok) {
         const data = await response.json();
         setAgents(data.agents || data.data || []);
@@ -81,47 +59,54 @@ export default function AdminAgentsPage() {
     if (user) {
       fetchAgents();
     }
-  }, [user]);
+  }, [user, filter]);
 
-  const handleAction = async (agentId: string, action: string, reason?: string) => {
+  const handleAction = async (agentId: string, action: string) => {
+    if (action === 'reject' && !rejectionReason) {
+      setShowRejectionInput(true);
+      return;
+    }
+
     setProcessingId(agentId);
     try {
       let response;
       if (action === 'approve') response = await adminApi.approveAgent(agentId);
-      else if (action === 'reject') response = await adminApi.rejectAgent(agentId, reason);
+      else if (action === 'reject') response = await adminApi.rejectAgent(agentId, rejectionReason);
       else if (action === 'suspend') response = await adminApi.suspendAgent(agentId);
 
       if (response?.ok) {
-        const updatedAgent = await response.json();
-        setAgents(agents.map(a => a.id === agentId ? { ...a, ...updatedAgent.agent } : a));
-        setReviewingAgent(null);
+        const payload = await response.json();
+        setAgents(agents.map(a => a.id === agentId ? { ...a, ...payload.agent } : a));
+        setSelectedAgent(null);
+        setRejectionReason('');
+        setShowRejectionInput(false);
       } else {
-        setError(`Failed to ${action} agent.`);
+        const data = await response?.json();
+        setError(data?.message || `Failed to ${action} agent.`);
       }
     } catch (err) {
-      setError('An error occurred');
+      setError('An error occurred during the request.');
     } finally {
       setProcessingId(null);
     }
   };
 
-  const filteredAgents = useMemo(() => {
-    if (filter === 'all') return agents;
-    return agents.filter((a) => a.status?.toLowerCase() === filter.toLowerCase());
-  }, [agents, filter]);
-
   const getStatusBadge = (status: string) => {
-    const s = status?.toLowerCase();
+    const s = status?.toLowerCase() || '';
     let badgeClass = 'badge-info';
     if (s === 'pending') badgeClass = 'badge-warning';
     if (s === 'approved') badgeClass = 'badge-success';
     if (s === 'rejected' || s === 'inactive') badgeClass = 'badge-danger';
     if (s === 'suspended') badgeClass = 'badge-secondary';
 
-    return <span className={`badge ${badgeClass}`} style={{ padding: '8px 12px', fontWeight: 600, textTransform: 'capitalize' }}>{status}</span>;
+    return (
+      <span className={`badge ${badgeClass}`} style={{ padding: '8px 12px', fontWeight: 600, textTransform: 'capitalize', fontSize: '1.2rem' }}>
+        {status}
+      </span>
+    );
   };
 
-  if (loading) {
+  if (loading && agents.length === 0) {
     return (
       <div className="d-flex align-items-center justify-content-center" style={{ minHeight: '400px' }}>
         <div className="spinner-border text-primary" role="status"><span className="sr-only">Loading...</span></div>
@@ -145,16 +130,21 @@ export default function AdminAgentsPage() {
             <div className="item-title"><h3>Partner Agents</h3></div>
           </div>
 
-          {error && <div className="alert alert-danger">{error}</div>}
+          {error && (
+            <div className="alert alert-danger alert-dismissible fade show">
+              {error}
+              <button type="button" className="close" onClick={() => setError(null)}><span>&times;</span></button>
+            </div>
+          )}
 
-          {/* Filter Tabs */}
           <div className="mb-4">
             <div className="btn-group" role="group">
-              {['pending', 'approved', 'suspended', 'rejected', 'all'].map((f) => (
+              {['pending', 'approved', 'suspended', 'inactive', 'all'].map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
                   className={`btn btn-lg ${filter === f ? 'btn-primary' : 'btn-outline-primary'}`}
+                  style={{ fontSize: '1.4rem' }}
                 >
                   {f.charAt(0).toUpperCase() + f.slice(1)}
                 </button>
@@ -164,22 +154,22 @@ export default function AdminAgentsPage() {
 
           <div className="table-responsive">
             <table className="table display data-table text-nowrap">
-              <thead>
+              <thead style={{ fontSize: '1.4rem' }}>
                 <tr>
-                  <th style={{ fontSize: '1.4rem' }}>Agent Name</th>
-                  <th style={{ fontSize: '1.4rem' }}>Contact</th>
-                  <th style={{ fontSize: '1.4rem' }}>Status</th>
-                  <th style={{ fontSize: '1.4rem' }}>Registered</th>
-                  <th style={{ fontSize: '1.4rem' }}>Actions</th>
+                  <th>Agent Name</th>
+                  <th>Contact</th>
+                  <th>Status</th>
+                  <th>Registered</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody style={{ fontSize: '1.4rem' }}>
-                {filteredAgents.length === 0 ? (
-                  <tr><td colSpan={5} className="text-center py-4">No {filter} agents found.</td></tr>
+                {agents.length === 0 ? (
+                  <tr><td colSpan={5} className="text-center py-4 text-muted">No {filter} agents found.</td></tr>
                 ) : (
-                  filteredAgents.map((agent) => (
+                  agents.map((agent) => (
                     <tr key={agent.id}>
-                      <td>{agent.full_name}</td>
+                      <td className="font-weight-bold">{agent.full_name}</td>
                       <td>
                         <div>{agent.email}</div>
                         <div className="text-muted" style={{ fontSize: '1.2rem' }}>{agent.phone}</div>
@@ -189,10 +179,13 @@ export default function AdminAgentsPage() {
                       <td>
                         <button 
                           className="btn-fill-sm text-light bg-dodger-blue"
-                          style={{ border: 'none', cursor: 'pointer', fontSize: '1.2rem', padding: '5px 12px' }}
-                          onClick={() => setReviewingAgent(agent)}
+                          style={{ border: 'none', cursor: 'pointer', fontSize: '1.3rem' }}
+                          onClick={() => {
+                            setSelectedAgent(agent);
+                            setShowRejectionInput(false);
+                          }}
                         >
-                          Review / Actions
+                          Manage
                         </button>
                       </td>
                     </tr>
@@ -204,45 +197,120 @@ export default function AdminAgentsPage() {
         </div>
       </div>
 
-      {/* Modern Action Modal */}
-      {reviewingAgent && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Agent Profile & Actions</h5>
-                <button type="button" className="close" onClick={() => setReviewingAgent(null)}><span>&times;</span></button>
+      {/* Themed Management Modal */}
+      {selectedAgent && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 1100 }}>
+          <div className="modal-dialog modal-dialog-centered modal-lg">
+            <div className="modal-content" style={{ borderRadius: '15px', border: 'none' }}>
+              <div className="modal-header pd-20">
+                <h5 className="modal-title" style={{ fontSize: '1.8rem', fontWeight: 700 }}>Agent Profile & Status</h5>
+                <button type="button" className="close" onClick={() => setSelectedAgent(null)}>
+                  <span style={{ fontSize: '2.5rem' }}>&times;</span>
+                </button>
               </div>
-              <div className="modal-body">
-                <div className="mb-4">
-                  <p className="mb-1 text-muted small">Account Status</p>
-                  {getStatusBadge(reviewingAgent.status)}
+              <div className="modal-body pd-30">
+                <div className="row mg-b-20">
+                  <div className="col-md-6">
+                    <p className="text-muted mg-b-5" style={{ fontSize: '1.2rem' }}>Full Name</p>
+                    <p style={{ fontSize: '1.5rem', fontWeight: 600 }}>{selectedAgent.full_name}</p>
+                  </div>
+                  <div className="col-md-6">
+                    <p className="text-muted mg-b-5" style={{ fontSize: '1.2rem' }}>Status</p>
+                    {getStatusBadge(selectedAgent.status)}
+                  </div>
                 </div>
-                <dl className="row">
-                  <dt className="col-sm-4">Full Name</dt><dd className="col-sm-8">{reviewingAgent.full_name}</dd>
-                  <dt className="col-sm-4">Email</dt><dd className="col-sm-8">{reviewingAgent.email}</dd>
-                  <dt className="col-sm-4">Bank</dt><dd className="col-sm-8">{reviewingAgent.bank_name}</dd>
-                  <dt className="col-sm-4">Account</dt><dd className="col-sm-8">{reviewingAgent.bank_account_number}</dd>
-                </dl>
-                
-                <hr />
-                <h6 className="mb-3">Available Actions</h6>
-                <div className="d-flex gap-2 flex-wrap">
-                  {getAvailableActions(reviewingAgent.status).map((btn) => (
-                    <button
-                      key={btn.action}
-                      className={`btn ${btn.color} btn-lg mr-2`}
-                      onClick={() => handleAction(reviewingAgent.id, btn.action)}
-                      disabled={processingId === reviewingAgent.id}
-                    >
-                      <i className={`${btn.icon} mr-2`} />
-                      {btn.label}
-                    </button>
-                  ))}
+
+                <div className="row mg-b-20">
+                  <div className="col-md-6">
+                    <p className="text-muted mg-b-5" style={{ fontSize: '1.2rem' }}>Email Address</p>
+                    <p style={{ fontSize: '1.4rem' }}>{selectedAgent.email}</p>
+                  </div>
+                  <div className="col-md-6">
+                    <p className="text-muted mg-b-5" style={{ fontSize: '1.2rem' }}>Bank Account</p>
+                    <p style={{ fontSize: '1.4rem' }}>{selectedAgent.bank_name} - {selectedAgent.bank_account_number}</p>
+                  </div>
                 </div>
+
+                <hr className="mg-b-20" />
+
+                {!showRejectionInput ? (
+                  <div className="action-area d-flex gap-3 flex-wrap">
+                    {selectedAgent.status?.toLowerCase() === 'pending' && (
+                      <>
+                        <button 
+                          className="btn-fill-lg font-mg text-light bg-green-600 mr-3"
+                          style={{ backgroundColor: '#28a745', border: 'none' }}
+                          onClick={() => handleAction(selectedAgent.id, 'approve')}
+                          disabled={!!processingId}
+                        >
+                          <i className="fas fa-check mr-2" /> Approve Agent
+                        </button>
+                        <button 
+                          className="btn-fill-lg font-mg text-light bg-red-600"
+                          style={{ backgroundColor: '#dc3545', border: 'none' }}
+                          onClick={() => setShowRejectionInput(true)}
+                          disabled={!!processingId}
+                        >
+                          <i className="fas fa-times mr-2" /> Reject Agent
+                        </button>
+                      </>
+                    )}
+
+                    {selectedAgent.status?.toLowerCase() === 'approved' && (
+                      <button 
+                        className="btn-fill-lg font-mg text-light bg-orange-peel"
+                        style={{ backgroundColor: '#ffae01', border: 'none' }}
+                        onClick={() => handleAction(selectedAgent.id, 'suspend')}
+                        disabled={!!processingId}
+                      >
+                        <i className="fas fa-pause mr-2" /> Suspend Account
+                      </button>
+                    )}
+
+                    {(selectedAgent.status?.toLowerCase() === 'suspended' || 
+                      selectedAgent.status?.toLowerCase() === 'rejected' || 
+                      selectedAgent.status?.toLowerCase() === 'inactive') && (
+                      <button 
+                        className="btn-fill-lg font-mg text-light bg-dodger-blue"
+                        style={{ border: 'none' }}
+                        onClick={() => handleAction(selectedAgent.id, 'approve')}
+                        disabled={!!processingId}
+                      >
+                        <i className="fas fa-play mr-2" /> Re-Activate Account
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rejection-form">
+                    <label style={{ fontSize: '1.4rem', fontWeight: 600 }}>Reason for Rejection</label>
+                    <textarea 
+                      className="form-control"
+                      rows={3}
+                      style={{ fontSize: '1.4rem', marginTop: '10px' }}
+                      placeholder="e.g. Incomplete profile or invalid bank details..."
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                    ></textarea>
+                    <div className="mt-3 d-flex gap-3">
+                      <button 
+                        className="btn btn-danger btn-lg mr-3" 
+                        onClick={() => handleAction(selectedAgent.id, 'reject')}
+                        disabled={!rejectionReason || !!processingId}
+                      >
+                        Confirm Rejection
+                      </button>
+                      <button 
+                        className="btn btn-secondary btn-lg" 
+                        onClick={() => setShowRejectionInput(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setReviewingAgent(null)}>Close</button>
+              <div className="modal-footer pd-20">
+                <button className="btn-fill-lmd radius-4 text-light bg-light-sea-green" style={{ border: 'none' }} onClick={() => setSelectedAgent(null)}>Close</button>
               </div>
             </div>
           </div>
