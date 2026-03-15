@@ -451,6 +451,18 @@ export default function AgentDashboardPage() {
         ))}
       </div>
 
+      {data.agent.status === 'inactive' && (
+        <div className="alert alert-danger mg-b-20">
+          <i className="fa fa-user-slash mr-2" />
+          <strong>Account Inactive:</strong> Your account has been marked as inactive. 
+          {data.agent.rejection_reason && (
+            <div className="mt-2">
+              <strong>Reason:</strong> {data.agent.rejection_reason}
+            </div>
+          )}
+        </div>
+      )}
+
       {data.earnings.pending > 0 && (
         <div className="alert alert-info mg-b-20">
           <i className="fa fa-info-circle mr-2" />
