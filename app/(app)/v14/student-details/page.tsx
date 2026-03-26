@@ -53,6 +53,8 @@ export default function StudentDetailsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const studentId = searchParams.get("id");
+  const querySessionId = searchParams.get("session_id") ?? "";
+  const queryTermId = searchParams.get("term_id") ?? "";
   const filterQuery = useMemo(() => {
     const params = new URLSearchParams();
     const search = searchParams.get("search");
@@ -119,6 +121,32 @@ export default function StudentDetailsPage() {
   const [termsCache, setTermsCache] = useState<Record<string, Term[]>>({});
   const [selectedSession, setSelectedSession] = useState<string>("");
   const [selectedTerm, setSelectedTerm] = useState<string>("");
+  const detailsContextQuery = useMemo(() => {
+    const params = new URLSearchParams(filterQuery);
+
+    if (selectedSession) {
+      params.set("session_id", selectedSession);
+    } else if (querySessionId) {
+      params.set("session_id", querySessionId);
+    }
+
+    if (selectedTerm) {
+      params.set("term_id", selectedTerm);
+    } else if (queryTermId) {
+      params.set("term_id", queryTermId);
+    }
+
+    return params.toString();
+  }, [filterQuery, querySessionId, queryTermId, selectedSession, selectedTerm]);
+  const editStudentHref = useMemo(() => {
+    if (!studentId) {
+      return "/v14/edit-student";
+    }
+
+    return detailsContextQuery
+      ? `/v14/edit-student?id=${studentId}&${detailsContextQuery}`
+      : `/v14/edit-student?id=${studentId}`;
+  }, [detailsContextQuery, studentId]);
   const studentResultEntryHref = useMemo(() => {
     if (!studentId) {
       return "/v14/student-result-entry";
@@ -136,6 +164,7 @@ export default function StudentDetailsPage() {
 
     const sessionCandidate =
       selectedSession ||
+      querySessionId ||
       (schoolContext.current_session_id != null
         ? String(schoolContext.current_session_id)
         : student?.current_session_id != null
@@ -144,6 +173,7 @@ export default function StudentDetailsPage() {
 
     const termCandidate =
       selectedTerm ||
+      queryTermId ||
       (schoolContext.current_term_id != null
         ? String(schoolContext.current_term_id)
         : student?.current_term_id != null
@@ -161,6 +191,8 @@ export default function StudentDetailsPage() {
     return `/v14/student-result-entry?${params.toString()}`;
   }, [
     filterQuery,
+    querySessionId,
+    queryTermId,
     schoolContext.current_session_id,
     schoolContext.current_term_id,
     selectedSession,
@@ -899,6 +931,7 @@ export default function StudentDetailsPage() {
     params.set("student_id", studentId);
     const sessionCandidate =
       (selectedSession ||
+        querySessionId ||
         (schoolContext.current_session_id != null
           ? String(schoolContext.current_session_id)
           : "") ||
@@ -907,6 +940,7 @@ export default function StudentDetailsPage() {
             : ""));
     const termCandidate =
       (selectedTerm ||
+        queryTermId ||
         (schoolContext.current_term_id != null
           ? String(schoolContext.current_term_id)
           : "") ||
@@ -921,6 +955,8 @@ export default function StudentDetailsPage() {
     }
     return params;
   }, [
+    querySessionId,
+    queryTermId,
     selectedSession,
     selectedTerm,
     student?.current_session_id,
@@ -1127,14 +1163,18 @@ export default function StudentDetailsPage() {
       return;
     }
     if (!selectedSession) {
-      if (schoolContext.current_session_id != null) {
+      if (querySessionId) {
+        setSelectedSession(querySessionId);
+      } else if (schoolContext.current_session_id != null) {
         setSelectedSession(String(schoolContext.current_session_id));
       } else if (student.current_session_id != null) {
         setSelectedSession(String(student.current_session_id));
       }
     }
     if (!selectedTerm) {
-      if (schoolContext.current_term_id != null) {
+      if (queryTermId) {
+        setSelectedTerm(queryTermId);
+      } else if (schoolContext.current_term_id != null) {
         setSelectedTerm(String(schoolContext.current_term_id));
       } else if (student.current_term_id != null) {
         setSelectedTerm(String(student.current_term_id));
@@ -1144,6 +1184,8 @@ export default function StudentDetailsPage() {
     student,
     selectedSession,
     selectedTerm,
+    querySessionId,
+    queryTermId,
     schoolContext.current_session_id,
     schoolContext.current_term_id,
   ]);
@@ -1184,6 +1226,40 @@ export default function StudentDetailsPage() {
       setSelectedTerm(String(terms[0].id));
     }
   }, [selectedSession, selectedTerm, termsCache]);
+
+  useEffect(() => {
+    if (!studentId) {
+      return;
+    }
+
+    const currentSessionParam = searchParams.get("session_id") ?? "";
+    const currentTermParam = searchParams.get("term_id") ?? "";
+
+    if (
+      currentSessionParam === selectedSession &&
+      currentTermParam === selectedTerm
+    ) {
+      return;
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (selectedSession) {
+      params.set("session_id", selectedSession);
+    } else {
+      params.delete("session_id");
+    }
+
+    if (selectedTerm) {
+      params.set("term_id", selectedTerm);
+    } else {
+      params.delete("term_id");
+    }
+
+    router.replace(`/v14/student-details?${params.toString()}`, {
+      scroll: false,
+    });
+  }, [router, searchParams, selectedSession, selectedTerm, studentId]);
 
   useEffect(() => {
     setSkillFeedback(null);
@@ -1329,11 +1405,7 @@ export default function StudentDetailsPage() {
             </div>
             <div className="btn-group">
               <Link
-                href={
-                  filterQuery
-                    ? `/v14/edit-student?id=${studentId}&${filterQuery}`
-                    : `/v14/edit-student?id=${studentId}`
-                }
+                href={editStudentHref}
                 className="btn btn-outline-primary"
               >
                 Edit
