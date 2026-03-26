@@ -8,7 +8,10 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { listClasses, type SchoolClass } from "@/lib/classes";
 import {
+  assignSkillTypesToClass,
   createSkillCategory,
   createSkillTypesBulk,
   deleteSkillCategory,
@@ -32,6 +35,7 @@ interface CategoryFormState {
   id: string;
   name: string;
   description: string;
+  school_class_id: string;
 }
 
 interface SkillFormState {
@@ -41,12 +45,14 @@ interface SkillFormState {
   names: string[];
   weight: string;
   description: string;
+  school_class_id: string;
 }
 
 const emptyCategoryForm: CategoryFormState = {
   id: "",
   name: "",
   description: "",
+  school_class_id: "",
 };
 
 const emptySkillForm: SkillFormState = {
@@ -56,11 +62,23 @@ const emptySkillForm: SkillFormState = {
   names: [""],
   weight: "",
   description: "",
+  school_class_id: "",
 };
 
 export default function SkillsPage() {
+  const { schoolContext } = useAuth();
+  const categorySeparatedByClass = Boolean(
+    schoolContext.school?.skill_categories_separate_by_class,
+  );
+  const skillSeparatedByClass = Boolean(
+    schoolContext.school?.skill_types_separate_by_class,
+  );
+  const usesClassScopedSkills =
+    categorySeparatedByClass || skillSeparatedByClass;
+
   const [categories, setCategories] = useState<SkillCategory[]>([]);
   const [skillTypes, setSkillTypes] = useState<SkillType[]>([]);
+  const [classes, setClasses] = useState<SchoolClass[]>([]);
 
   const [categoryForm, setCategoryForm] =
     useState<CategoryFormState>(emptyCategoryForm);
@@ -76,13 +94,21 @@ export default function SkillsPage() {
   const [loadingSkills, setLoadingSkills] = useState(false);
   const [categorySubmitting, setCategorySubmitting] = useState(false);
   const [skillSubmitting, setSkillSubmitting] = useState(false);
+  const [loadingClasses, setLoadingClasses] = useState(false);
   const [skillCategoryFilter, setSkillCategoryFilter] = useState("");
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
+  const [scopeClassFilter, setScopeClassFilter] = useState("");
+  const [bulkAssignClassId, setBulkAssignClassId] = useState("");
 
   const refreshCategories = useCallback(async () => {
     setLoadingCategories(true);
     try {
-      const data = await listSkillCategories();
+      const data = await listSkillCategories({
+        schoolClassId:
+          categorySeparatedByClass && scopeClassFilter
+            ? scopeClassFilter
+            : undefined,
+      });
       setCategories(data);
     } catch (error) {
       console.error("Unable to load categories", error);
@@ -96,12 +122,16 @@ export default function SkillsPage() {
     } finally {
       setLoadingCategories(false);
     }
-  }, []);
+  }, [categorySeparatedByClass, scopeClassFilter]);
 
   const refreshSkillTypes = useCallback(async () => {
     setLoadingSkills(true);
     try {
-      const data = await listSkillTypes(skillCategoryFilter || undefined);
+      const data = await listSkillTypes({
+        skillCategoryId: skillCategoryFilter || undefined,
+        schoolClassId:
+          usesClassScopedSkills && scopeClassFilter ? scopeClassFilter : undefined,
+      });
       setSkillTypes(data);
     } catch (error) {
       console.error("Unable to load skill types", error);
@@ -115,7 +145,27 @@ export default function SkillsPage() {
     } finally {
       setLoadingSkills(false);
     }
-  }, [skillCategoryFilter]);
+  }, [skillCategoryFilter, scopeClassFilter, usesClassScopedSkills]);
+
+  const refreshClasses = useCallback(async () => {
+    if (!usesClassScopedSkills) {
+      setClasses([]);
+      return;
+    }
+    setLoadingClasses(true);
+    try {
+      setClasses(await listClasses());
+    } catch (error) {
+      console.error("Unable to load classes", error);
+      setCategoryFeedback({
+        type: "danger",
+        message:
+          error instanceof Error ? error.message : "Unable to load classes.",
+      });
+    } finally {
+      setLoadingClasses(false);
+    }
+  }, [usesClassScopedSkills]);
 
   useEffect(() => {
     refreshCategories().catch((error) =>
@@ -130,11 +180,42 @@ export default function SkillsPage() {
   }, [refreshSkillTypes]);
 
   useEffect(() => {
+    refreshClasses().catch((error) =>
+      console.error("Unable to load classes", error),
+    );
+  }, [refreshClasses]);
+
+  useEffect(() => {
+    setCategoryForm((prev) => ({
+      ...prev,
+      school_class_id:
+        prev.id !== "" ? prev.school_class_id : categorySeparatedByClass ? scopeClassFilter : "",
+    }));
+    setSkillForm((prev) => ({
+      ...prev,
+      school_class_id:
+        prev.id !== "" ? prev.school_class_id : skillSeparatedByClass ? scopeClassFilter : "",
+    }));
+  }, [categorySeparatedByClass, skillSeparatedByClass, scopeClassFilter]);
+
+  useEffect(() => {
     const visibleSkillIds = new Set(skillTypes.map((skill) => String(skill.id)));
     setSelectedSkillIds((previous) =>
       previous.filter((skillId) => visibleSkillIds.has(skillId)),
     );
   }, [skillTypes]);
+
+  useEffect(() => {
+    if (!skillCategoryFilter) {
+      return;
+    }
+    const exists = categories.some(
+      (category) => String(category.id) === String(skillCategoryFilter),
+    );
+    if (!exists) {
+      setSkillCategoryFilter("");
+    }
+  }, [categories, skillCategoryFilter]);
 
   const categoryCountById = useMemo(() => {
     const map = new Map<string, number>();
@@ -157,6 +238,27 @@ export default function SkillsPage() {
     return map;
   }, [categories]);
 
+  const classNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    classes.forEach((schoolClass) => {
+      map.set(String(schoolClass.id), schoolClass.name);
+    });
+    return map;
+  }, [classes]);
+
+  const scopeLabel = useCallback(
+    (classId?: string | null) => {
+      if (!usesClassScopedSkills) {
+        return "All classes";
+      }
+      if (!classId) {
+        return "All classes";
+      }
+      return classNameById.get(String(classId)) ?? "Selected class";
+    },
+    [classNameById, usesClassScopedSkills],
+  );
+
   const handleCategorySubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setCategoryFeedback(null);
@@ -173,6 +275,10 @@ export default function SkillsPage() {
     const payload = {
       name,
       description: categoryForm.description.trim() || null,
+      school_class_id:
+        categorySeparatedByClass && categoryForm.school_class_id
+          ? categoryForm.school_class_id
+          : null,
     };
 
     try {
@@ -190,7 +296,10 @@ export default function SkillsPage() {
           message: "Category created successfully.",
         });
       }
-      setCategoryForm(emptyCategoryForm);
+      setCategoryForm({
+        ...emptyCategoryForm,
+        school_class_id: categorySeparatedByClass ? scopeClassFilter : "",
+      });
       await refreshCategories();
       await refreshSkillTypes();
     } catch (error) {
@@ -212,12 +321,16 @@ export default function SkillsPage() {
       id: String(category.id),
       name: category.name ?? "",
       description: category.description ?? "",
+      school_class_id: category.school_class_id ? String(category.school_class_id) : "",
     });
     setCategoryFeedback(null);
   };
 
   const cancelCategoryEdit = () => {
-    setCategoryForm(emptyCategoryForm);
+    setCategoryForm({
+      ...emptyCategoryForm,
+      school_class_id: categorySeparatedByClass ? scopeClassFilter : "",
+    });
     setCategoryFeedback(null);
   };
 
@@ -236,7 +349,10 @@ export default function SkillsPage() {
         message: "Category deleted successfully.",
       });
       if (categoryForm.id === String(category.id)) {
-        setCategoryForm(emptyCategoryForm);
+        setCategoryForm({
+          ...emptyCategoryForm,
+          school_class_id: categorySeparatedByClass ? scopeClassFilter : "",
+        });
       }
       if (skillCategoryFilter === String(category.id)) {
         setSkillCategoryFilter("");
@@ -285,6 +401,10 @@ export default function SkillsPage() {
       skill_category_id: skillForm.skill_category_id,
       weight: weightValue,
       description: skillForm.description.trim() || null,
+      school_class_id:
+        skillSeparatedByClass && skillForm.school_class_id
+          ? skillForm.school_class_id
+          : null,
     };
 
     try {
@@ -348,7 +468,10 @@ export default function SkillsPage() {
           } created successfully.`,
         });
       }
-      setSkillForm(emptySkillForm);
+      setSkillForm({
+        ...emptySkillForm,
+        school_class_id: skillSeparatedByClass ? scopeClassFilter : "",
+      });
       await refreshSkillTypes();
       await refreshCategories();
     } catch (error) {
@@ -374,12 +497,16 @@ export default function SkillsPage() {
           : `${Number(skill.weight).toFixed(2)}`,
       names: [""],
       description: skill.description ?? "",
+      school_class_id: skill.school_class_id ? String(skill.school_class_id) : "",
     });
     setSkillFeedback(null);
   };
 
   const cancelSkillEdit = () => {
-    setSkillForm(emptySkillForm);
+    setSkillForm({
+      ...emptySkillForm,
+      school_class_id: skillSeparatedByClass ? scopeClassFilter : "",
+    });
     setSkillFeedback(null);
   };
 
@@ -426,7 +553,10 @@ export default function SkillsPage() {
         message: "Skill deleted successfully.",
       });
       if (skillForm.id === String(skill.id)) {
-        setSkillForm(emptySkillForm);
+        setSkillForm({
+          ...emptySkillForm,
+          school_class_id: skillSeparatedByClass ? scopeClassFilter : "",
+        });
       }
       setSelectedSkillIds((previous) =>
         previous.filter((skillId) => skillId !== String(skill.id)),
@@ -506,7 +636,10 @@ export default function SkillsPage() {
       const deletedCount = results.length - failedCount;
 
       if (selectedIds.includes(skillForm.id)) {
-        setSkillForm(emptySkillForm);
+        setSkillForm({
+          ...emptySkillForm,
+          school_class_id: skillSeparatedByClass ? scopeClassFilter : "",
+        });
       }
 
       setSelectedSkillIds([]);
@@ -541,11 +674,57 @@ export default function SkillsPage() {
     }
   };
 
+  const handleAssignSelectedSkills = async () => {
+    if (!selectedSkillIds.length) {
+      setSkillFeedback({
+        type: "warning",
+        message: "Select at least one skill to move.",
+      });
+      return;
+    }
+
+    try {
+      setSkillSubmitting(true);
+      const updated = await assignSkillTypesToClass(
+        selectedSkillIds,
+        bulkAssignClassId || null,
+      );
+
+      setSelectedSkillIds([]);
+      await refreshSkillTypes();
+      await refreshCategories();
+
+      const targetLabel = bulkAssignClassId
+        ? scopeLabel(bulkAssignClassId)
+        : "All classes";
+
+      setSkillFeedback({
+        type: "success",
+        message: `${updated.length} skill${
+          updated.length === 1 ? "" : "s"
+        } moved to ${targetLabel}.`,
+      });
+    } catch (error) {
+      console.error("Unable to move selected skills", error);
+      setSkillFeedback({
+        type: "danger",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to move selected skills.",
+      });
+    } finally {
+      setSkillSubmitting(false);
+    }
+  };
+
   const renderCategoryTable = () => {
+    const columnCount = categorySeparatedByClass ? 4 : 3;
+
     if (loadingCategories) {
       return (
         <tr>
-          <td colSpan={3}>Loading categories...</td>
+          <td colSpan={columnCount}>Loading categories...</td>
         </tr>
       );
     }
@@ -553,7 +732,7 @@ export default function SkillsPage() {
     if (!categories.length) {
       return (
         <tr>
-          <td colSpan={3}>No categories found.</td>
+          <td colSpan={columnCount}>No categories found.</td>
         </tr>
       );
     }
@@ -563,6 +742,7 @@ export default function SkillsPage() {
       return (
         <tr key={category.id}>
           <td>{category.name}</td>
+          {categorySeparatedByClass ? <td>{scopeLabel(category.school_class_id)}</td> : null}
           <td>{count}</td>
           <td>
             <button
@@ -586,10 +766,12 @@ export default function SkillsPage() {
   };
 
   const renderSkillTable = () => {
+    const columnCount = usesClassScopedSkills ? 7 : 6;
+
     if (loadingSkills) {
       return (
         <tr>
-          <td colSpan={6}>Loading skills...</td>
+          <td colSpan={columnCount}>Loading skills...</td>
         </tr>
       );
     }
@@ -597,7 +779,7 @@ export default function SkillsPage() {
     if (!skillTypes.length) {
       return (
         <tr>
-          <td colSpan={6}>
+          <td colSpan={columnCount}>
             {skillCategoryFilter
               ? "No skills found in the selected category."
               : "No skills found."}
@@ -615,6 +797,8 @@ export default function SkillsPage() {
         skill.weight === null || skill.weight === undefined
           ? "—"
           : Number(skill.weight).toFixed(2);
+      const effectiveScopeId =
+        skill.school_class_id ?? skill.category_school_class_id ?? null;
       return (
         <tr key={skill.id}>
           <td>
@@ -626,6 +810,7 @@ export default function SkillsPage() {
           </td>
           <td>{skill.name}</td>
           <td>{categoryName}</td>
+          {usesClassScopedSkills ? <td>{scopeLabel(effectiveScopeId)}</td> : null}
           <td>{weightText}</td>
           <td>{skill.description || "—"}</td>
           <td>
@@ -689,6 +874,32 @@ export default function SkillsPage() {
                 </div>
               </div>
 
+              {categorySeparatedByClass ? (
+                <div className="form-group">
+                  <label className="text-dark-medium">Category Class Scope</label>
+                  <select
+                    className="form-control"
+                    value={scopeClassFilter}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setScopeClassFilter(value);
+                      setCategoryForm((prev) => ({
+                        ...prev,
+                        school_class_id: value,
+                      }));
+                    }}
+                    disabled={loadingClasses}
+                  >
+                    <option value="">All classes</option>
+                    {classes.map((schoolClass) => (
+                      <option key={schoolClass.id} value={String(schoolClass.id)}>
+                        {schoolClass.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+
               <form onSubmit={handleCategorySubmit} className="mb-3">
                 <input type="hidden" value={categoryForm.id} />
                 <div className="form-group">
@@ -722,6 +933,32 @@ export default function SkillsPage() {
                     maxLength={255}
                   />
                 </div>
+                {categorySeparatedByClass ? (
+                  <div className="form-group">
+                    <label className="text-dark-medium">Scope</label>
+                    <select
+                      className="form-control"
+                      value={categoryForm.school_class_id}
+                      onChange={(event) =>
+                        setCategoryForm((prev) => ({
+                          ...prev,
+                          school_class_id: event.target.value,
+                        }))
+                      }
+                      disabled={loadingClasses}
+                    >
+                      <option value="">All classes</option>
+                      {classes.map((schoolClass) => (
+                        <option key={schoolClass.id} value={String(schoolClass.id)}>
+                          {schoolClass.name}
+                        </option>
+                      ))}
+                    </select>
+                    <small className="form-text text-muted">
+                      Leave this on All classes to share the category across the school.
+                    </small>
+                  </div>
+                ) : null}
                 <div className="d-flex align-items-center">
                   <button
                     type="submit"
@@ -757,6 +994,7 @@ export default function SkillsPage() {
                   <thead>
                     <tr>
                       <th>Name</th>
+                      {categorySeparatedByClass ? <th>Scope</th> : null}
                       <th>Skills</th>
                       <th>Actions</th>
                     </tr>
@@ -795,10 +1033,39 @@ export default function SkillsPage() {
                 </div>
               </div>
 
+              {usesClassScopedSkills ? (
+                <div className="form-group">
+                  <label className="text-dark-medium">Skill Class Scope</label>
+                  <select
+                    className="form-control"
+                    value={scopeClassFilter}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setScopeClassFilter(value);
+                      setSkillForm((prev) => ({
+                        ...prev,
+                        school_class_id: value,
+                      }));
+                    }}
+                    disabled={loadingClasses}
+                  >
+                    <option value="">All classes</option>
+                    {classes.map((schoolClass) => (
+                      <option key={schoolClass.id} value={String(schoolClass.id)}>
+                        {schoolClass.name}
+                      </option>
+                    ))}
+                  </select>
+                  <small className="form-text text-muted">
+                    Global skills still appear for every class. Class-specific skills only appear in their selected class.
+                  </small>
+                </div>
+              ) : null}
+
               <form onSubmit={handleSkillSubmit} className="mb-3">
                 <input type="hidden" value={skillForm.id} />
                 <div className="form-row">
-                  <div className="form-group col-md-6">
+                  <div className={`form-group ${skillForm.id || skillSeparatedByClass ? "col-md-4" : "col-md-6"}`}>
                     <label className="text-dark-medium">Category</label>
                     <select
                       className="form-control"
@@ -814,13 +1081,38 @@ export default function SkillsPage() {
                       <option value="">Select category</option>
                       {categories.map((category) => (
                         <option key={category.id} value={String(category.id)}>
-                          {category.name}
+                          {categorySeparatedByClass
+                            ? `${category.name} (${scopeLabel(category.school_class_id)})`
+                            : category.name}
                         </option>
                       ))}
                     </select>
                   </div>
+                  {skillSeparatedByClass ? (
+                    <div className="form-group col-md-4">
+                      <label className="text-dark-medium">Scope</label>
+                      <select
+                        className="form-control"
+                        value={skillForm.school_class_id}
+                        onChange={(event) =>
+                          setSkillForm((prev) => ({
+                            ...prev,
+                            school_class_id: event.target.value,
+                          }))
+                        }
+                        disabled={loadingClasses}
+                      >
+                        <option value="">All classes</option>
+                        {classes.map((schoolClass) => (
+                          <option key={schoolClass.id} value={String(schoolClass.id)}>
+                            {schoolClass.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
                   {skillForm.id ? (
-                    <div className="form-group col-md-6">
+                    <div className={`form-group ${skillSeparatedByClass ? "col-md-4" : "col-md-6"}`}>
                       <label className="text-dark-medium">Skill Name</label>
                       <input
                         type="text"
@@ -958,13 +1250,15 @@ export default function SkillsPage() {
                   <option value="">All categories</option>
                   {categories.map((category) => (
                     <option key={category.id} value={String(category.id)}>
-                      {category.name}
+                      {categorySeparatedByClass
+                        ? `${category.name} (${scopeLabel(category.school_class_id)})`
+                        : category.name}
                     </option>
                   ))}
                 </select>
               </div>
 
-              <div className="d-flex align-items-center mb-3">
+              <div className="d-flex align-items-center mb-3 flex-wrap">
                 <button
                   type="button"
                   className="btn btn-light mr-2"
@@ -981,6 +1275,32 @@ export default function SkillsPage() {
                 >
                   Delete selected ({selectedSkillIds.length})
                 </button>
+                {skillSeparatedByClass ? (
+                  <>
+                    <select
+                      className="form-control ml-2 mr-2"
+                      style={{ width: 220 }}
+                      value={bulkAssignClassId}
+                      onChange={(event) => setBulkAssignClassId(event.target.value)}
+                      disabled={skillSubmitting}
+                    >
+                      <option value="">All classes</option>
+                      {classes.map((schoolClass) => (
+                        <option key={schoolClass.id} value={String(schoolClass.id)}>
+                          {schoolClass.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleAssignSelectedSkills}
+                      disabled={!selectedSkillIds.length || skillSubmitting}
+                    >
+                      Move selected
+                    </button>
+                  </>
+                ) : null}
               </div>
 
               <div className="table-responsive">
@@ -990,6 +1310,7 @@ export default function SkillsPage() {
                       <th>Select</th>
                       <th>Skill</th>
                       <th>Category</th>
+                      {usesClassScopedSkills ? <th>Scope</th> : null}
                       <th>Weight</th>
                       <th>Description</th>
                       <th>Actions</th>

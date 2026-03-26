@@ -19,6 +19,8 @@ interface FormState {
   term_school_opened_days: string;
   current_session_id: string;
   current_term_id: string;
+  skill_categories_separate_by_class: boolean;
+  skill_types_separate_by_class: boolean;
 }
 
 const initialFormState: FormState = {
@@ -30,6 +32,8 @@ const initialFormState: FormState = {
   term_school_opened_days: "",
   current_session_id: "",
   current_term_id: "",
+  skill_categories_separate_by_class: false,
+  skill_types_separate_by_class: false,
 };
 
 export default function EditSchoolProfilePage() {
@@ -124,6 +128,12 @@ export default function EditSchoolProfilePage() {
       current_term_id: school.current_term_id
         ? `${school.current_term_id}`
         : "",
+      skill_categories_separate_by_class: Boolean(
+        school.skill_categories_separate_by_class,
+      ),
+      skill_types_separate_by_class: Boolean(
+        school.skill_types_separate_by_class,
+      ),
     });
 
     const sessionId = school.current_session_id
@@ -157,6 +167,13 @@ export default function EditSchoolProfilePage() {
       ...(key === "current_session_id"
         ? { current_term_id: "" }
         : null),
+    }));
+  };
+
+  const handleBooleanChange = (key: keyof FormState, value: boolean) => {
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
     }));
   };
 
@@ -463,6 +480,53 @@ export default function EditSchoolProfilePage() {
                     <small className="form-text text-muted">
                       Selecting a session filters the available terms to keep them
                       in sync.
+                    </small>
+                  </div>
+                  <div className="col-lg-6 col-12 form-group">
+                    <label className="d-block">Skill Scope</label>
+                    <div className="form-check mb-2">
+                      <input
+                        id="skill-categories-separate-by-class"
+                        className="form-check-input"
+                        type="checkbox"
+                        checked={form.skill_categories_separate_by_class}
+                        onChange={(event) =>
+                          handleBooleanChange(
+                            "skill_categories_separate_by_class",
+                            event.target.checked,
+                          )
+                        }
+                      />
+                      <label
+                        className="form-check-label"
+                        htmlFor="skill-categories-separate-by-class"
+                      >
+                        Separate skill categories by class
+                      </label>
+                    </div>
+                    <div className="form-check">
+                      <input
+                        id="skill-types-separate-by-class"
+                        className="form-check-input"
+                        type="checkbox"
+                        checked={form.skill_types_separate_by_class}
+                        onChange={(event) =>
+                          handleBooleanChange(
+                            "skill_types_separate_by_class",
+                            event.target.checked,
+                          )
+                        }
+                      />
+                      <label
+                        className="form-check-label"
+                        htmlFor="skill-types-separate-by-class"
+                      >
+                        Separate skills by class
+                      </label>
+                    </div>
+                    <small className="form-text text-muted">
+                      Leave these off to keep categories and skills shared across
+                      the whole school.
                     </small>
                   </div>
                   <div className="col-12 form-group mg-t-8">

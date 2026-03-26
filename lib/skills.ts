@@ -5,6 +5,11 @@ export interface SkillCategory {
   id: number | string;
   name: string;
   description?: string | null;
+  school_class_id?: string | null;
+  school_class?: {
+    id: string | number;
+    name: string;
+  } | null;
   skill_types?: SkillType[];
   [key: string]: unknown;
 }
@@ -16,6 +21,12 @@ export interface SkillType {
   weight?: number | null;
   description?: string | null;
   category?: string | null;
+  school_class_id?: string | null;
+  school_class?: {
+    id: string | number;
+    name: string;
+  } | null;
+  category_school_class_id?: string | null;
   [key: string]: unknown;
 }
 
@@ -53,16 +64,29 @@ function normalizeSkillTypes(payload: SkillTypesResponse): SkillType[] {
   return [];
 }
 
-export async function listSkillCategories(): Promise<SkillCategory[]> {
-  const payload = await apiFetch<CategoriesResponse>(
-    API_ROUTES.skillCategories,
-  );
+export interface ListSkillCategoriesOptions {
+  schoolClassId?: string | number;
+}
+
+export async function listSkillCategories(
+  options: ListSkillCategoriesOptions = {},
+): Promise<SkillCategory[]> {
+  const params = new URLSearchParams();
+  if (options.schoolClassId) {
+    params.set("school_class_id", String(options.schoolClassId));
+  }
+  const endpoint = params.size
+    ? `${API_ROUTES.skillCategories}?${params.toString()}`
+    : API_ROUTES.skillCategories;
+
+  const payload = await apiFetch<CategoriesResponse>(endpoint);
   return normalizeCategories(payload);
 }
 
 export interface UpsertSkillCategoryPayload {
   name: string;
   description?: string | null;
+  school_class_id?: string | number | null;
 }
 
 interface SkillCategoryResponse {
@@ -121,13 +145,23 @@ export async function deleteSkillCategory(
   });
 }
 
+export interface ListSkillTypesOptions {
+  skillCategoryId?: number | string;
+  schoolClassId?: number | string;
+}
+
 export async function listSkillTypes(
-  skillCategoryId?: number | string,
+  options: ListSkillTypesOptions = {},
 ): Promise<SkillType[]> {
-  const endpoint = skillCategoryId
-    ? `${API_ROUTES.skillTypes}?skill_category_id=${encodeURIComponent(
-        String(skillCategoryId),
-      )}`
+  const params = new URLSearchParams();
+  if (options.skillCategoryId) {
+    params.set("skill_category_id", String(options.skillCategoryId));
+  }
+  if (options.schoolClassId) {
+    params.set("school_class_id", String(options.schoolClassId));
+  }
+  const endpoint = params.size
+    ? `${API_ROUTES.skillTypes}?${params.toString()}`
     : API_ROUTES.skillTypes;
 
   const payload = await apiFetch<SkillTypesResponse>(endpoint);
@@ -139,6 +173,7 @@ export interface UpsertSkillTypePayload {
   name: string;
   weight?: number | null;
   description?: string | null;
+  school_class_id?: string | number | null;
 }
 
 export interface BulkCreateSkillTypesPayload {
@@ -146,6 +181,7 @@ export interface BulkCreateSkillTypesPayload {
   names: string[];
   weight?: number | null;
   description?: string | null;
+  school_class_id?: string | number | null;
 }
 
 interface SkillTypeResponse {
@@ -224,4 +260,32 @@ export async function deleteSkillType(
   await apiFetch(`${API_ROUTES.skillTypes}/${skillTypeId}`, {
     method: "DELETE",
   });
+}
+
+interface BulkSkillScopeResponse {
+  data?: SkillType[];
+  message?: string;
+  [key: string]: unknown;
+}
+
+export async function assignSkillTypesToClass(
+  skillTypeIds: Array<number | string>,
+  schoolClassId?: number | string | null,
+): Promise<SkillType[]> {
+  const response = await apiFetch<BulkSkillScopeResponse>(
+    `${API_ROUTES.skillTypes}/scope`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        skill_type_ids: skillTypeIds,
+        school_class_id: schoolClassId ?? null,
+      }),
+    },
+  );
+
+  if (response && Array.isArray(response.data)) {
+    return response.data;
+  }
+
+  throw new Error("Unexpected server response for bulk skill scope update.");
 }

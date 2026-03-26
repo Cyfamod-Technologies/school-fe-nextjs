@@ -121,13 +121,13 @@ export default function ClassSkillRatingsPage() {
 
   const lockSessionAndTerm = isTeacher;
 
-  // Load skill types once so the Skill dropdown is available without needing
-  // to click "Load Students & Skills" first.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const types = await listSkillTypes();
+        const types = await listSkillTypes({
+          schoolClassId: selectedClass || undefined,
+        });
         if (cancelled) return;
         const mapped: StudentSkillType[] = types.map((type) => ({
           id: String(type.id),
@@ -144,7 +144,7 @@ export default function ClassSkillRatingsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedClass]);
 
   const terms = useMemo(() => {
     if (!selectedSession) {
@@ -206,6 +206,22 @@ export default function ClassSkillRatingsPage() {
       setSkillSearchTerm(selected.label);
     }
   }, [selectedSkillTypeId, skillTypeOptions]);
+
+  useEffect(() => {
+    if (!selectedSkillTypeId) {
+      return;
+    }
+    const stillExists = skillTypes.some(
+      (type) => String(type.id) === String(selectedSkillTypeId),
+    );
+    if (!stillExists) {
+      setFilters((prev) => ({
+        ...prev,
+        skillTypeId: "",
+      }));
+      setSkillSearchTerm("");
+    }
+  }, [selectedSkillTypeId, skillTypes]);
 
   const visibleSkillTypes = useMemo(() => {
     if (!selectedSkillTypeId) {

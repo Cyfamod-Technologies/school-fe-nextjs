@@ -66,6 +66,8 @@ export interface School {
   current_session?: Session | null;
   current_term?: Term | null;
   result_comment_mode?: "manual" | "range" | null;
+  skill_categories_separate_by_class?: boolean | null;
+  skill_types_separate_by_class?: boolean | null;
   [key: string]: unknown;
 }
 
