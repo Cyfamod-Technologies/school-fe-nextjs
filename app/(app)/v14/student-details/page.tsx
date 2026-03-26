@@ -101,7 +101,7 @@ export default function StudentDetailsPage() {
   const allStudentsHref = useMemo(() => {
     return filterQuery ? `/v14/all-students?${filterQuery}` : "/v14/all-students";
   }, [filterQuery]);
-  const { schoolContext, user, hasPermission } = useAuth();
+  const { schoolContext, user, hasPermission, loading: authLoading } = useAuth();
 
   const isTeacher = isTeacherUser(user);
   const hidePrintResult =
@@ -1165,22 +1165,23 @@ export default function StudentDetailsPage() {
     if (!selectedSession) {
       if (querySessionId) {
         setSelectedSession(querySessionId);
-      } else if (schoolContext.current_session_id != null) {
+      } else if (!authLoading && schoolContext.current_session_id != null) {
         setSelectedSession(String(schoolContext.current_session_id));
-      } else if (student.current_session_id != null) {
+      } else if (!authLoading && student.current_session_id != null) {
         setSelectedSession(String(student.current_session_id));
       }
     }
     if (!selectedTerm) {
       if (queryTermId) {
         setSelectedTerm(queryTermId);
-      } else if (schoolContext.current_term_id != null) {
+      } else if (!authLoading && schoolContext.current_term_id != null) {
         setSelectedTerm(String(schoolContext.current_term_id));
-      } else if (student.current_term_id != null) {
+      } else if (!authLoading && student.current_term_id != null) {
         setSelectedTerm(String(student.current_term_id));
       }
     }
   }, [
+    authLoading,
     student,
     selectedSession,
     selectedTerm,
@@ -1232,8 +1233,19 @@ export default function StudentDetailsPage() {
       return;
     }
 
+    if (authLoading && !selectedSession && !selectedTerm) {
+      return;
+    }
+
     const currentSessionParam = searchParams.get("session_id") ?? "";
     const currentTermParam = searchParams.get("term_id") ?? "";
+
+    if (
+      (currentSessionParam && !selectedSession) ||
+      (currentTermParam && !selectedTerm)
+    ) {
+      return;
+    }
 
     if (
       currentSessionParam === selectedSession &&
@@ -1259,7 +1271,7 @@ export default function StudentDetailsPage() {
     router.replace(`/v14/student-details?${params.toString()}`, {
       scroll: false,
     });
-  }, [router, searchParams, selectedSession, selectedTerm, studentId]);
+  }, [authLoading, router, searchParams, selectedSession, selectedTerm, studentId]);
 
   useEffect(() => {
     setSkillFeedback(null);
