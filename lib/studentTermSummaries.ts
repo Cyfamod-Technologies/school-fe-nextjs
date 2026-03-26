@@ -23,8 +23,47 @@ export interface UpdateStudentTermSummaryPayload
   days_absent?: number | null;
 }
 
+export interface StudentTermSummaryBatchFilters
+  extends StudentTermSummaryFilters {
+  school_class_id: string | number;
+  class_arm_id?: string | number | null;
+  class_section_id?: string | number | null;
+}
+
+export interface StudentTermSummaryBatchRow {
+  student: {
+    id: string | number;
+    name?: string | null;
+    admission_no?: string | null;
+    class_label?: string | null;
+    [key: string]: unknown;
+  };
+  class_teacher_comment?: string | null;
+  principal_comment?: string | null;
+  days_present?: number | null;
+  days_absent?: number | null;
+  [key: string]: unknown;
+}
+
+export interface UpdateStudentTermSummaryBatchPayload
+  extends StudentTermSummaryFilters {
+  entries: Array<{
+    student_id: string | number;
+    days_present?: number | null;
+    days_absent?: number | null;
+  }>;
+}
+
 interface TermSummaryResponse {
   data?: StudentTermSummary | null;
+  [key: string]: unknown;
+}
+
+interface TermSummaryBatchResponse {
+  data?:
+    | StudentTermSummaryBatchRow[]
+    | { data?: StudentTermSummaryBatchRow[] };
+  message?: string;
   [key: string]: unknown;
 }
 
@@ -103,6 +142,30 @@ function extractSummary(
   return { ...EMPTY_SUMMARY };
 }
 
+function extractBatchRows(
+  payload:
+    | StudentTermSummaryBatchRow[]
+    | TermSummaryBatchResponse
+    | null,
+): StudentTermSummaryBatchRow[] {
+  if (!payload) {
+    return [];
+  }
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (Array.isArray(payload.data)) {
+    return payload.data;
+  }
+  if (payload.data && typeof payload.data === "object") {
+    const nested = payload.data as { data?: StudentTermSummaryBatchRow[] };
+    if (Array.isArray(nested.data)) {
+      return nested.data;
+    }
+  }
+  return [];
+}
+
 export async function getStudentTermSummary(
   studentId: string | number,
   filters: StudentTermSummaryFilters,
@@ -139,4 +202,41 @@ export async function updateStudentTermSummary(
     },
   );
   return extractSummary(response);
+}
+
+export async function listStudentTermSummaryBatch(
+  filters: StudentTermSummaryBatchFilters,
+): Promise<StudentTermSummaryBatchRow[]> {
+  const query = buildQuery({
+    session_id: filters.session_id,
+    term_id: filters.term_id,
+    school_class_id: filters.school_class_id,
+    class_arm_id: filters.class_arm_id ?? undefined,
+    class_section_id: filters.class_section_id ?? undefined,
+  });
+  const response = await apiFetch<
+    StudentTermSummaryBatchRow[] | TermSummaryBatchResponse
+  >(`/api/v1/student-term-summaries${query}`);
+  return extractBatchRows(response);
+}
+
+export async function updateStudentTermSummaryBatch(
+  payload: UpdateStudentTermSummaryBatchPayload,
+): Promise<{ rows: StudentTermSummaryBatchRow[]; message?: string }> {
+  const response = await apiFetch<
+    StudentTermSummaryBatchRow[] | TermSummaryBatchResponse
+  >("/api/v1/student-term-summaries/batch", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+
+  return {
+    rows: extractBatchRows(response),
+    message:
+      response && typeof response === "object" && "message" in response
+        ? typeof response.message === "string"
+          ? response.message
+          : undefined
+        : undefined,
+  };
 }

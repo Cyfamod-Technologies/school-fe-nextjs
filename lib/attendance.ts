@@ -162,6 +162,7 @@ export async function listStudentAttendance(
     term_id: filters.term_id,
     school_class_id: filters.school_class_id,
     class_arm_id: filters.class_arm_id,
+    class_section_id: filters.class_section_id,
     search: filters.search,
   });
 
@@ -175,7 +176,7 @@ export async function listStudentAttendance(
 export interface StudentAttendanceEntryPayload {
   student_id: number | string;
   status: string;
-  notes?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface SaveStudentAttendancePayload {
@@ -245,13 +246,11 @@ function extractMutationResponse<T>(
 export async function saveStudentAttendance(
   payload: SaveStudentAttendancePayload,
 ): Promise<AttendanceSaveResult<StudentAttendanceRecord>> {
-  const sanitizedPayload = { ...payload };
-  delete sanitizedPayload.class_section_id;
   const response = await apiFetch<
     AttendanceMutationResponse<StudentAttendanceRecord>
   >(API_ROUTES.studentAttendance, {
     method: "POST",
-    body: JSON.stringify(sanitizedPayload),
+    body: JSON.stringify(payload),
   });
   return extractMutationResponse<StudentAttendanceRecord>(response);
 }
@@ -413,6 +412,7 @@ export function buildStudentAttendanceExportUrl(
     to: filters.to,
     school_class_id: filters.school_class_id,
     class_arm_id: filters.class_arm_id,
+    class_section_id: filters.class_section_id,
     session_id: filters.session_id,
     term_id: filters.term_id,
   });

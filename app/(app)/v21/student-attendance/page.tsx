@@ -1,16 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { listSessions, type Session } from "@/lib/sessions";
 import { listTermsBySession, type Term } from "@/lib/terms";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import { listClassArms, type ClassArm } from "@/lib/classArms";
-import {
-  listClassArmSections,
-  type ClassArmSection,
-} from "@/lib/classArmSections";
 import {
   listStudents,
   type StudentSummary,
@@ -23,6 +19,11 @@ import {
   type StudentAttendanceRecord,
   type StudentAttendanceExportFilters,
 } from "@/lib/attendance";
+import {
+  listStudentTermSummaryBatch,
+  updateStudentTermSummaryBatch,
+  type StudentTermSummaryBatchRow,
+} from "@/lib/studentTermSummaries";
 import { isTeacherUser } from "@/lib/roleChecks";
 
 type FeedbackKind = "success" | "danger" | "warning" | "info";
@@ -45,6 +46,18 @@ interface AttendanceState {
   comment?: string;
 }
 
+type ManualResultAttendanceStatus = "saved" | "pending" | "none";
+
+interface ManualResultAttendanceRow {
+  student: StudentTermSummaryBatchRow["student"];
+  daysPresent: string;
+  daysAbsent: string;
+  originalDaysPresent: string;
+  originalDaysAbsent: string;
+  status: ManualResultAttendanceStatus;
+  rowError: string | null;
+}
+
 const STATUS_OPTIONS: Array<{ value: StudentAttendanceStatus; label: string }> = [
   { value: "", label: "Select status" },
   { value: "present", label: "Present" },
@@ -58,7 +71,6 @@ interface StudentFilters {
   termId: string;
   classId: string;
   armId: string;
-  sectionId: string;
 }
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -75,9 +87,6 @@ export default function StudentAttendancePage() {
   const [termsCache, setTermsCache] = useState<Record<string, Term[]>>({});
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [armsCache, setArmsCache] = useState<Record<string, ClassArm[]>>({});
-  const [sectionsCache, setSectionsCache] = useState<
-    Record<string, ClassArmSection[]>
-  >({});
 
   const [filters, setFilters] = useState<StudentFilters>(() => ({
     sessionId: schoolContext.current_session_id
@@ -88,7 +97,6 @@ export default function StudentAttendancePage() {
       : "",
     classId: "",
     armId: "",
-    sectionId: "",
   }));
 
   const [students, setStudents] = useState<StudentSummary[]>([]);
@@ -102,6 +110,15 @@ export default function StudentAttendancePage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const [manualRows, setManualRows] = useState<ManualResultAttendanceRow[]>([]);
+  const [manualLoading, setManualLoading] = useState(false);
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualFeedback, setManualFeedback] = useState<FeedbackState | null>(
+    null,
+  );
+  const [manualSearch, setManualSearch] = useState("");
+  const manualAutoSaveTimerRef = useRef<number | null>(null);
+  const manualRowsRef = useRef<ManualResultAttendanceRow[]>([]);
 
   useEffect(() => {
     listSessions()
@@ -183,28 +200,6 @@ export default function StudentAttendancePage() {
     [armsCache],
   );
 
-  const ensureSections = useCallback(
-    async (classId: string, armId: string) => {
-      if (!classId || !armId) {
-        return;
-      }
-      const key = `${classId}:${armId}`;
-      if (sectionsCache[key]) {
-        return;
-      }
-      try {
-        const data = await listClassArmSections(classId, armId);
-        setSectionsCache((prev) => ({
-          ...prev,
-          [key]: data,
-        }));
-      } catch (error) {
-        console.error("Unable to load class sections", error);
-      }
-    },
-    [sectionsCache],
-  );
-
   useEffect(() => {
     if (filters.sessionId) {
       ensureTerms(filters.sessionId).catch((error) =>
@@ -221,14 +216,6 @@ export default function StudentAttendancePage() {
     }
   }, [filters.classId, ensureArms]);
 
-  useEffect(() => {
-    if (filters.classId && filters.armId) {
-      ensureSections(filters.classId, filters.armId).catch((error) =>
-        console.error(error),
-      );
-    }
-  }, [filters.classId, filters.armId, ensureSections]);
-
   const terms = useMemo(
     () => termsCache[filters.sessionId] ?? [],
     [termsCache, filters.sessionId],
@@ -237,13 +224,6 @@ export default function StudentAttendancePage() {
     () => (filters.classId ? armsCache[filters.classId] ?? [] : []),
     [armsCache, filters.classId],
   );
-  const sections = useMemo(() => {
-    if (!filters.classId || !filters.armId) {
-      return [];
-    }
-    const key = `${filters.classId}:${filters.armId}`;
-    return sectionsCache[key] ?? [];
-  }, [filters.classId, filters.armId, sectionsCache]);
 
   const studentCountSummary = useMemo(() => {
     const counts = {
@@ -261,6 +241,40 @@ export default function StudentAttendancePage() {
     return counts;
   }, [attendanceMap, students]);
 
+  const manualRowsFiltered = useMemo(() => {
+    const search = manualSearch.trim().toLowerCase();
+    if (!search) {
+      return manualRows;
+    }
+    return manualRows.filter((row) => {
+      const name = String(row.student.name ?? "").toLowerCase();
+      const admissionNo = String(row.student.admission_no ?? "").toLowerCase();
+      const classLabel = String(row.student.class_label ?? "").toLowerCase();
+
+      return (
+        name.includes(search) ||
+        admissionNo.includes(search) ||
+        classLabel.includes(search)
+      );
+    });
+  }, [manualRows, manualSearch]);
+
+  const manualSummary = useMemo(() => {
+    const pending = manualRows.filter((row) => row.status === "pending").length;
+    const entered = manualRows.filter(
+      (row) => row.daysPresent.trim() !== "" || row.daysAbsent.trim() !== "",
+    ).length;
+    return {
+      total: manualRows.length,
+      pending,
+      entered,
+    };
+  }, [manualRows]);
+
+  useEffect(() => {
+    manualRowsRef.current = manualRows;
+  }, [manualRows]);
+
   const loadRecentAttendance = useCallback(async () => {
     try {
       const recent = await listStudentAttendance({ per_page: 5 });
@@ -276,7 +290,8 @@ export default function StudentAttendancePage() {
     );
   }, [loadRecentAttendance]);
 
-  const resetFeedback = () => setFeedback(null);
+  const resetFeedback = useCallback(() => setFeedback(null), []);
+  const resetManualFeedback = useCallback(() => setManualFeedback(null), []);
 
   const loadStudents = useCallback(async () => {
     resetFeedback();
@@ -308,7 +323,6 @@ export default function StudentAttendancePage() {
         per_page: 500,
         school_class_id: filters.classId,
         class_arm_id: filters.armId || undefined,
-        class_section_id: filters.sectionId || undefined,
         current_session_id: filters.sessionId,
         current_term_id: filters.termId || undefined,
         sortBy: "first_name",
@@ -321,7 +335,6 @@ export default function StudentAttendancePage() {
         date,
         school_class_id: filters.classId,
         class_arm_id: filters.armId || undefined,
-        class_section_id: filters.sectionId || undefined,
       });
 
       const recordMap = new Map<string, StudentAttendanceRecord>();
@@ -371,7 +384,88 @@ export default function StudentAttendancePage() {
     } finally {
       setLoading(false);
     }
-  }, [date, filters.classId, filters.armId, filters.sectionId, filters.sessionId, filters.termId]);
+  }, [date, filters.classId, filters.armId, filters.sessionId, filters.termId]);
+
+  const loadManualAttendance = useCallback(async () => {
+    if (!filters.sessionId || !filters.termId || !filters.classId) {
+      setManualRows([]);
+      return;
+    }
+
+    setManualLoading(true);
+    resetManualFeedback();
+    try {
+      const rows = await listStudentTermSummaryBatch({
+        session_id: filters.sessionId,
+        term_id: filters.termId,
+        school_class_id: filters.classId,
+        class_arm_id: filters.armId || null,
+      });
+
+      setManualRows(
+        rows.map((row) => {
+          const daysPresent = formatManualAttendanceValue(row.days_present);
+          const daysAbsent = formatManualAttendanceValue(row.days_absent);
+
+          return {
+            student: row.student,
+            daysPresent,
+            daysAbsent,
+            originalDaysPresent: daysPresent,
+            originalDaysAbsent: daysAbsent,
+            status: buildManualAttendanceStatus(
+              daysPresent,
+              daysAbsent,
+              daysPresent,
+              daysAbsent,
+            ),
+            rowError: null,
+          };
+        }),
+      );
+    } catch (error) {
+      console.error("Unable to load manual result attendance", error);
+      setManualRows([]);
+      setManualFeedback({
+        type: "danger",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to load manual result attendance.",
+      });
+    } finally {
+      setManualLoading(false);
+    }
+  }, [
+    filters.armId,
+    filters.classId,
+    filters.sessionId,
+    filters.termId,
+  ]);
+
+  useEffect(() => {
+    if (!filters.sessionId || !filters.termId || !filters.classId) {
+      setManualRows([]);
+      setManualFeedback(null);
+      return;
+    }
+
+    loadManualAttendance().catch((error) => console.error(error));
+  }, [
+    filters.armId,
+    filters.classId,
+    filters.sessionId,
+    filters.termId,
+    loadManualAttendance,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (manualAutoSaveTimerRef.current) {
+        window.clearTimeout(manualAutoSaveTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleStatusChange = (
     studentId: number | string,
@@ -457,6 +551,180 @@ export default function StudentAttendancePage() {
     });
   };
 
+  const runManualAutoSave = useCallback(async () => {
+    resetManualFeedback();
+
+    if (!filters.sessionId || !filters.termId || !filters.classId) {
+      return;
+    }
+
+    const normalizedRows = manualRowsRef.current.map((row) => {
+      const daysPresent = parseManualAttendanceValue(row.daysPresent);
+      const daysAbsent = parseManualAttendanceValue(row.daysAbsent);
+      const hasChanged =
+        row.daysPresent !== row.originalDaysPresent ||
+        row.daysAbsent !== row.originalDaysAbsent;
+
+      let rowError: string | null = null;
+      if (hasChanged) {
+        if (daysPresent === undefined || daysAbsent === undefined) {
+          rowError = "Use whole numbers only.";
+        } else if ((daysPresent === null) !== (daysAbsent === null)) {
+          rowError = "Enter both days present and days absent.";
+        }
+      }
+
+      return {
+        ...row,
+        rowError,
+      };
+    });
+
+    setManualRows(normalizedRows);
+
+    const changedRows = normalizedRows.filter(
+      (row) =>
+        row.daysPresent !== row.originalDaysPresent ||
+        row.daysAbsent !== row.originalDaysAbsent,
+    );
+
+    const validChangedRows = changedRows.filter((row) => !row.rowError);
+
+    if (!validChangedRows.length) {
+      return;
+    }
+
+    setManualSaving(true);
+    try {
+      const { rows, message } = await updateStudentTermSummaryBatch({
+        session_id: filters.sessionId,
+        term_id: filters.termId,
+        entries: validChangedRows.map((row) => ({
+          student_id: row.student.id,
+          days_present: parseManualAttendanceValue(row.daysPresent) ?? null,
+          days_absent: parseManualAttendanceValue(row.daysAbsent) ?? null,
+        })),
+      });
+
+      const savedByStudentId = new Map(
+        rows.map((row) => [String(row.student.id), row] as const),
+      );
+
+      setManualRows((prev) =>
+        prev.map((row) => {
+          const saved = savedByStudentId.get(String(row.student.id));
+          if (!saved) {
+            return row;
+          }
+
+          const daysPresent = formatManualAttendanceValue(saved.days_present);
+          const daysAbsent = formatManualAttendanceValue(saved.days_absent);
+
+          return {
+            ...row,
+            daysPresent,
+            daysAbsent,
+            originalDaysPresent: daysPresent,
+            originalDaysAbsent: daysAbsent,
+            rowError: null,
+            status: buildManualAttendanceStatus(
+              daysPresent,
+              daysAbsent,
+              daysPresent,
+              daysAbsent,
+            ),
+          };
+        }),
+      );
+
+      setManualFeedback({
+        type: "success",
+        message: message ?? "Result attendance autosaved.",
+      });
+    } catch (error) {
+      setManualFeedback({
+        type: "danger",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to autosave result attendance.",
+      });
+    } finally {
+      setManualSaving(false);
+    }
+  }, [
+    filters.classId,
+    filters.sessionId,
+    filters.termId,
+    resetManualFeedback,
+  ]);
+
+  const scheduleManualAutoSave = useCallback(() => {
+    if (manualAutoSaveTimerRef.current) {
+      window.clearTimeout(manualAutoSaveTimerRef.current);
+    }
+
+    manualAutoSaveTimerRef.current = window.setTimeout(() => {
+      void runManualAutoSave();
+    }, 700);
+  }, [runManualAutoSave]);
+
+  const handleManualRowChange = (
+    studentId: string | number,
+    field: "daysPresent" | "daysAbsent",
+    value: string,
+  ) => {
+    resetManualFeedback();
+    setManualRows((prev) =>
+      prev.map((row) => {
+        if (String(row.student.id) !== String(studentId)) {
+          return row;
+        }
+
+        const nextRow = {
+          ...row,
+          [field]: value,
+          rowError: null,
+        };
+
+        return {
+          ...nextRow,
+          status: buildManualAttendanceStatus(
+            nextRow.daysPresent,
+            nextRow.daysAbsent,
+            nextRow.originalDaysPresent,
+            nextRow.originalDaysAbsent,
+          ),
+        };
+      }),
+    );
+    scheduleManualAutoSave();
+  };
+
+  const handleManualRowReset = (studentId: string | number) => {
+    resetManualFeedback();
+    setManualRows((prev) =>
+      prev.map((row) => {
+        if (String(row.student.id) !== String(studentId)) {
+          return row;
+        }
+
+        return {
+          ...row,
+          daysPresent: row.originalDaysPresent,
+          daysAbsent: row.originalDaysAbsent,
+          rowError: null,
+          status: buildManualAttendanceStatus(
+            row.originalDaysPresent,
+            row.originalDaysAbsent,
+            row.originalDaysPresent,
+            row.originalDaysAbsent,
+          ),
+        };
+      }),
+    );
+  };
+
   const handleSave = async () => {
     resetFeedback();
     if (!date) {
@@ -495,7 +763,6 @@ export default function StudentAttendancePage() {
         term_id: filters.termId || null,
         school_class_id: filters.classId || null,
         class_arm_id: filters.armId || null,
-        class_section_id: filters.sectionId || null,
         entries,
       });
       setFeedback({
@@ -525,7 +792,6 @@ export default function StudentAttendancePage() {
       date,
       school_class_id: filters.classId || null,
       class_arm_id: filters.armId || null,
-      class_section_id: filters.sectionId || null,
       session_id: filters.sessionId || null,
       term_id: filters.termId || null,
     } as StudentAttendanceExportFilters);
@@ -579,16 +845,6 @@ export default function StudentAttendancePage() {
           </div>
 
           <div className="row gutters-8">
-            <div className="col-lg-3 col-md-6 col-12 form-group">
-              <label htmlFor="attendance-date">Date</label>
-              <input
-                id="attendance-date"
-                type="date"
-                className="form-control"
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-              />
-            </div>
             <div className="col-lg-3 col-md-6 col-12 form-group">
               <label htmlFor="attendance-session">Session</label>
               <select
@@ -645,7 +901,6 @@ export default function StudentAttendancePage() {
                     ...prev,
                     classId: event.target.value,
                     armId: "",
-                    sectionId: "",
                   }))
                 }
               >
@@ -667,7 +922,6 @@ export default function StudentAttendancePage() {
                   setFilters((prev) => ({
                     ...prev,
                     armId: event.target.value,
-                    sectionId: "",
                   }))
                 }
               >
@@ -748,6 +1002,174 @@ export default function StudentAttendancePage() {
         </div>
       </div>
 
+      <div className="card mt-4">
+        <div className="card-body">
+          <div className="heading-layout1">
+            <div className="item-title">
+              <h3>Result Attendance Entry</h3>
+              <p className="mb-0 text-muted small">
+                Enter term-level days present and days absent used on student
+                results. Changes autosave after both values are entered.
+              </p>
+            </div>
+            <div className="d-flex flex-wrap">
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm mb-2 mr-2"
+                onClick={() =>
+                  loadManualAttendance().catch((error) => console.error(error))
+                }
+                disabled={
+                  manualLoading ||
+                  !filters.sessionId ||
+                  !filters.termId ||
+                  !filters.classId
+                }
+              >
+                <i className="fas fa-sync-alt mr-1" />
+                Reload Grid
+              </button>
+            </div>
+          </div>
+
+          <div className="row gutters-8 align-items-end mb-3">
+            <div className="col-lg-4 col-md-6 col-12 form-group mb-2">
+              <label htmlFor="manual-attendance-search">Search students</label>
+              <input
+                id="manual-attendance-search"
+                type="search"
+                className="form-control"
+                value={manualSearch}
+                onChange={(event) => setManualSearch(event.target.value)}
+                placeholder="Search by name or admission number"
+              />
+            </div>
+            <div className="col-lg-8 col-md-6 col-12 mb-2">
+              <div className="d-flex flex-wrap justify-content-md-end">
+                <span className="badge badge-primary mr-2 mb-2">
+                  Students: {manualSummary.total}
+                </span>
+                <span className="badge badge-warning mr-2 mb-2">
+                  Pending: {manualSummary.pending}
+                </span>
+                <span className="badge badge-success mb-2">
+                  Manual Entries: {manualSummary.entered}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {manualFeedback ? (
+            <div className={`alert alert-${manualFeedback.type}`} role="alert">
+              {manualFeedback.message}
+            </div>
+          ) : null}
+
+          <div className="table-responsive">
+            <table className="table table-bordered">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Student</th>
+                  <th className="d-none d-md-table-cell">Admission No</th>
+                  <th className="d-none d-md-table-cell">Class</th>
+                  <th>Days Present</th>
+                  <th>Days Absent</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {manualRowsFiltered.length ? (
+                  manualRowsFiltered.map((row, index) => (
+                    <tr key={String(row.student.id)}>
+                      <td>{index + 1}</td>
+                      <td>
+                        <strong>{row.student.name ?? "Unnamed Student"}</strong>
+                        {row.rowError ? (
+                          <div className="text-danger small mt-1">
+                            {row.rowError}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="d-none d-md-table-cell">
+                        {row.student.admission_no ?? "—"}
+                      </td>
+                      <td className="d-none d-md-table-cell">
+                        {row.student.class_label ?? "—"}
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          className="form-control form-control-sm"
+                          value={row.daysPresent}
+                          onChange={(event) =>
+                            handleManualRowChange(
+                              row.student.id,
+                              "daysPresent",
+                              event.target.value,
+                            )
+                          }
+                          disabled={manualSaving || manualLoading}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          className="form-control form-control-sm"
+                          value={row.daysAbsent}
+                          onChange={(event) =>
+                            handleManualRowChange(
+                              row.student.id,
+                              "daysAbsent",
+                              event.target.value,
+                            )
+                          }
+                          disabled={manualSaving || manualLoading}
+                        />
+                      </td>
+                      <td>
+                        <span
+                          className={manualAttendanceStatusBadgeClass(
+                            row.status,
+                          )}
+                        >
+                          {manualAttendanceStatusLabel(row.status)}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-secondary"
+                          onClick={() => handleManualRowReset(row.student.id)}
+                          disabled={manualSaving || manualLoading}
+                        >
+                          Reset Row
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={8} className="text-center">
+                      {!filters.sessionId || !filters.termId || !filters.classId
+                        ? "Select session, term, and class to load result attendance."
+                        : manualLoading
+                          ? "Loading result attendance..."
+                          : "No students found for the selected filters."}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <div className="card">
         <div className="card-body">
           <div className="d-flex justify-content-between align-items-center flex-wrap mb-3">
@@ -776,7 +1198,7 @@ export default function StudentAttendancePage() {
                 <tr>
                   <th>#</th>
                   <th>Student</th>
-                  <th>Admission No</th>
+                  <th className="d-none d-md-table-cell">Admission No</th>
                   <th>Status</th>
                   <th>Comment</th>
                   <th>Last Updated</th>
@@ -792,10 +1214,12 @@ export default function StudentAttendancePage() {
                     return (
                       <tr key={key}>
                         <td>{index + 1}</td>
-                        <td>
-                          <strong>{formatStudentName(student)}</strong>
-                        </td>
-                        <td>{student.admission_no ?? "—"}</td>
+                      <td>
+                        <strong>{formatStudentName(student)}</strong>
+                      </td>
+                      <td className="d-none d-md-table-cell">
+                        {student.admission_no ?? "—"}
+                      </td>
                         <td>
                           <select
                             className="form-control student-attendance-select"
@@ -884,7 +1308,7 @@ export default function StudentAttendancePage() {
                   <th>Date</th>
                   <th>Student</th>
                   <th>Status</th>
-                  <th>Class</th>
+                  <th className="d-none d-md-table-cell">Class</th>
                   <th>Comment</th>
                   <th>Recorded By</th>
                 </tr>
@@ -896,7 +1320,9 @@ export default function StudentAttendancePage() {
                       <td>{record.date ? formatDate(record.date) : "—"}</td>
                       <td>{record.student?.name ?? "Unknown"}</td>
                       <td>{record.status?.toUpperCase() ?? "—"}</td>
-                      <td>{record.class?.name ?? "—"}</td>
+                      <td className="d-none d-md-table-cell">
+                        {record.class?.name ?? "—"}
+                      </td>
                       <td>
                         {record.metadata &&
                         typeof record.metadata === "object" &&
@@ -942,4 +1368,62 @@ function formatDate(value: string): string {
     month: "short",
     day: "numeric",
   });
+}
+
+function formatManualAttendanceValue(value?: number | null): string {
+  if (value == null) {
+    return "";
+  }
+  return String(value);
+}
+
+function parseManualAttendanceValue(value: string): number | null | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+    return undefined;
+  }
+  return parsed;
+}
+
+function buildManualAttendanceStatus(
+  daysPresent: string,
+  daysAbsent: string,
+  originalDaysPresent: string,
+  originalDaysAbsent: string,
+): ManualResultAttendanceStatus {
+  if (
+    daysPresent === originalDaysPresent &&
+    daysAbsent === originalDaysAbsent
+  ) {
+    return daysPresent || daysAbsent ? "saved" : "none";
+  }
+  return "pending";
+}
+
+function manualAttendanceStatusBadgeClass(
+  status: ManualResultAttendanceStatus,
+): string {
+  if (status === "saved") {
+    return "badge badge-success";
+  }
+  if (status === "pending") {
+    return "badge badge-warning";
+  }
+  return "badge badge-secondary";
+}
+
+function manualAttendanceStatusLabel(
+  status: ManualResultAttendanceStatus,
+): string {
+  if (status === "saved") {
+    return "Saved";
+  }
+  if (status === "pending") {
+    return "Pending";
+  }
+  return "Not set";
 }

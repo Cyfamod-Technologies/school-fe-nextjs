@@ -898,16 +898,18 @@ export default function StudentDetailsPage() {
     }
     params.set("student_id", studentId);
     const sessionCandidate =
-      (schoolContext.current_session_id != null
-        ? String(schoolContext.current_session_id)
-        : selectedSession ||
+      (selectedSession ||
+        (schoolContext.current_session_id != null
+          ? String(schoolContext.current_session_id)
+          : "") ||
           (student?.current_session_id != null
             ? String(student.current_session_id)
             : ""));
     const termCandidate =
-      (schoolContext.current_term_id != null
-        ? String(schoolContext.current_term_id)
-        : selectedTerm ||
+      (selectedTerm ||
+        (schoolContext.current_term_id != null
+          ? String(schoolContext.current_term_id)
+          : "") ||
           (student?.current_term_id != null
             ? String(student.current_term_id)
             : ""));
