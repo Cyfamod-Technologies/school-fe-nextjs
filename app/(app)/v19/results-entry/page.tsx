@@ -217,6 +217,23 @@ export default function ResultsEntryPage() {
     [getComponentMaxScore],
   );
 
+  const getComponentDisplayLabel = useCallback(
+    (component: AssessmentComponent) => {
+      const baseLabel = String(component.label ?? "").trim();
+      if (!baseLabel) {
+        return component.name;
+      }
+
+      if (baseLabel.includes("%") && !/\d+(?:\.\d+)?\s*%/.test(baseLabel)) {
+        const scorePercentLabel = `${getComponentMaxScoreLabel(String(component.id))}%`;
+        return `${component.name} (${baseLabel.replace(/%/g, scorePercentLabel)})`;
+      }
+
+      return `${component.name} (${baseLabel})`;
+    },
+    [getComponentMaxScoreLabel],
+  );
+
   useEffect(() => {
     if (!selectedClass || !selectedTerm || displayComponents.length === 0) {
       setComponentMaxScores({});
@@ -1719,12 +1736,9 @@ export default function ResultsEntryPage() {
                 >
                   <option value="">All components</option>
                   {components.map((component) => {
-                    const label = component.label
-                      ? `${component.name} (${component.label})`
-                      : component.name;
                     return (
                       <option key={component.id} value={component.id}>
-                        {label}
+                        {getComponentDisplayLabel(component)}
                       </option>
                     );
                   })}
@@ -1761,14 +1775,11 @@ export default function ResultsEntryPage() {
                   <th>Admission No</th>
                   <th>Class</th>
                   {displayComponents.map((component) => {
-                    const label = component.label
-                      ? `${component.name} (${component.label})`
-                      : component.name;
                     const componentId = String(component.id);
                     return (
                       <th key={component.id} style={{ width: "140px" }}>
                         <div className="text-muted small font-weight-bold">
-                          {label}
+                          {getComponentDisplayLabel(component)}
                         </div>
                         <div className="text-muted small">
                           Max {getComponentMaxScoreLabel(componentId)}
