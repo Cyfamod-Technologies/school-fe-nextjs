@@ -268,6 +268,17 @@ interface BulkSkillScopeResponse {
   [key: string]: unknown;
 }
 
+export interface BulkCopySkillTypesResponse {
+  data?: SkillType[];
+  skipped?: Array<{
+    id: number | string;
+    name: string;
+    reason?: string;
+  }>;
+  message?: string;
+  [key: string]: unknown;
+}
+
 export async function assignSkillTypesToClass(
   skillTypeIds: Array<number | string>,
   schoolClassId?: number | string | null,
@@ -288,4 +299,26 @@ export async function assignSkillTypesToClass(
   }
 
   throw new Error("Unexpected server response for bulk skill scope update.");
+}
+
+export async function copySkillTypesToClass(
+  skillTypeIds: Array<number | string>,
+  schoolClassId?: number | string | null,
+): Promise<BulkCopySkillTypesResponse> {
+  const response = await apiFetch<BulkCopySkillTypesResponse>(
+    API_ROUTES.skillTypesCopy,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        skill_type_ids: skillTypeIds,
+        school_class_id: schoolClassId ?? null,
+      }),
+    },
+  );
+
+  if (response && Array.isArray(response.data)) {
+    return response;
+  }
+
+  throw new Error("Unexpected server response for bulk skill copy request.");
 }

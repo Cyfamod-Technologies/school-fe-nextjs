@@ -12,6 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import {
   assignSkillTypesToClass,
+  copySkillTypesToClass,
   createSkillCategory,
   createSkillTypesBulk,
   deleteSkillCategory,
@@ -718,6 +719,47 @@ export default function SkillsPage() {
     }
   };
 
+  const handleCopySelectedSkills = async () => {
+    if (!selectedSkillIds.length) {
+      setSkillFeedback({
+        type: "warning",
+        message: "Select at least one skill to copy.",
+      });
+      return;
+    }
+
+    try {
+      setSkillSubmitting(true);
+      const response = await copySkillTypesToClass(
+        selectedSkillIds,
+        bulkAssignClassId || null,
+      );
+
+      await refreshSkillTypes();
+      await refreshCategories();
+
+      setSkillFeedback({
+        type: response.skipped?.length ? "warning" : "success",
+        message:
+          response.message ??
+          `${response.data?.length ?? 0} skill${
+            response.data?.length === 1 ? "" : "s"
+          } copied successfully.`,
+      });
+    } catch (error) {
+      console.error("Unable to copy selected skills", error);
+      setSkillFeedback({
+        type: "danger",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to copy selected skills.",
+      });
+    } finally {
+      setSkillSubmitting(false);
+    }
+  };
+
   const renderCategoryTable = () => {
     const columnCount = categorySeparatedByClass ? 4 : 3;
 
@@ -1298,6 +1340,14 @@ export default function SkillsPage() {
                       disabled={!selectedSkillIds.length || skillSubmitting}
                     >
                       Move selected
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary ml-2"
+                      onClick={handleCopySelectedSkills}
+                      disabled={!selectedSkillIds.length || skillSubmitting}
+                    >
+                      Copy selected
                     </button>
                   </>
                 ) : null}
