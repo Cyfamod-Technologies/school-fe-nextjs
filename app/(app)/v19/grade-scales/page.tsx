@@ -366,6 +366,7 @@ const defaultResultSettings: ResultPageSettings = {
   hide_student_identity: false,
   allow_shared_pin_access: false,
   comment_mode: "manual",
+  signatory_title: "principal",
 };
 
 export default function GradeScalesPage() {
@@ -755,7 +756,7 @@ export default function GradeScalesPage() {
   };
 
   const handleResultSettingToggle = (
-    key: Exclude<keyof ResultPageSettings, "comment_mode">,
+    key: Exclude<keyof ResultPageSettings, "comment_mode" | "signatory_title">,
   ) => {
     setResultSettings((prev) => ({
       ...prev,
@@ -1241,6 +1242,30 @@ export default function GradeScalesPage() {
             <div className="alert alert-info">Loading settings...</div>
           ) : null}
           <div className="row gutters-20">
+            <div className="col-md-6 col-12 form-group">
+              <label htmlFor="grade-scale-result-signatory-title">
+                Main Result Signatory Title
+              </label>
+              <select
+                id="grade-scale-result-signatory-title"
+                className="form-control"
+                value={resultSettings.signatory_title}
+                onChange={(event) =>
+                  setResultSettings((prev) => ({
+                    ...prev,
+                    signatory_title:
+                      event.target.value as ResultPageSettings["signatory_title"],
+                  }))
+                }
+                disabled={resultSettingsLoading || resultSettingsSaving}
+              >
+                <option value="principal">Principal</option>
+                <option value="director">Director</option>
+              </select>
+              <small className="form-text text-muted">
+                Controls the label shown for the signatory comment and signature on the main result sheet.
+              </small>
+            </div>
             {resultSettingOptions.map((option) => (
               <div key={option.key} className="col-md-6 col-12 form-group">
                 <div className="form-check">

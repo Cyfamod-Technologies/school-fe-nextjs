@@ -11,6 +11,7 @@ export interface ResultPageSettings {
   hide_student_identity: boolean;
   allow_shared_pin_access: boolean;
   comment_mode: "manual" | "range";
+  signatory_title: "principal" | "director";
 }
 
 const defaultSettings: ResultPageSettings = {
@@ -23,6 +24,7 @@ const defaultSettings: ResultPageSettings = {
   hide_student_identity: false,
   allow_shared_pin_access: false,
   comment_mode: "manual",
+  signatory_title: "principal",
 };
 
 type ResultPageSettingsResponse =
@@ -66,6 +68,11 @@ function normalizeSettings(payload: ResultPageSettingsResponse): ResultPageSetti
     settings.comment_mode === "range" || settings.comment_mode === "manual"
       ? settings.comment_mode
       : defaultSettings.comment_mode;
+  const signatoryTitle =
+    settings.signatory_title === "director" ||
+    settings.signatory_title === "principal"
+      ? settings.signatory_title
+      : defaultSettings.signatory_title;
 
   return {
     show_grade: parseBoolean(settings.show_grade, defaultSettings.show_grade),
@@ -98,6 +105,7 @@ function normalizeSettings(payload: ResultPageSettingsResponse): ResultPageSetti
       defaultSettings.allow_shared_pin_access,
     ),
     comment_mode: commentMode,
+    signatory_title: signatoryTitle,
   };
 }
 

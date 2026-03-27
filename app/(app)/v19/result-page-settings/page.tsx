@@ -18,6 +18,7 @@ const defaultSettings: ResultPageSettings = {
   hide_student_identity: false,
   allow_shared_pin_access: false,
   comment_mode: "manual",
+  signatory_title: "principal",
 };
 
 export default function ResultPageSettingsPage() {
@@ -103,7 +104,7 @@ export default function ResultPageSettingsPage() {
   );
 
   const handleToggle = (
-    key: Exclude<keyof ResultPageSettings, "comment_mode">,
+    key: Exclude<keyof ResultPageSettings, "comment_mode" | "signatory_title">,
   ) => {
     setSettings((prev) => ({
       ...prev,
@@ -173,6 +174,27 @@ export default function ResultPageSettingsPage() {
           ) : null}
 
           <div className="row gutters-20">
+            <div className="col-md-6 col-12 form-group">
+              <label htmlFor="result-signatory-title">Main Result Signatory Title</label>
+              <select
+                id="result-signatory-title"
+                className="form-control"
+                value={settings.signatory_title}
+                onChange={(event) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    signatory_title: event.target.value as ResultPageSettings["signatory_title"],
+                  }))
+                }
+                disabled={loading || saving}
+              >
+                <option value="principal">Principal</option>
+                <option value="director">Director</option>
+              </select>
+              <small className="form-text text-muted">
+                Controls the label shown for the signatory comment and signature on the main result sheet.
+              </small>
+            </div>
             {options.map((option) => (
               <div key={option.key} className="col-md-6 col-12 form-group">
                 <div className="form-check">
