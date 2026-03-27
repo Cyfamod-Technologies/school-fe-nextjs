@@ -253,6 +253,7 @@ export default function StudentDetailsPage() {
   const [printProcessing, setPrintProcessing] = useState(false);
 
   const ratingOptions = ["0", "1", "2", "3", "4", "5"];
+  const termSelectionTouchedRef = useRef(false);
   const skillAutoSaveTimersRef = useRef<Record<string, number>>({});
   const lastSkillSaveKeyRef = useRef<Record<string, string>>({});
   const skillRatingsLoadRequestRef = useRef(0);
@@ -279,6 +280,40 @@ export default function StudentDetailsPage() {
     }
     return termsCache[selectedSession] ?? [];
   }, [selectedSession, termsCache]);
+  const preferredSelectedTerm = useMemo(() => {
+    if (!selectedSession) {
+      return "";
+    }
+
+    if (queryTermId) {
+      return queryTermId;
+    }
+
+    if (
+      schoolContext.current_session_id != null &&
+      schoolContext.current_term_id != null &&
+      String(schoolContext.current_session_id) === selectedSession
+    ) {
+      return String(schoolContext.current_term_id);
+    }
+
+    if (
+      student?.current_session_id != null &&
+      student?.current_term_id != null &&
+      String(student.current_session_id) === selectedSession
+    ) {
+      return String(student.current_term_id);
+    }
+
+    return "";
+  }, [
+    queryTermId,
+    schoolContext.current_session_id,
+    schoolContext.current_term_id,
+    selectedSession,
+    student?.current_session_id,
+    student?.current_term_id,
+  ]);
 
   const skillRatingsMap = useMemo(() => {
     const map = new Map<string, StudentSkillRating>();
@@ -563,6 +598,7 @@ export default function StudentDetailsPage() {
     const newSession = event.target.value;
     setSelectedSession(newSession);
     setSelectedTerm("");
+    termSelectionTouchedRef.current = false;
     setSkillValues({});
     setSkillFeedback(null);
     setSkillError(null);
@@ -573,6 +609,7 @@ export default function StudentDetailsPage() {
   };
 
   const handleTermChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    termSelectionTouchedRef.current = true;
     setSelectedTerm(event.target.value);
     setSkillValues({});
     setSkillFeedback(null);
@@ -1219,14 +1256,33 @@ export default function StudentDetailsPage() {
       return;
     }
     const terms = termsCache[selectedSession];
-    if (!terms || terms.length === 0) {
+    if (!terms) {
+      return;
+    }
+    if (terms.length === 0) {
       setSelectedTerm("");
       return;
     }
-    if (!selectedTerm || !terms.find((term) => String(term.id) === selectedTerm)) {
+    const hasSelectedTerm = terms.some(
+      (term) => String(term.id) === selectedTerm,
+    );
+    const hasPreferredTerm =
+      preferredSelectedTerm &&
+      terms.some((term) => String(term.id) === preferredSelectedTerm);
+
+    if (
+      hasPreferredTerm &&
+      (!termSelectionTouchedRef.current || !hasSelectedTerm) &&
+      selectedTerm !== preferredSelectedTerm
+    ) {
+      setSelectedTerm(preferredSelectedTerm);
+      return;
+    }
+
+    if (!hasSelectedTerm) {
       setSelectedTerm(String(terms[0].id));
     }
-  }, [selectedSession, selectedTerm, termsCache]);
+  }, [preferredSelectedTerm, selectedSession, selectedTerm, termsCache]);
 
   useEffect(() => {
     if (!studentId) {
@@ -1551,6 +1607,7 @@ export default function StudentDetailsPage() {
                 className="form-control"
                 value={selectedSession}
                 onChange={handleSessionChange}
+                disabled={isTeacher}
               >
                 <option value="">Select session</option>
                 {sessions.map((session) => (
@@ -1566,7 +1623,7 @@ export default function StudentDetailsPage() {
                 className="form-control"
                 value={selectedTerm}
                 onChange={handleTermChange}
-                disabled={!selectedSession}
+                disabled={isTeacher || !selectedSession}
               >
                 <option value="">Select term</option>
                 {terms.map((term) => (
