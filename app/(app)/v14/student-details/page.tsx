@@ -104,8 +104,6 @@ export default function StudentDetailsPage() {
   const { schoolContext, user, hasPermission, loading: authLoading } = useAuth();
 
   const isTeacher = isTeacherUser(user);
-  const hidePrintResult =
-    studentId === "4cc05231-689a-4c36-9ba5-8fb4d8b6c51e";
   const canOpenResultEntry = hasPermission([
     "results.entry.view",
     "results.entry.enter",
@@ -250,7 +248,6 @@ export default function StudentDetailsPage() {
   const [pinFeedbackType, setPinFeedbackType] = useState<"success" | "warning">("success");
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinProcessing, setPinProcessing] = useState(false);
-  const [printProcessing, setPrintProcessing] = useState(false);
 
   const ratingOptions = ["0", "1", "2", "3", "4", "5"];
   const termSelectionTouchedRef = useRef(false);
@@ -1072,32 +1069,6 @@ export default function StudentDetailsPage() {
     return response.text();
   }, [buildPrintParams, studentId]);
 
-  const handlePrintResult = useCallback(async () => {
-    setPrintProcessing(true);
-    try {
-      const html = await fetchPrintableResultHtml();
-      const printWindow = window.open("", "_blank");
-      if (!printWindow) {
-        window.alert(
-          "Unable to open result window. Please allow pop-ups for this site.",
-        );
-        return;
-      }
-      printWindow.document.open();
-      printWindow.document.write(html);
-      printWindow.document.close();
-    } catch (error) {
-      console.error("Unable to load printable result", error);
-      window.alert(
-        error instanceof Error
-          ? error.message
-          : "Unable to load printable result.",
-      );
-    } finally {
-      setPrintProcessing(false);
-    }
-  }, [fetchPrintableResultHtml]);
-
   const handlePreviewResult = useCallback(async () => {
     setPreviewOpen(true);
     setPreviewLoading(true);
@@ -1478,16 +1449,6 @@ export default function StudentDetailsPage() {
               >
                 Edit
               </Link>
-              {!isTeacher && !hidePrintResult ? (
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary"
-                  onClick={handlePrintResult}
-                  disabled={printProcessing}
-                >
-                  {printProcessing ? "Loading…" : "Print Result"}
-                </button>
-              ) : null}
               {!isTeacher ? (
                 <button
                   type="button"
