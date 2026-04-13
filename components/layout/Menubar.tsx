@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { resolveBackendUrl } from "@/lib/config";
 import {
-  menuSections,
+  getMenuSections,
   sidebarQuickLinks,
 } from "@/components/layout/Sidebar";
 import { isTeacherUser } from "@/lib/roleChecks";
@@ -65,6 +65,9 @@ export function Menubar() {
   }, [isTeacher]);
 
   const searchableItems = useMemo(() => {
+    const menuSections = getMenuSections(
+      Boolean(schoolContext.school?.result_enable_session_print),
+    );
     const quickLinks = sidebarQuickLinks.map((link) => ({
       label: link.label,
       href: link.href,
@@ -76,7 +79,7 @@ export function Menubar() {
       })),
     );
     return [...quickLinks, ...sectionLinks];
-  }, []);
+  }, [schoolContext.school?.result_enable_session_print]);
 
   // Simple natural language intent parser for the quick navigation
   const parseIntent = useCallback((input: string): string | null => {

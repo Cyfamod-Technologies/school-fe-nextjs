@@ -135,6 +135,7 @@ export const API_ROUTES = {
   resultPageSettings: "/api/v1/settings/result-page",
   results: "/api/v1/results",
   resultsBulkPrint: "/api/v1/results/bulk/print",
+  resultsSessionPrint: "/api/v1/results/session/print",
   resultPinCardsPrint: "/api/v1/result-pins/cards/print",
   resultBatch: "/api/v1/results/batch",
   resultPins: "/api/v1/result-pins",

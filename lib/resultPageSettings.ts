@@ -10,6 +10,7 @@ export interface ResultPageSettings {
   show_remarks: boolean;
   hide_student_identity: boolean;
   allow_shared_pin_access: boolean;
+  enable_session_result_print: boolean;
   comment_mode: "manual" | "range";
   signatory_title: "principal" | "director";
 }
@@ -23,6 +24,7 @@ const defaultSettings: ResultPageSettings = {
   show_remarks: true,
   hide_student_identity: false,
   allow_shared_pin_access: false,
+  enable_session_result_print: false,
   comment_mode: "manual",
   signatory_title: "principal",
 };
@@ -103,6 +105,10 @@ function normalizeSettings(payload: ResultPageSettingsResponse): ResultPageSetti
     allow_shared_pin_access: parseBoolean(
       settings.allow_shared_pin_access,
       defaultSettings.allow_shared_pin_access,
+    ),
+    enable_session_result_print: parseBoolean(
+      settings.enable_session_result_print,
+      defaultSettings.enable_session_result_print,
     ),
     comment_mode: commentMode,
     signatory_title: signatoryTitle,

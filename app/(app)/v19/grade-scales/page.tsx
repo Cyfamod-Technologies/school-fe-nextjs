@@ -365,6 +365,7 @@ const defaultResultSettings: ResultPageSettings = {
   show_remarks: true,
   hide_student_identity: false,
   allow_shared_pin_access: false,
+  enable_session_result_print: false,
   comment_mode: "manual",
   signatory_title: "principal",
 };
@@ -571,6 +572,11 @@ export default function GradeScalesPage() {
         key: "allow_shared_pin_access" as const,
         label: "Shared Scratch Cards",
         hint: "Allow any active scratch card for the same session and term to unlock the logged-in student's own result.",
+      },
+      {
+        key: "enable_session_result_print" as const,
+        label: "Session Result Printing",
+        hint: "Enable the separate session-result print page and sidebar link for schools that print cumulative first-to-third-term sheets.",
       },
     ],
     [],

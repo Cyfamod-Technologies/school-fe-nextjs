@@ -60,178 +60,167 @@ export const sidebarQuickLinks: SidebarQuickLink[] = [
   },
 ];
 
-export const menuSections: MenuSection[] = [
-  {
-    label: "Management",
-    icon: "flaticon-technological",
-    links: [
-      { label: "Session", href: "/v11/all-sessions", requiredPermissions: "sessions.view" },
-      { label: "Term", href: "/v11/all-terms", requiredPermissions: "terms.view" },
-      { label: "Subject", href: "/v16/all-subjects", requiredPermissions: "subjects.view" },
-      {
-        label: "Classes",
-        href: "#",
-        children: [
-          { label: "Class", href: "/v12/all-classes", requiredPermissions: "classes.view" },
-          { label: "Class Arm", href: "/v12/all-class-arms", requiredPermissions: "class-arms.view" },
-        ],
-      },
-      { label: "Result Pin", href: "/v19/pins", requiredPermissions: "result.pin.view" },
-    ],
-  },
-  {
-    label: "Users",
-    icon: "flaticon-multiple-users-silhouette",
-    links: [
-      {
-        label: "Parent",
-        href: "#",
-        children: [
-          { label: "View Parent", href: "/v13/all-parents", requiredPermissions: "parents.view" },
-          { label: "Add Parent", href: "/v13/add-parent", requiredPermissions: "parents.create" },
-        ],
-      },
-      {
-        label: "Staff",
-        href: "#",
-        children: [
-          { label: "View Staff", href: "/v15/all-staff", requiredPermissions: "staff.view" },
-          { label: "Add Staff", href: "/v15/add-staff", requiredPermissions: "staff.create" },
-        ],
-      },
-      {
-        label: "Student",
-        href: "#",
-        excludeRoles: ["teacher"],
-        children: [
-          { label: "View Student", href: "/v14/all-students", requiredPermissions: "students.view" },
-          { label: "Add Student", href: "/v14/add-student", requiredPermissions: "students.create" },
-          { label: "Bulk Result Print", href: "/v14/bulk-results", requiredPermissions: "results.bulk.view", excludeRoles: "teacher" },
-          { label: "Check Student Result", href: "/v14/check-result", requiredPermissions: "results.check", excludeRoles: "teacher" },
-          { label: "Early Years Report", href: "/v14/early-years-report", requiredPermissions: "results.early-years.view", excludeRoles: "teacher" },
-          { label: "Result Entry", href: "/v19/results-entry", requiredPermissions: "results.entry.view" },
+export function getMenuSections(enableSessionResultPrint = false): MenuSection[] {
+  const studentLinks: MenuLink[] = [
+    { label: "View Student", href: "/v14/all-students", requiredPermissions: "students.view" },
+    { label: "Add Student", href: "/v14/add-student", requiredPermissions: "students.create" },
+    { label: "Bulk Result Print", href: "/v14/bulk-results", requiredPermissions: "results.bulk.view", excludeRoles: "teacher" },
+    ...(enableSessionResultPrint
+      ? [
           {
-            label: "Class Skill Ratings",
-            href: "/v14/class-skill-ratings",
-            // Allow either skills.ratings.view (admins) or results.entry.enter (teachers) to see it
-            requiredPermissions: ["skills.ratings.view", "results.entry.enter"],
-          },
-          { label: "Student Bulk Upload", href: "/v22/bulk-student-upload", requiredPermissions: "students.import" },
-          { label: "Student Promotion", href: "/v20/student-promotion", requiredPermissions: "students.promote" },
-          { label: "Promotion Reports", href: "/v20/promotion-reports", requiredPermissions: "promotions.history" },
-        ],
-      },
-    ],
-  },
-  {
-    label: "Assign",
-    icon: "flaticon-settings-work-tool",
-    links: [
-      { label: "Subject to Class", href: "/v17/assign-subjects", requiredPermissions: "subject.assignments.view" },
-      { label: "Teachers to Subject", href: "/v17/assign-teachers", requiredPermissions: "teacher.assignments.view" },
-      { label: "Teachers to Class", href: "/v18/assign-class-teachers", requiredPermissions: "class-teachers.view" },
-    ],
-  },
-  {
-    label: "Student",
-    icon: "flaticon-classmates",
-    links: [
-      { label: "View Student", href: "/v14/all-students", requiredPermissions: "students.view" },
-      { label: "Add Student", href: "/v14/add-student", requiredPermissions: "students.create" },
-      { label: "Bulk Result Print", href: "/v14/bulk-results", requiredPermissions: "results.bulk.view", excludeRoles: "teacher" },
-      { label: "Check Student Result", href: "/v14/check-result", requiredPermissions: "results.check", excludeRoles: "teacher" },
-      ...(showEarlyYearsReport
-        ? [
-            {
-              label: "Early Years Report",
-              href: "/v14/early-years-report",
-              requiredPermissions: "results.early-years.view",
-              excludeRoles: "teacher",
-            },
-          ]
-        : []),
-      {
-        label: "Result Entry",
-        href: "/v19/results-entry",
-        requiredPermissions: [
-          "results.entry.view",
-          "results.entry.enter",
-          "results.enter",
-        ],
-      },
-      {
-        label: "Class Skill Ratings",
-        href: "/v14/class-skill-ratings",
-        // Allow either skills.ratings.view (admins) or results.entry.enter (teachers) to see it
-        requiredPermissions: ["skills.ratings.view", "results.entry.enter"],
-      },
-      { label: "Student Bulk Upload", href: "/v22/bulk-student-upload", requiredPermissions: "students.import" },
-      { label: "Student Promotion", href: "/v20/student-promotion", requiredPermissions: "students.promote" },
-      { label: "Promotion Reports", href: "/v20/promotion-reports", requiredPermissions: "promotions.history" },
-    ],
-  },
-  {
-    label: "Attendance",
-    icon: "flaticon-checklist",
-    links: [
-      { label: "Student Attendance", href: "/v21/student-attendance", requiredPermissions: "attendance.student.view" },
-      { label: "Staff Attendance", href: "/v21/staff-attendance", requiredPermissions: "attendance.staff.view" },
-      { label: "Attendance Reports", href: "/v21/attendance-dashboard", requiredPermissions: "attendance.dashboard.view" },
-    ],
-  },
-  {
-    label: "CBT",
-    icon: "flaticon-checklist",
-    links: [
-      { label: "Quiz Panel", href: "/v27/cbt/admin", requiredPermissions: "cbt.admin.view" },
-      { label: "CBT Link", href: "/v27/cbt/admin/cbt-link", requiredPermissions: "cbt.links.view" },
-    ],
-  },
-  {
-    label: "Settings",
-    icon: "flaticon-settings",
-    links: [
-      { id: "grading-scale", label: "Grading Scale & Result Page", href: "/v19/grade-scales", requiredPermissions: "assessment.grade-scales.view" },
-      { id: "skills", label: "Skills", href: "/v19/skills", requiredPermissions: "skills.categories.view" },
-      {
-        id: "assessment-components",
-        label: "Assessment Components",
-        href: "/v19/assessment-components",
-        requiredPermissions: "assessment.components.view",
-      },
-      {
-        id: "assessment-structure",
-        label: "Assessment Structure",
-        href: "/v19/assessment-structures",
-        requiredPermissions: "assessment.structures.view",
-      },
-      { id: "academic-rollover", label: "Academic-Rollover", href: "/v20/academic-rollover", requiredPermissions: "academic.rollover.view" },
-      {
-        label: "Roles & Permissions",
-        href: "#",
-        children: [
-          { label: "Roles", href: "/v24/roles", requiredPermissions: "roles.view" },
-          { label: "User Roles", href: "/v24/user-roles", requiredPermissions: "user-roles.view" },
-        ],
-      },
-    ],
-  },
-  // {
-  //   label: "Fee Management",
-  //   icon: "flaticon-planet-earth",
-  //   links: [
-  //     { label: "Fee Structure", href: "/v23/fee-structure", requiredPermissions: "fees.structures" },
-  //     { label: "Bank Details", href: "/v23/bank-details", requiredPermissions: "fees.bank-details" },
-  //   ],
-  // },
-  {
-    label: "School Settings",
-    icon: "flaticon-settings",
-    links: [
-      { label: "School Settings", href: "/v10/profile", requiredRoles: ["admin"] },
-    ],
-  },
-];
+            label: "Session Result Print",
+            href: "/v14/session-results",
+            requiredPermissions: "results.session.view",
+            excludeRoles: "teacher",
+          } satisfies MenuLink,
+        ]
+      : []),
+    { label: "Check Student Result", href: "/v14/check-result", requiredPermissions: "results.check", excludeRoles: "teacher" },
+    ...(showEarlyYearsReport
+      ? [
+          {
+            label: "Early Years Report",
+            href: "/v14/early-years-report",
+            requiredPermissions: "results.early-years.view",
+            excludeRoles: "teacher",
+          } satisfies MenuLink,
+        ]
+      : []),
+    {
+      label: "Result Entry",
+      href: "/v19/results-entry",
+      requiredPermissions: [
+        "results.entry.view",
+        "results.entry.enter",
+        "results.enter",
+      ],
+    },
+    {
+      label: "Class Skill Ratings",
+      href: "/v14/class-skill-ratings",
+      requiredPermissions: ["skills.ratings.view", "results.entry.enter"],
+    },
+    { label: "Student Bulk Upload", href: "/v22/bulk-student-upload", requiredPermissions: "students.import" },
+    { label: "Student Promotion", href: "/v20/student-promotion", requiredPermissions: "students.promote" },
+    { label: "Promotion Reports", href: "/v20/promotion-reports", requiredPermissions: "promotions.history" },
+  ];
+
+  return [
+    {
+      label: "Management",
+      icon: "flaticon-technological",
+      links: [
+        { label: "Session", href: "/v11/all-sessions", requiredPermissions: "sessions.view" },
+        { label: "Term", href: "/v11/all-terms", requiredPermissions: "terms.view" },
+        { label: "Subject", href: "/v16/all-subjects", requiredPermissions: "subjects.view" },
+        {
+          label: "Classes",
+          href: "#",
+          children: [
+            { label: "Class", href: "/v12/all-classes", requiredPermissions: "classes.view" },
+            { label: "Class Arm", href: "/v12/all-class-arms", requiredPermissions: "class-arms.view" },
+          ],
+        },
+        { label: "Result Pin", href: "/v19/pins", requiredPermissions: "result.pin.view" },
+      ],
+    },
+    {
+      label: "Users",
+      icon: "flaticon-multiple-users-silhouette",
+      links: [
+        {
+          label: "Parent",
+          href: "#",
+          children: [
+            { label: "View Parent", href: "/v13/all-parents", requiredPermissions: "parents.view" },
+            { label: "Add Parent", href: "/v13/add-parent", requiredPermissions: "parents.create" },
+          ],
+        },
+        {
+          label: "Staff",
+          href: "#",
+          children: [
+            { label: "View Staff", href: "/v15/all-staff", requiredPermissions: "staff.view" },
+            { label: "Add Staff", href: "/v15/add-staff", requiredPermissions: "staff.create" },
+          ],
+        },
+        {
+          label: "Student",
+          href: "#",
+          excludeRoles: ["teacher"],
+          children: studentLinks,
+        },
+      ],
+    },
+    {
+      label: "Assign",
+      icon: "flaticon-settings-work-tool",
+      links: [
+        { label: "Subject to Class", href: "/v17/assign-subjects", requiredPermissions: "subject.assignments.view" },
+        { label: "Teachers to Subject", href: "/v17/assign-teachers", requiredPermissions: "teacher.assignments.view" },
+        { label: "Teachers to Class", href: "/v18/assign-class-teachers", requiredPermissions: "class-teachers.view" },
+      ],
+    },
+    {
+      label: "Student",
+      icon: "flaticon-classmates",
+      links: studentLinks,
+    },
+    {
+      label: "Attendance",
+      icon: "flaticon-checklist",
+      links: [
+        { label: "Student Attendance", href: "/v21/student-attendance", requiredPermissions: "attendance.student.view" },
+        { label: "Staff Attendance", href: "/v21/staff-attendance", requiredPermissions: "attendance.staff.view" },
+        { label: "Attendance Reports", href: "/v21/attendance-dashboard", requiredPermissions: "attendance.dashboard.view" },
+      ],
+    },
+    {
+      label: "CBT",
+      icon: "flaticon-checklist",
+      links: [
+        { label: "Quiz Panel", href: "/v27/cbt/admin", requiredPermissions: "cbt.admin.view" },
+        { label: "CBT Link", href: "/v27/cbt/admin/cbt-link", requiredPermissions: "cbt.links.view" },
+      ],
+    },
+    {
+      label: "Settings",
+      icon: "flaticon-settings",
+      links: [
+        { id: "grading-scale", label: "Grading Scale & Result Page", href: "/v19/grade-scales", requiredPermissions: "assessment.grade-scales.view" },
+        { id: "skills", label: "Skills", href: "/v19/skills", requiredPermissions: "skills.categories.view" },
+        {
+          id: "assessment-components",
+          label: "Assessment Components",
+          href: "/v19/assessment-components",
+          requiredPermissions: "assessment.components.view",
+        },
+        {
+          id: "assessment-structure",
+          label: "Assessment Structure",
+          href: "/v19/assessment-structures",
+          requiredPermissions: "assessment.structures.view",
+        },
+        { id: "academic-rollover", label: "Academic-Rollover", href: "/v20/academic-rollover", requiredPermissions: "academic.rollover.view" },
+        {
+          label: "Roles & Permissions",
+          href: "#",
+          children: [
+            { label: "Roles", href: "/v24/roles", requiredPermissions: "roles.view" },
+            { label: "User Roles", href: "/v24/user-roles", requiredPermissions: "user-roles.view" },
+          ],
+        },
+      ],
+    },
+    {
+      label: "School Settings",
+      icon: "flaticon-settings",
+      links: [
+        { label: "School Settings", href: "/v10/profile", requiredRoles: ["admin"] },
+      ],
+    },
+  ];
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -351,7 +340,7 @@ export function Sidebar() {
   }, [linkVisible]);
 
   const filteredSections = useMemo(() => {
-    return menuSections
+    return getMenuSections(Boolean(schoolContext.school?.result_enable_session_print))
       .filter((section) => {
         if (isAdminRole && section.label === "Student") {
           return false;
@@ -366,7 +355,7 @@ export function Sidebar() {
         links: filterLinks(section.links),
       }))
       .filter((section) => section.links.length > 0);
-  }, [filterLinks, isTeacher, isAdminRole]);
+  }, [filterLinks, isTeacher, isAdminRole, schoolContext.school?.result_enable_session_print]);
 
   const isSectionActive = useCallback(
     (section: MenuSection) => section.links.some((link) => isLinkActive(link.href)),
