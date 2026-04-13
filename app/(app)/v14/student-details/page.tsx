@@ -16,7 +16,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   deleteStudent,
   getStudent,
+  listStudents,
   type StudentDetail,
+  type StudentSummary,
 } from "@/lib/students";
 import { resolveBackendUrl } from "@/lib/config";
 import { getCookie } from "@/lib/cookies";
@@ -48,6 +50,29 @@ import {
 import { isTeacherUser } from "@/lib/roleChecks";
 
 const passthroughLoader: ImageLoader = ({ src }) => src;
+
+interface StudentNavigationTarget {
+  href: string;
+  label: string;
+}
+
+const buildStudentDisplayName = (
+  student: Pick<
+    StudentSummary,
+    "first_name" | "middle_name" | "last_name" | "admission_no"
+  >,
+): string => {
+  const fullName = [
+    student.first_name,
+    student.middle_name,
+    student.last_name,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return fullName || student.admission_no || "Student";
+};
 
 export default function StudentDetailsPage() {
   const router = useRouter();
@@ -101,6 +126,17 @@ export default function StudentDetailsPage() {
   const allStudentsHref = useMemo(() => {
     return filterQuery ? `/v14/all-students?${filterQuery}` : "/v14/all-students";
   }, [filterQuery]);
+  const listPage = useMemo(() => {
+    const parsed = Number(searchParams.get("page"));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  }, [searchParams]);
+  const listPerPage = useMemo(() => {
+    const parsed = Number(searchParams.get("per_page"));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 10;
+  }, [searchParams]);
+  const listSortBy = searchParams.get("sortBy") || "last_name";
+  const listSortDirection: "asc" | "desc" =
+    searchParams.get("sortDirection") === "desc" ? "desc" : "asc";
   const { schoolContext, user, hasPermission, loading: authLoading } = useAuth();
 
   const isTeacher = isTeacherUser(user);
@@ -112,6 +148,10 @@ export default function StudentDetailsPage() {
   ]);
 
   const [student, setStudent] = useState<StudentDetail | null>(null);
+  const [previousStudent, setPreviousStudent] =
+    useState<StudentNavigationTarget | null>(null);
+  const [nextStudent, setNextStudent] = useState<StudentNavigationTarget | null>(null);
+  const [studentNavLoading, setStudentNavLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -145,6 +185,34 @@ export default function StudentDetailsPage() {
       ? `/v14/edit-student?id=${studentId}&${detailsContextQuery}`
       : `/v14/edit-student?id=${studentId}`;
   }, [detailsContextQuery, studentId]);
+  const buildStudentDetailsHref = useCallback(
+    (targetStudentId: number | string) => {
+      return detailsContextQuery
+        ? `/v14/student-details?id=${targetStudentId}&${detailsContextQuery}`
+        : `/v14/student-details?id=${targetStudentId}`;
+    },
+    [detailsContextQuery],
+  );
+  const studentListFilters = useMemo(
+    () => ({
+      page: listPage,
+      per_page: listPerPage,
+      sortBy: listSortBy,
+      sortDirection: listSortDirection,
+      search: searchParams.get("search") ?? undefined,
+      current_session_id: searchParams.get("current_session_id") ?? undefined,
+      school_class_id: searchParams.get("school_class_id") ?? undefined,
+      class_arm_id: searchParams.get("class_arm_id") ?? undefined,
+      class_section_id: searchParams.get("class_section_id") ?? undefined,
+    }),
+    [
+      listPage,
+      listPerPage,
+      listSortBy,
+      listSortDirection,
+      searchParams,
+    ],
+  );
   const studentResultEntryHref = useMemo(() => {
     if (!studentId) {
       return "/v14/student-result-entry";
@@ -199,6 +267,93 @@ export default function StudentDetailsPage() {
     student?.current_term_id,
     studentId,
   ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const mapTarget = (candidate: StudentSummary | null): StudentNavigationTarget | null => {
+      if (!candidate?.id) {
+        return null;
+      }
+
+      return {
+        href: buildStudentDetailsHref(candidate.id),
+        label: buildStudentDisplayName(candidate),
+      };
+    };
+
+    const loadStudentNavigation = async () => {
+      if (!studentId) {
+        setPreviousStudent(null);
+        setNextStudent(null);
+        return;
+      }
+
+      setStudentNavLoading(true);
+
+      try {
+        const response = await listStudents(studentListFilters);
+        const currentStudents = Array.isArray(response.data) ? response.data : [];
+        const currentIndex = currentStudents.findIndex(
+          (candidate) => String(candidate.id) === String(studentId),
+        );
+
+        let previousCandidate =
+          currentIndex > 0 ? currentStudents[currentIndex - 1] : null;
+        let nextCandidate =
+          currentIndex >= 0 && currentIndex < currentStudents.length - 1
+            ? currentStudents[currentIndex + 1]
+            : null;
+
+        if (!previousCandidate && currentIndex === 0 && response.current_page > 1) {
+          const previousPage = await listStudents({
+            ...studentListFilters,
+            page: response.current_page - 1,
+          });
+          const previousPageStudents = Array.isArray(previousPage.data)
+            ? previousPage.data
+            : [];
+          previousCandidate =
+            previousPageStudents[previousPageStudents.length - 1] ?? null;
+        }
+
+        if (
+          !nextCandidate &&
+          currentIndex >= 0 &&
+          currentIndex === currentStudents.length - 1 &&
+          response.current_page < response.last_page
+        ) {
+          const nextPage = await listStudents({
+            ...studentListFilters,
+            page: response.current_page + 1,
+          });
+          const nextPageStudents = Array.isArray(nextPage.data) ? nextPage.data : [];
+          nextCandidate = nextPageStudents[0] ?? null;
+        }
+
+        if (!cancelled) {
+          setPreviousStudent(mapTarget(previousCandidate));
+          setNextStudent(mapTarget(nextCandidate));
+        }
+      } catch (err) {
+        console.error("Unable to load adjacent students", err);
+        if (!cancelled) {
+          setPreviousStudent(null);
+          setNextStudent(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setStudentNavLoading(false);
+        }
+      }
+    };
+
+    void loadStudentNavigation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [buildStudentDetailsHref, studentId, studentListFilters]);
 
   const [skillTypes, setSkillTypes] = useState<StudentSkillType[]>([]);
   const [skillRatings, setSkillRatings] = useState<StudentSkillRating[]>([]);
@@ -523,8 +678,10 @@ export default function StudentDetailsPage() {
   }, [student?.id, selectedSession, selectedTerm]);
 
   const loadResultPins = useCallback(async () => {
-    if (!student?.id || !selectedSession || !selectedTerm) {
+    if (isTeacher || !student?.id || !selectedSession || !selectedTerm) {
       setPins([]);
+      setPinError(null);
+      setPinLoading(false);
       return;
     }
     setPinLoading(true);
@@ -546,7 +703,7 @@ export default function StudentDetailsPage() {
     } finally {
       setPinLoading(false);
     }
-  }, [student?.id, selectedSession, selectedTerm]);
+  }, [isTeacher, student?.id, selectedSession, selectedTerm]);
 
   const loadAttendanceReport = useCallback(async () => {
     if (!student?.id || !selectedSession || !selectedTerm) {
@@ -1417,6 +1574,42 @@ export default function StudentDetailsPage() {
 
       <div className="card height-auto">
         <div className="card-body">
+          <div className="heading-layout1">
+            <div className="item-title">
+              <h3>Student Navigation</h3>
+              <p className="mb-0 text-muted small">
+                Move through the current filtered student list without going back
+                to the directory.
+              </p>
+            </div>
+          </div>
+          <div className="student-nav-actions">
+            <button
+              type="button"
+              className="btn-fill-lg student-nav-button student-nav-button--previous"
+              onClick={() => previousStudent && router.push(previousStudent.href)}
+              disabled={!previousStudent || studentNavLoading}
+              title={previousStudent ? `Previous: ${previousStudent.label}` : "No previous student"}
+              style={{ fontSize: "1.1rem" }}
+            >
+              {previousStudent ? `Previous (${previousStudent.label})` : "Previous Student"}
+            </button>
+            <button
+              type="button"
+              className="btn-fill-lg student-nav-button student-nav-button--next"
+              onClick={() => nextStudent && router.push(nextStudent.href)}
+              disabled={!nextStudent || studentNavLoading}
+              title={nextStudent ? `Next: ${nextStudent.label}` : "No next student"}
+              style={{ fontSize: "1.1rem" }}
+            >
+              {nextStudent ? `Next (${nextStudent.label})` : "Next Student"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card height-auto mt-4">
+        <div className="card-body">
           <div className="d-flex justify-content-between align-items-start mb-4">
             <div className="d-flex align-items-center">
               <Image
@@ -2035,6 +2228,49 @@ export default function StudentDetailsPage() {
       ) : null}
 
       <style jsx>{`
+        .student-nav-actions {
+          display: flex;
+          flex-wrap: nowrap;
+          justify-content: space-between;
+          gap: 1rem;
+        }
+
+        .student-nav-button {
+          flex: 1 1 0;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 0;
+          border: none;
+          color: #ffffff;
+          font-weight: 700;
+        }
+
+        .student-nav-button--previous {
+          background: #3b82f6;
+        }
+
+        .student-nav-button--next {
+          background: #10b981;
+        }
+
+        @media (max-width: 767px) {
+          .student-nav-actions {
+            flex-direction: column;
+            gap: 10px;
+          }
+          .student-nav-button {
+            font-size: 1.5rem !important;
+            padding: 20px 25px !important;
+            width: 100%;
+          }
+        }
+
+        .student-nav-button:disabled {
+          opacity: 0.65;
+          cursor: not-allowed;
+        }
+
         .result-preview-backdrop {
           position: fixed;
           inset: 0;
@@ -2138,6 +2374,16 @@ export default function StudentDetailsPage() {
         }
 
         @media (max-width: 768px) {
+          .student-nav-actions {
+            gap: 0.75rem;
+          }
+
+          .student-nav-button {
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+            font-size: 0.9rem;
+          }
+
           .skills-scrollbar-range {
             display: none;
           }
@@ -2197,27 +2443,27 @@ export default function StudentDetailsPage() {
         }
       `}</style>
 
-      <div className="card height-auto mt-4">
-        <div className="card-body">
-          <div className="heading-layout1">
-            <div className="item-title">
-              <h3>Result PIN</h3>
-              <p className="mb-0 text-muted small">
-                Linked to the selected session and term.
-              </p>
+      {!isTeacher ? (
+        <div className="card height-auto mt-4">
+          <div className="card-body">
+            <div className="heading-layout1">
+              <div className="item-title">
+                <h3>Result PIN</h3>
+                <p className="mb-0 text-muted small">
+                  Linked to the selected session and term.
+                </p>
+              </div>
             </div>
-          </div>
-          {pinFeedback ? (
-            <div className={`alert alert-${pinFeedbackType}`} role="alert">
-              {pinFeedback}
-            </div>
-          ) : null}
-          {pinError ? (
-            <div className="alert alert-danger" role="alert">
-              {pinError}
-            </div>
-          ) : null}
-          {!isTeacher ? (
+            {pinFeedback ? (
+              <div className={`alert alert-${pinFeedbackType}`} role="alert">
+                {pinFeedback}
+              </div>
+            ) : null}
+            {pinError ? (
+              <div className="alert alert-danger" role="alert">
+                {pinError}
+              </div>
+            ) : null}
             <div className="mb-3">
               <button
                 type="button"
@@ -2240,49 +2486,47 @@ export default function StudentDetailsPage() {
                 Regenerate PIN
               </button>
             </div>
-          ) : null}
-          <div className="table-responsive">
-            <table className="table display text-nowrap">
-              <thead>
-                <tr>
-                  <th>Session</th>
-                  <th>Term</th>
-                  <th>PIN</th>
-                  <th>Status</th>
-                  <th>Expires</th>
-                  <th>Updated</th>
-                  {!isTeacher ? <th>Actions</th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {pinLoading ? (
+            <div className="table-responsive">
+              <table className="table display text-nowrap">
+                <thead>
                   <tr>
-                    <td colSpan={pinTableColspan}>Loading result PINs…</td>
+                    <th>Session</th>
+                    <th>Term</th>
+                    <th>PIN</th>
+                    <th>Status</th>
+                    <th>Expires</th>
+                    <th>Updated</th>
+                    <th>Actions</th>
                   </tr>
-                ) : pins.length === 0 ? (
-                  <tr>
-                    <td colSpan={pinTableColspan}>
-                      {selectedSession && selectedTerm
-                        ? "No result PIN generated for this term."
-                        : "Select a session and term to view the PIN."}
-                    </td>
-                  </tr>
-                ) : (
-                  pins.map((pin) => (
-                    <tr key={String(pin.id)}>
-                      <td>{pin.session?.name ?? "—"}</td>
-                      <td>{pin.term?.name ?? "—"}</td>
-                      <td>
-                        <code>{maskPin(pin.pin_code)}</code>
+                </thead>
+                <tbody>
+                  {pinLoading ? (
+                    <tr>
+                      <td colSpan={pinTableColspan}>Loading result PINs…</td>
+                    </tr>
+                  ) : pins.length === 0 ? (
+                    <tr>
+                      <td colSpan={pinTableColspan}>
+                        {selectedSession && selectedTerm
+                          ? "No result PIN generated for this term."
+                          : "Select a session and term to view the PIN."}
                       </td>
-                      <td>
-                        <span className={pinStatusClass(pin.status)}>
-                          {(pin.status ?? "unknown").toLowerCase()}
-                        </span>
-                      </td>
-                      <td>{formatDate(pin.expires_at)}</td>
-                      <td>{formatDateTime(pin.updated_at)}</td>
-                      {!isTeacher ? (
+                    </tr>
+                  ) : (
+                    pins.map((pin) => (
+                      <tr key={String(pin.id)}>
+                        <td>{pin.session?.name ?? "—"}</td>
+                        <td>{pin.term?.name ?? "—"}</td>
+                        <td>
+                          <code>{maskPin(pin.pin_code)}</code>
+                        </td>
+                        <td>
+                          <span className={pinStatusClass(pin.status)}>
+                            {(pin.status ?? "unknown").toLowerCase()}
+                          </span>
+                        </td>
+                        <td>{formatDate(pin.expires_at)}</td>
+                        <td>{formatDateTime(pin.updated_at)}</td>
                         <td>
                           <button
                             type="button"
@@ -2304,15 +2548,15 @@ export default function StudentDetailsPage() {
                             </button>
                           ) : null}
                         </td>
-                      ) : null}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
     </>
   );
 }
