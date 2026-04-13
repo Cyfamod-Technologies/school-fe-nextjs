@@ -1590,7 +1590,6 @@ export default function StudentDetailsPage() {
               onClick={() => previousStudent && router.push(previousStudent.href)}
               disabled={!previousStudent || studentNavLoading}
               title={previousStudent ? `Previous: ${previousStudent.label}` : "No previous student"}
-              style={{ fontSize: "1.1rem" }}
             >
               {previousStudent ? `Previous (${previousStudent.label})` : "Previous Student"}
             </button>
@@ -1600,7 +1599,6 @@ export default function StudentDetailsPage() {
               onClick={() => nextStudent && router.push(nextStudent.href)}
               disabled={!nextStudent || studentNavLoading}
               title={nextStudent ? `Next: ${nextStudent.label}` : "No next student"}
-              style={{ fontSize: "1.1rem" }}
             >
               {nextStudent ? `Next (${nextStudent.label})` : "Next Student"}
             </button>
@@ -2244,6 +2242,8 @@ export default function StudentDetailsPage() {
           border: none;
           color: #ffffff;
           font-weight: 700;
+          font-size: 1.6rem;
+          padding: 1.25rem 2rem;
         }
 
         .student-nav-button--previous {
@@ -2260,8 +2260,8 @@ export default function StudentDetailsPage() {
             gap: 10px;
           }
           .student-nav-button {
-            font-size: 1.5rem !important;
-            padding: 20px 25px !important;
+            font-size: 1.8rem !important;
+            padding: 25px 30px !important;
             width: 100%;
           }
         }
