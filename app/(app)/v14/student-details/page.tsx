@@ -19,7 +19,9 @@ import {
   listStudents,
   type StudentDetail,
   type StudentSummary,
+  type StudentDelectionWithDependenciesError,
 } from "@/lib/students";
+import DeleteStudentModal from "@/components/DeleteStudentModal";
 import { resolveBackendUrl } from "@/lib/config";
 import { getCookie } from "@/lib/cookies";
 import { listSessions, type Session } from "@/lib/sessions";
@@ -155,6 +157,9 @@ export default function StudentDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletionDependencies, setDeletionDependencies] = useState<string[]>([]);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [termsCache, setTermsCache] = useState<Record<string, Term[]>>({});
   const [selectedSession, setSelectedSession] = useState<string>("");
@@ -1497,26 +1502,50 @@ export default function StudentDetailsPage() {
     if (!studentId || removing) {
       return;
     }
-    if (
-      !window.confirm(
-        "Delete this student? This will fail if the student has dependent records (results, attendance, etc.).",
-      )
-    ) {
-      return;
-    }
     setRemoving(true);
+    setDeleteError(null);
+    setDeletionDependencies([]);
+
     try {
       await deleteStudent(studentId);
       router.push(allStudentsHref);
     } catch (err) {
-      console.error("Unable to delete student", err);
-      alert(
-        err instanceof Error ? err.message : "Unable to delete student.",
-      );
-    } finally {
       setRemoving(false);
+      console.error("Unable to delete student", err);
+
+      // Check if it's a dependency error
+      if (
+        err instanceof Error &&
+        "isDependencyError" in err &&
+        err.isDependencyError
+      ) {
+        const dependencyError = err as StudentDelectionWithDependenciesError;
+        if (dependencyError.dependencies && dependencyError.dependencies.length > 0) {
+          setDeletionDependencies(dependencyError.dependencies);
+          setDeleteModalOpen(true);
+          return;
+        }
+      }
+
+      const errorMessage =
+        err instanceof Error ? err.message : "Unable to delete student.";
+      setDeleteError(errorMessage);
+      alert(errorMessage);
     }
   };
+
+  const handleDeleteClick = () => {
+    setDeleteError(null);
+    setDeletionDependencies([]);
+    if (
+      window.confirm(
+        "Delete this student? This will fail if the student has dependent records (results, attendance, etc.).",
+      )
+    ) {
+      handleDelete();
+    }
+  };
+
 
   if (!studentId) {
     return null;
@@ -1644,7 +1673,7 @@ export default function StudentDetailsPage() {
                 <button
                   type="button"
                   className="btn btn-outline-danger"
-                  onClick={handleDelete}
+                  onClick={handleDeleteClick}
                   disabled={removing}
                 >
                   {removing ? "Deleting…" : "Delete"}
@@ -2557,6 +2586,24 @@ export default function StudentDetailsPage() {
           </div>
         </div>
       ) : null}
+
+      <DeleteStudentModal
+        isOpen={deleteModalOpen}
+        studentName={student ? buildStudentDisplayName(student) : undefined}
+        studentId={studentId}
+        dependencies={deletionDependencies}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setRemoving(false);
+        }}
+        onDeleteSuccess={() => {
+          router.push(allStudentsHref);
+        }}
+        onDeleteError={(errorMsg) => {
+          setDeleteError(errorMsg);
+          alert(errorMsg);
+        }}
+      />
     </>
   );
 }
