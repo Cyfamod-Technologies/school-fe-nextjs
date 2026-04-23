@@ -69,7 +69,7 @@ const formatScore = (value: unknown): string => {
   if (Number.isNaN(numeric)) {
     return "";
   }
-  return numeric.toFixed(2);
+  return numeric.toFixed(2).replace(/\.?0+$/, "");
 };
 
 const buildStudentName = (student: StudentDetail): string => {

@@ -477,7 +477,7 @@ function renderResultsTable() {
         const armName = student.class_arm?.name || '';
         const sectionName = student.class_section?.name || '';
         const classLabel = [className, armName, sectionName].filter(Boolean).join(' / ') || '—';
-        const score = result ? Number(result.total_score).toFixed(2) : '';
+        const score = result ? Number(result.total_score).toFixed(2).replace(/\.?0+$/, '') : '';
         const remark = result?.remarks || '';
         const statusClass = result ? 'saved' : 'none';
         const statusLabel = result ? 'Saved' : 'Not recorded';
