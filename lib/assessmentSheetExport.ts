@@ -77,65 +77,6 @@ export function downloadCSVFile(
 }
 
 /**
- * Generate Excel file using XLSX library if available, otherwise use CSV
- * This is a more advanced version that creates proper Excel (.xlsx) files
- */
-export async function generateExcelFile(
-  students: StudentSummary[],
-  assessmentComponents: AssessmentComponent[],
-): Promise<void> {
-  // Try to use XLSX if available
-  try {
-    // @ts-ignore - XLSX is optional dependency
-    const XLSX = await import("xlsx");
-
-    // Sort components by order
-    const sortedComponents = [...assessmentComponents].sort(
-      (a, b) => (a.order || 0) - (b.order || 0),
-    );
-
-    // Create header row
-    const headers = ["Name", "Admission No", ...sortedComponents.map((c) => c.name)];
-
-    // Create data rows
-    const rows = students.map((student) => {
-      const name = [student.first_name, student.middle_name, student.last_name]
-        .filter(Boolean)
-        .join(" ")
-        .trim();
-      const admissionNo = student.admission_no || "";
-
-      // Assessment component columns (empty for now)
-      const componentColumns = sortedComponents.map(() => "");
-
-      return [name, admissionNo, ...componentColumns];
-    });
-
-    // Create worksheet
-    const worksheet_data = [headers, ...rows];
-    const worksheet = XLSX.utils.aoa_to_sheet(worksheet_data);
-
-    // Set column widths
-    const colWidths = [
-      { wch: 30 }, // Name
-      { wch: 15 }, // Admission No
-      ...sortedComponents.map(() => ({ wch: 12 })), // Assessment component columns
-    ];
-    worksheet["!cols"] = colWidths;
-
-    // Create workbook
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Assessment Sheet");
-
-    // Generate file
-    XLSX.writeFile(workbook, `assessment_sheet_${new Date().getTime()}.xlsx`);
-  } catch (error) {
-    // If XLSX fails, fall back to CSV
-    throw new Error("XLSX not available, using CSV fallback");
-  }
-}
-
-/**
  * Export assessment sheet - main function to be called from components
  */
 export function exportAssessmentSheet(
