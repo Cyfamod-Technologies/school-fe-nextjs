@@ -35,6 +35,10 @@ import {
   type StudentSkillType,
 } from "@/lib/studentSkillRatings";
 import {
+  fetchResultPageSettings,
+  type ResultPageSettings,
+} from "@/lib/resultPageSettings";
+import {
   getStudentTermSummary,
   updateStudentTermSummary,
   type StudentTermSummary,
@@ -52,6 +56,20 @@ import {
 import { isTeacherUser } from "@/lib/roleChecks";
 
 const passthroughLoader: ImageLoader = ({ src }) => src;
+
+const defaultResultPageSettings: ResultPageSettings = {
+  show_grade: true,
+  show_position: true,
+  show_class_average: true,
+  show_lowest: true,
+  show_highest: true,
+  show_remarks: true,
+  hide_student_identity: false,
+  allow_shared_pin_access: false,
+  enable_session_result_print: false,
+  comment_mode: "manual",
+  signatory_title: "principal",
+};
 
 interface StudentNavigationTarget {
   href: string;
@@ -142,6 +160,15 @@ export default function StudentDetailsPage() {
   const { schoolContext, user, hasPermission, loading: authLoading } = useAuth();
 
   const isTeacher = isTeacherUser(user);
+  const [resultPageSettings, setResultPageSettings] = useState<ResultPageSettings>(
+    defaultResultPageSettings,
+  );
+  const effectiveCommentMode: ResultPageSettings["comment_mode"] =
+    user?.school?.result_comment_mode === "range" ||
+    resultPageSettings.comment_mode === "range"
+      ? "range"
+      : "manual";
+  const isAutomaticCommentMode = effectiveCommentMode === "range";
   const canOpenResultEntry = hasPermission([
     "results.entry.view",
     "results.entry.enter",
@@ -746,6 +773,20 @@ export default function StudentDetailsPage() {
   }, [loadTermSummary]);
 
   useEffect(() => {
+    if (!student?.id || !selectedSession || !selectedTerm) {
+      return;
+    }
+
+    void loadTermSummary();
+  }, [
+    loadTermSummary,
+    resultPageSettings.comment_mode,
+    selectedSession,
+    selectedTerm,
+    student?.id,
+  ]);
+
+  useEffect(() => {
     void loadResultPins();
   }, [loadResultPins]);
 
@@ -1296,6 +1337,33 @@ export default function StudentDetailsPage() {
     }
     return "badge badge-secondary";
   };
+
+  useEffect(() => {
+    let active = true;
+
+    fetchResultPageSettings()
+      .then((data) => {
+        if (!active) {
+          return;
+        }
+        setResultPageSettings(data);
+      })
+      .catch((error) => {
+        console.error("Unable to load result comment mode", error);
+        if (!active) {
+          return;
+        }
+        setResultPageSettings((prev) => ({
+          ...prev,
+          comment_mode:
+            user?.school?.result_comment_mode === "range" ? "range" : "manual",
+        }));
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.school?.result_comment_mode]);
 
   useEffect(() => {
     if (!studentId) {
@@ -2094,7 +2162,9 @@ export default function StudentDetailsPage() {
             <div className="item-title">
               <h3>Term Comments</h3>
               <p className="mb-0 text-muted small">
-                Applies to the selected session and term above.
+                {isAutomaticCommentMode
+                  ? "Automatic score-based comments apply to the selected session and term."
+                  : "Applies to the selected session and term above."}
               </p>
             </div>
             <div>
@@ -2114,30 +2184,32 @@ export default function StudentDetailsPage() {
                 <label className="text-dark-medium">
                   Class Teacher&apos;s Comment
                 </label>
-                <select
-                  className="form-control mb-2"
-                  value={
-                    teacherCommentOptions.includes(
-                      termSummary.class_teacher_comment ?? "",
-                    )
-                      ? termSummary.class_teacher_comment ?? ""
-                      : ""
-                  }
-                  onChange={(event) =>
-                    handleTermSummaryChange(
-                      "class_teacher_comment",
-                      event.target.value,
-                    )
-                  }
-                  disabled={!selectedSession || !selectedTerm}
-                >
-                  <option value="">Select saved comment (optional)</option>
-                  {teacherCommentOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+                {!isAutomaticCommentMode ? (
+                  <select
+                    className="form-control mb-2"
+                    value={
+                      teacherCommentOptions.includes(
+                        termSummary.class_teacher_comment ?? "",
+                      )
+                        ? termSummary.class_teacher_comment ?? ""
+                        : ""
+                    }
+                    onChange={(event) =>
+                      handleTermSummaryChange(
+                        "class_teacher_comment",
+                        event.target.value,
+                      )
+                    }
+                    disabled={!selectedSession || !selectedTerm}
+                  >
+                    <option value="">Select saved comment (optional)</option>
+                    {teacherCommentOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
                 <textarea
                   className="form-control"
                   style={{ backgroundColor: "#f8f8f8" }}
@@ -2150,37 +2222,47 @@ export default function StudentDetailsPage() {
                       event.target.value,
                     )
                   }
-                  disabled={!selectedSession || !selectedTerm}
+                  disabled={
+                    !selectedSession || !selectedTerm || isAutomaticCommentMode
+                  }
                 />
+                {isAutomaticCommentMode ? (
+                  <small className="form-text text-muted">
+                    This comment is generated automatically from the student&apos;s
+                    score.
+                  </small>
+                ) : null}
               </div>
               <div className="col-md-6 col-12 form-group">
                 <label className="text-dark-medium">
                   Principal&apos;s Comment
                 </label>
-                <select
-                  className="form-control mb-2"
-                  value={
-                    principalCommentOptions.includes(
-                      termSummary.principal_comment ?? "",
-                    )
-                      ? termSummary.principal_comment ?? ""
-                      : ""
-                  }
-                  onChange={(event) =>
-                    handleTermSummaryChange(
-                      "principal_comment",
-                      event.target.value,
-                    )
-                  }
-                  disabled={!selectedSession || !selectedTerm}
-                >
-                  <option value="">Select saved comment (optional)</option>
-                  {principalCommentOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+                {!isAutomaticCommentMode ? (
+                  <select
+                    className="form-control mb-2"
+                    value={
+                      principalCommentOptions.includes(
+                        termSummary.principal_comment ?? "",
+                      )
+                        ? termSummary.principal_comment ?? ""
+                        : ""
+                    }
+                    onChange={(event) =>
+                      handleTermSummaryChange(
+                        "principal_comment",
+                        event.target.value,
+                      )
+                    }
+                    disabled={!selectedSession || !selectedTerm}
+                  >
+                    <option value="">Select saved comment (optional)</option>
+                    {principalCommentOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
                 <textarea
                   className="form-control"
                   style={{ backgroundColor: "#f8f8f8" }}
@@ -2193,18 +2275,34 @@ export default function StudentDetailsPage() {
                       event.target.value,
                     )
                   }
-                  disabled={!selectedSession || !selectedTerm}
+                  disabled={
+                    !selectedSession || !selectedTerm || isAutomaticCommentMode
+                  }
                 />
+                {isAutomaticCommentMode ? (
+                  <small className="form-text text-muted">
+                    This comment is generated automatically from the student&apos;s
+                    score.
+                  </small>
+                ) : null}
               </div>
             </div>
-            <button
-              type="submit"
-              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-              disabled={termSummarySaving || !selectedSession || !selectedTerm}
-            >
-              {termSummarySaving ? "Saving…" : "Save Comments"}
-            </button>
+            {!isAutomaticCommentMode ? (
+              <button
+                type="submit"
+                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                disabled={termSummarySaving || !selectedSession || !selectedTerm}
+              >
+                {termSummarySaving ? "Saving…" : "Save Comments"}
+              </button>
+            ) : null}
           </form>
+          {isAutomaticCommentMode ? (
+            <div className="alert alert-info">
+              Automatic comment mode is active. These comments are generated
+              from the student&apos;s average score and cannot be edited here.
+            </div>
+          ) : null}
           {termSummaryFeedback ? (
             <div
               className={`alert alert-${termSummaryFeedbackType}`}

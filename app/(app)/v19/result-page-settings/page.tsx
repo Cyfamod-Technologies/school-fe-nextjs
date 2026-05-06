@@ -181,6 +181,29 @@ export default function ResultPageSettingsPage() {
 
           <div className="row gutters-20">
             <div className="col-md-6 col-12 form-group">
+              <label htmlFor="result-comment-mode">Result Comment Mode</label>
+              <select
+                id="result-comment-mode"
+                className="form-control"
+                value={settings.comment_mode}
+                onChange={(event) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    comment_mode:
+                      event.target.value as ResultPageSettings["comment_mode"],
+                  }))
+                }
+                disabled={loading || saving}
+              >
+                <option value="manual">Manual</option>
+                <option value="range">Automatic</option>
+              </select>
+              <small className="form-text text-muted">
+                Automatic uses score-based comments. Manual allows saved comment
+                templates and custom edits per student.
+              </small>
+            </div>
+            <div className="col-md-6 col-12 form-group">
               <label htmlFor="result-signatory-title">Main Result Signatory Title</label>
               <select
                 id="result-signatory-title"

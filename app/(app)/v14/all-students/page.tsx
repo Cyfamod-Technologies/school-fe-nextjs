@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { PermissionGate } from "@/components/PermissionGate";
 import { PERMISSIONS } from "@/lib/permissionKeys";
 import { listSessions, type Session } from "@/lib/sessions";
+import { listTermsBySession, type Term } from "@/lib/terms";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import {
   listClassArms,
@@ -24,6 +25,8 @@ import {
   type StudentSummary,
 } from "@/lib/students";
 import { resolveBackendUrl } from "@/lib/config";
+import { listSubjectAssignments } from "@/lib/subjectAssignments";
+import { exportBroadsheet } from "@/lib/broadsheetExport";
 import { isTeacherUser } from "@/lib/roleChecks";
 import {
   listAssessmentComponents,
@@ -36,6 +39,7 @@ const passthroughLoader: ImageLoader = ({ src }) => src;
 interface FilterState {
   search: string;
   current_session_id: string;
+  term_id: string;
   school_class_id: string;
   class_arm_id: string;
   class_section_id: string;
@@ -44,6 +48,7 @@ interface FilterState {
 const initialFilters: FilterState = {
   search: "",
   current_session_id: "",
+  term_id: "",
   school_class_id: "",
   class_arm_id: "",
   class_section_id: "",
@@ -72,6 +77,7 @@ export default function AllStudentsPage() {
     ...initialFilters,
     search: searchParams.get("search") ?? "",
     current_session_id: searchParams.get("current_session_id") ?? "",
+    term_id: searchParams.get("term_id") ?? "",
     school_class_id: searchParams.get("school_class_id") ?? "",
     class_arm_id: searchParams.get("class_arm_id") ?? "",
     class_section_id: searchParams.get("class_section_id") ?? "",
@@ -82,6 +88,7 @@ export default function AllStudentsPage() {
   const [perPage, setPerPage] = useState(initialPerPage);
 
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [termsCache, setTermsCache] = useState<Record<string, Term[]>>({});
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [classArms, setClassArms] = useState<ClassArm[]>([]);
   const [classSections, setClassSections] = useState<ClassArmSection[]>([]);
@@ -91,6 +98,7 @@ export default function AllStudentsPage() {
     AssessmentComponent[]
   >([]);
   const [exporting, setExporting] = useState(false);
+  const [exportingBroadsheet, setExportingBroadsheet] = useState(false);
 
   const [data, setData] = useState<StudentListResponse | null>(null);
   const [students, setStudents] = useState<StudentSummary[]>([]);
@@ -165,6 +173,20 @@ export default function AllStudentsPage() {
       );
     }
   }, [filters, sortBy, sortDirection]);
+
+  const terms = useMemo(() => {
+    if (!filters.current_session_id) return [];
+    return termsCache[filters.current_session_id] ?? [];
+  }, [filters.current_session_id, termsCache]);
+
+  useEffect(() => {
+    if (!filters.current_session_id || termsCache[filters.current_session_id]) return;
+    listTermsBySession(filters.current_session_id)
+      .then((loaded) =>
+        setTermsCache((prev) => ({ ...prev, [filters.current_session_id]: loaded }))
+      )
+      .catch((err) => console.error("Unable to load terms", err));
+  }, [filters.current_session_id, termsCache]);
 
   useEffect(() => {
     listSessions()
@@ -526,6 +548,64 @@ export default function AllStudentsPage() {
     }
   }, [exporting, assessmentComponents, fetchAllStudentsForExport, filters.school_class_id, filters.class_arm_id, classes, classArms]);
 
+  const handleExportBroadsheet = useCallback(async () => {
+    if (exportingBroadsheet) return;
+
+    if (!filters.school_class_id) {
+      setBulkFeedback({
+        type: "warning",
+        message: "Please select a Class before exporting the broadsheet.",
+      });
+      return;
+    }
+
+    setExportingBroadsheet(true);
+    setBulkFeedback(null);
+    try {
+      // Fetch subjects and all students in parallel
+      const [subjectResponse, allStudents] = await Promise.all([
+        listSubjectAssignments({
+          school_class_id: filters.school_class_id,
+          class_arm_id: filters.class_arm_id || undefined,
+          per_page: 200,
+        }),
+        fetchAllStudentsForExport(),
+      ]);
+
+      const subjects = (subjectResponse.data ?? [])
+        .map((a) => a.subject)
+        .filter((s): s is NonNullable<typeof s> => Boolean(s?.id && s?.name))
+        .filter((s, i, arr) => arr.findIndex((x) => x.id === s.id) === i);
+
+      if (allStudents.length === 0) {
+        setBulkFeedback({ type: "warning", message: "No students found for the selected filters." });
+        return;
+      }
+
+      let filename = "broadsheet";
+      const selectedClass = classes.find((c) => String(c.id) === String(filters.school_class_id));
+      if (selectedClass) filename += `_${selectedClass.name}`;
+      const selectedArm = classArms.find((a) => String(a.id) === String(filters.class_arm_id));
+      if (selectedArm) filename += `_${selectedArm.name}`;
+      const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      filename += `_${timestamp}.csv`;
+
+      exportBroadsheet(allStudents, subjects, filename);
+
+      setBulkFeedback({
+        type: "success",
+        message: `Broadsheet exported with ${allStudents.length} student(s) and ${subjects.length} subject(s).`,
+      });
+    } catch (err) {
+      setBulkFeedback({
+        type: "danger",
+        message: err instanceof Error ? err.message : "Unable to export broadsheet.",
+      });
+    } finally {
+      setExportingBroadsheet(false);
+    }
+  }, [exportingBroadsheet, filters, fetchAllStudentsForExport, classes, classArms]);
+
   return (
     <>
       <div className="breadcrumbs-area">
@@ -616,6 +696,7 @@ export default function AllStudentsPage() {
                   setFilters((prev) => ({
                     ...prev,
                     current_session_id: event.target.value,
+                    term_id: "",
                   }));
                 }}
                 disabled={isTeacher}
@@ -624,6 +705,26 @@ export default function AllStudentsPage() {
                 {sessions.map((session) => (
                   <option key={session.id} value={session.id}>
                     {session.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-lg-2 col-12 form-group">
+              <label htmlFor="filter-term">Term</label>
+              <select
+                id="filter-term"
+                className="form-control"
+                value={filters.term_id}
+                onChange={(event) => {
+                  setPage(1);
+                  setFilters((prev) => ({ ...prev, term_id: event.target.value }));
+                }}
+                disabled={!filters.current_session_id || terms.length === 0}
+              >
+                <option value="">Select Term</option>
+                {terms.map((term) => (
+                  <option key={term.id} value={term.id}>
+                    {term.name}
                   </option>
                 ))}
               </select>
@@ -720,6 +821,17 @@ export default function AllStudentsPage() {
                   disabled={exporting || students.length === 0}
                 >
                   {exporting ? "Exporting…" : "Export Assessment Sheet"}
+                </button>
+                <button
+                  type="button"
+                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
+                  onClick={handleExportBroadsheet}
+                  disabled={exportingBroadsheet || !filters.school_class_id}
+                  title={!filters.school_class_id ? "Select a Class to export" : "Export broadsheet for selected class"}
+                >
+                  {exportingBroadsheet
+                    ? "Opening…"
+                    : `Export Broadsheet${data?.total ? ` (${data.total})` : ""}`}
                 </button>
                 {!isTeacher ? (
                   <PermissionGate permission={PERMISSIONS.STUDENTS_DELETE}>

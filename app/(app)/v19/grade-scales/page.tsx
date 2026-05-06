@@ -419,6 +419,7 @@ export default function GradeScalesPage() {
   const [resultSettingsError, setResultSettingsError] = useState<string | null>(
     null,
   );
+  const isAutomaticCommentMode = resultSettings.comment_mode === "range";
 
   useEffect(() => {
     let active = true;
@@ -457,10 +458,7 @@ export default function GradeScalesPage() {
     fetchResultPageSettings()
       .then((data) => {
         if (!active) return;
-        setResultSettings({
-          ...data,
-          comment_mode: "manual",
-        });
+        setResultSettings(data);
       })
       .catch((error) => {
         console.error("Unable to load result page settings", error);
@@ -776,14 +774,8 @@ export default function GradeScalesPage() {
 
     try {
       setResultSettingsSaving(true);
-      const saved = await updateResultPageSettings({
-        ...resultSettings,
-        comment_mode: "manual",
-      });
-      setResultSettings({
-        ...saved,
-        comment_mode: "manual",
-      });
+      const saved = await updateResultPageSettings(resultSettings);
+      setResultSettings(saved);
       setResultSettingsInfo("Result page settings updated successfully.");
     } catch (error) {
       console.error("Unable to save result page settings", error);
@@ -1249,6 +1241,31 @@ export default function GradeScalesPage() {
           ) : null}
           <div className="row gutters-20">
             <div className="col-md-6 col-12 form-group">
+              <label htmlFor="grade-scale-result-comment-mode">
+                Result Comment Mode
+              </label>
+              <select
+                id="grade-scale-result-comment-mode"
+                className="form-control"
+                value={resultSettings.comment_mode}
+                onChange={(event) =>
+                  setResultSettings((prev) => ({
+                    ...prev,
+                    comment_mode:
+                      event.target.value as ResultPageSettings["comment_mode"],
+                  }))
+                }
+                disabled={resultSettingsLoading || resultSettingsSaving}
+              >
+                <option value="manual">Manual</option>
+                <option value="range">Automatic</option>
+              </select>
+              <small className="form-text text-muted">
+                Automatic uses score-based comments. Manual allows saved comment
+                templates and custom edits per student.
+              </small>
+            </div>
+            <div className="col-md-6 col-12 form-group">
               <label htmlFor="grade-scale-result-signatory-title">
                 Main Result Signatory Title
               </label>
@@ -1402,55 +1419,66 @@ export default function GradeScalesPage() {
         </div>
       </div>
 
-      <div className="card height-auto mt-4">
-        <div className="card-body">
-          <div className="heading-layout1">
-            <div className="item-title">
-              <h3>Result Comment Templates (Optional)</h3>
+      {isAutomaticCommentMode ? (
+        <div className="card height-auto mt-4">
+          <div className="card-body">
+            <div className="alert alert-info mb-0">
+              Automatic comment mode is active. Result comment templates are
+              hidden until you switch back to manual.
             </div>
-            <div className="d-flex align-items-center">
-              <button
-                type="button"
-                className="btn btn-sm btn-outline-primary mr-2"
-                onClick={handleAddCommentRange}
-                disabled={!selectedScaleId || commentSaving}
-              >
-                <i className="fas fa-plus" /> Add Comment
-              </button>
-              <button
-                type="button"
-                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                onClick={handleCommentSave}
-                disabled={commentSaving || !selectedScaleId}
-              >
-                {commentSaving ? "Saving..." : "Save Changes"}
-              </button>
-            </div>
-          </div>
-          <p className="text-muted mb-3">
-            Add reusable teacher and principal comments that staff can pick and
-            still edit as custom text when needed.
-          </p>
-          {commentInfoMessage ? (
-            <div className="alert alert-info">{commentInfoMessage}</div>
-          ) : null}
-          {commentErrorMessage ? (
-            <div className="alert alert-danger">{commentErrorMessage}</div>
-          ) : null}
-          <div className="table-responsive">
-            <table className="table table-bordered table-striped">
-              <thead>
-                <tr>
-                  <th>Teacher Comment</th>
-                  <th>Principal Comment</th>
-                  <th className="text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody>{renderCommentTableBody()}</tbody>
-            </table>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="card height-auto mt-4">
+          <div className="card-body">
+            <div className="heading-layout1">
+              <div className="item-title">
+                <h3>Result Comment Templates (Optional)</h3>
+              </div>
+              <div className="d-flex align-items-center">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-primary mr-2"
+                  onClick={handleAddCommentRange}
+                  disabled={!selectedScaleId || commentSaving}
+                >
+                  <i className="fas fa-plus" /> Add Comment
+                </button>
+                <button
+                  type="button"
+                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                  onClick={handleCommentSave}
+                  disabled={commentSaving || !selectedScaleId}
+                >
+                  {commentSaving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </div>
+            <p className="text-muted mb-3">
+              Add reusable teacher and principal comments that staff can pick and
+              still edit as custom text when needed.
+            </p>
+            {commentInfoMessage ? (
+              <div className="alert alert-info">{commentInfoMessage}</div>
+            ) : null}
+            {commentErrorMessage ? (
+              <div className="alert alert-danger">{commentErrorMessage}</div>
+            ) : null}
+            <div className="table-responsive">
+              <table className="table table-bordered table-striped">
+                <thead>
+                  <tr>
+                    <th>Teacher Comment</th>
+                    <th>Principal Comment</th>
+                    <th className="text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody>{renderCommentTableBody()}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
