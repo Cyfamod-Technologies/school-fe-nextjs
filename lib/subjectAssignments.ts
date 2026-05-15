@@ -6,11 +6,11 @@ import type { ClassArm } from "@/lib/classArms";
 import type { ClassArmSection } from "@/lib/classArmSections";
 
 export interface SubjectAssignment {
-  id: number;
-  subject_id: number;
-  school_class_id: number;
-  class_arm_id?: number | null;
-  class_section_id?: number | null;
+  id: string;
+  subject_id: string;
+  school_class_id: string;
+  class_arm_id?: string | null;
+  class_section_id?: string | null;
   created_at?: string;
   updated_at?: string;
   subject?: Subject | null;
@@ -29,6 +29,14 @@ export interface SubjectAssignmentListResponse {
   from?: number;
   to?: number;
   [key: string]: unknown;
+}
+
+export interface SubjectAssignmentCreateResponse {
+  message: string;
+  data: SubjectAssignment | SubjectAssignment[];
+  created_count?: number;
+  skipped_count?: number;
+  skipped_subject_ids?: string[];
 }
 
 export interface SubjectAssignmentFilters {
@@ -78,15 +86,16 @@ export async function listSubjectAssignments(
 
 export async function createSubjectAssignment(
   payload: {
-    subject_id: string | number;
+    subject_id?: string | number;
+    subject_ids?: Array<string | number>;
     school_class_id: string | number;
     class_arm_id?: string | number | null;
     class_section_id?: string | number | null;
   },
-): Promise<SubjectAssignment> {
+): Promise<SubjectAssignmentCreateResponse> {
   const sanitizedPayload = { ...payload };
   delete sanitizedPayload.class_section_id;
-  return apiFetch<SubjectAssignment>(API_ROUTES.subjectAssignments, {
+  return apiFetch<SubjectAssignmentCreateResponse>(API_ROUTES.subjectAssignments, {
     method: "POST",
     body: JSON.stringify(sanitizedPayload),
   });
