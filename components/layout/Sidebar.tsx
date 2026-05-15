@@ -103,6 +103,7 @@ export function getMenuSections(enableSessionResultPrint = false): MenuSection[]
     { label: "Student Bulk Upload", href: "/v22/bulk-student-upload", requiredPermissions: "students.import" },
     { label: "Student Promotion", href: "/v20/student-promotion", requiredPermissions: "students.promote" },
     { label: "Promotion Reports", href: "/v20/promotion-reports", requiredPermissions: "promotions.history" },
+    { label: "Exit Students", href: "/v14/exited-students", requiredPermissions: "students.view" },
   ];
 
   return [

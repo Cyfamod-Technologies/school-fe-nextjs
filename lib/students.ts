@@ -59,6 +59,7 @@ export interface StudentFilters {
   school_class_id?: string;
   class_arm_id?: string;
   class_section_id?: string;
+  status?: string;
 }
 
 function buildQuery(params: Record<string, string | number | undefined>): string {
@@ -88,6 +89,7 @@ export async function listStudents(
     school_class_id: filters.school_class_id,
     class_arm_id: filters.class_arm_id,
     class_section_id: filters.class_section_id,
+    status: filters.status,
   });
 
   const payload = await apiFetch<StudentListResponse>(
