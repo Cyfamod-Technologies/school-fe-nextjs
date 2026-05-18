@@ -21,6 +21,7 @@ import {
 import {
   listStudents,
   deleteStudent,
+  deleteDependentRecords,
   type StudentListResponse,
   type StudentSummary,
 } from "@/lib/students";
@@ -428,7 +429,10 @@ export default function AllStudentsPage() {
     setDeletingSelected(true);
     try {
       const results = await Promise.allSettled(
-        selectedStudentIdList.map((studentId) => deleteStudent(studentId)),
+        selectedStudentIdList.map(async (studentId) => {
+          await deleteDependentRecords(studentId);
+          await deleteStudent(studentId);
+        }),
       );
       const succeededIds = selectedStudentIdList.filter(
         (_studentId, index) => results[index]?.status === "fulfilled",
@@ -477,7 +481,7 @@ export default function AllStudentsPage() {
     } finally {
       setDeletingSelected(false);
     }
-  }, [deleteStudent, deletingSelected, fetchStudents, page, selectedStudentIdList, students.length]);
+  }, [deletingSelected, fetchStudents, page, selectedStudentIdList, students.length]);
 
   const handleExportAssessmentSheet = useCallback(async () => {
     if (exporting) {
