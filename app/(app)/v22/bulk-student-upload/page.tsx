@@ -521,6 +521,40 @@ export default function BulkStudentUploadPage() {
       ),
     [validationErrors],
   );
+  const duplicateAdmissionGroupByRowKey = useMemo(() => {
+    const grouped = new Map<string, string[]>();
+
+    previewRows.forEach((row, index) => {
+      const rowKey = String(row.source_row ?? index);
+      const admissionNo = (rowUpdates[rowKey]?.admission_no ?? row.admission_no ?? "")
+        .toString()
+        .trim();
+
+      if (!admissionNo || admissionNo === "Auto-generated") {
+        return;
+      }
+
+      const normalizedAdmissionNo = admissionNo.toLowerCase();
+      const currentRows = grouped.get(normalizedAdmissionNo) ?? [];
+      currentRows.push(rowKey);
+      grouped.set(normalizedAdmissionNo, currentRows);
+    });
+
+    const rowGroupMap = new Map<string, string>();
+    let paletteIndex = 0;
+
+    grouped.forEach((rowKeys) => {
+      if (rowKeys.length < 2) {
+        return;
+      }
+
+      const groupClass = `preview-row-duplicate-group-${paletteIndex % 4}`;
+      paletteIndex += 1;
+      rowKeys.forEach((rowKey) => rowGroupMap.set(rowKey, groupClass));
+    });
+
+    return rowGroupMap;
+  }, [previewRows, rowUpdates]);
 
   const handleDuplicateDecisionChange = (rowKey: string, action: DuplicateAction) => {
     setDuplicateDecisions((prev) => ({
@@ -940,11 +974,18 @@ export default function BulkStudentUploadPage() {
                             previewRows.map((row, index) => {
                               const rowKey = String(row.source_row ?? index);
                               const hasRowError = errorRowKeys.has(rowKey);
+                              const duplicateGroupClass = duplicateAdmissionGroupByRowKey.get(rowKey);
+                              const rowClassName = [
+                                hasRowError ? "preview-row-error" : "",
+                                duplicateGroupClass ?? "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ");
 
                               return (
                               <tr
                                 key={`preview-${index}`}
-                                className={hasRowError ? "preview-row-error" : undefined}
+                                className={rowClassName || undefined}
                               >
                                 <td>{row.source_row ?? index + 1}</td>
                                 <td>{row.name ?? ""}</td>
@@ -1426,6 +1467,38 @@ export default function BulkStudentUploadPage() {
         :global(.bulk-preview-table tbody tr.preview-row-error td:first-child) {
           color: #b91c1c;
           font-weight: 700;
+        }
+
+        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-0) {
+          background: #fff7ed;
+        }
+
+        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-0 td) {
+          border-color: #fdba74;
+        }
+
+        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-1) {
+          background: #eff6ff;
+        }
+
+        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-1 td) {
+          border-color: #93c5fd;
+        }
+
+        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-2) {
+          background: #f0fdf4;
+        }
+
+        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-2 td) {
+          border-color: #86efac;
+        }
+
+        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-3) {
+          background: #faf5ff;
+        }
+
+        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-3 td) {
+          border-color: #d8b4fe;
         }
 
         :global(.bulk-preview-table .form-control.is-invalid) {
