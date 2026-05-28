@@ -230,19 +230,19 @@ export async function commitStudentBulkUpload(
   const headers = buildAuthHeaders();
   headers.set("Content-Type", "application/json");
 
-  const payload: {
+  const requestPayload: {
     decisions?: Record<string, "skip" | "overwrite" | "allow">;
     row_updates?: Record<string, BulkRowUpdate>;
   } = {};
 
   if (decisions && Object.keys(decisions).length) {
-    payload.decisions = decisions;
+    requestPayload.decisions = decisions;
   }
   if (rowUpdates && Object.keys(rowUpdates).length) {
-    payload.row_updates = rowUpdates;
+    requestPayload.row_updates = rowUpdates;
   }
 
-  const body = Object.keys(payload).length ? JSON.stringify(payload) : undefined;
+  const body = Object.keys(requestPayload).length ? JSON.stringify(requestPayload) : undefined;
 
   const response = await fetch(
     `${BACKEND_URL}${API_ROUTES.studentsBulkCommit}/${encodeURIComponent(batchId)}/commit`,
@@ -254,19 +254,19 @@ export async function commitStudentBulkUpload(
     },
   );
 
-  let payload: BulkCommitResponsePayload | null = null;
+  let responsePayload: BulkCommitResponsePayload | null = null;
   try {
-    payload = (await response.json()) as BulkCommitResponsePayload;
+    responsePayload = (await response.json()) as BulkCommitResponsePayload;
   } catch {
-    payload = null;
+    responsePayload = null;
   }
 
   if (!response.ok) {
     throw new BulkCommitError(
-      payload?.message ?? `Bulk upload failed (${response.status}).`,
-      Array.isArray(payload?.errors) ? payload.errors : [],
+      responsePayload?.message ?? `Bulk upload failed (${response.status}).`,
+      Array.isArray(responsePayload?.errors) ? responsePayload.errors : [],
     );
   }
 
-  return payload ?? {};
+  return responsePayload ?? {};
 }
