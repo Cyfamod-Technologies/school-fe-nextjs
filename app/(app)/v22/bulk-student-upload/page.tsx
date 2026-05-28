@@ -529,12 +529,20 @@ export default function BulkStudentUploadPage() {
   };
 
   const previewRows = useMemo(() => preview?.rows ?? [], [preview?.rows]);
+  const workingPreviewRows = useMemo(
+    () =>
+      previewRows.filter((row, index) => {
+        const rowKey = String(row.source_row ?? index);
+        return !rowUpdates[rowKey]?.deleted;
+      }),
+    [previewRows, rowUpdates],
+  );
   const validationErrors = useMemo(
     () => validationFailure?.errors ?? [],
     [validationFailure?.errors],
   );
-  const totalRows = preview?.summary?.total_rows ?? previewRows.length;
-  const showingPreviewSubset = totalRows > previewRows.length;
+  const totalRows = preview?.summary?.total_rows ?? workingPreviewRows.length;
+  const showingPreviewSubset = totalRows > workingPreviewRows.length;
   const errorRowKeys = useMemo(
     () =>
       new Set(
@@ -562,7 +570,7 @@ export default function BulkStudentUploadPage() {
 
     const grouped = new Map<string, BulkPreviewRow[]>();
 
-    previewRows.forEach((row, index) => {
+    workingPreviewRows.forEach((row, index) => {
       const rowKey = String(row.source_row ?? index);
       if (!duplicateErrorRows.has(rowKey)) {
         return;
@@ -590,8 +598,14 @@ export default function BulkStudentUploadPage() {
         const rightRow = Number(right.rows[0]?.source_row ?? 0);
         return leftRow - rightRow;
       });
-  }, [previewRows, rowUpdates, validationErrors]);
-  const isDuplicateResolutionOpen = !!validationFailure && duplicateResolutionGroups.length > 0;
+  }, [workingPreviewRows, rowUpdates, validationErrors]);
+  const hasPendingDuplicateResolutionChanges = useMemo(
+    () => Object.values(rowUpdates).some((update) => !!update.deleted),
+    [rowUpdates],
+  );
+  const isDuplicateResolutionOpen =
+    !!validationFailure &&
+    (duplicateResolutionGroups.length > 0 || hasPendingDuplicateResolutionChanges);
   const activeDuplicateResolutionGroup = duplicateResolutionGroups[duplicateResolutionIndex] ?? null;
 
   useEffect(() => {
@@ -1019,7 +1033,7 @@ export default function BulkStudentUploadPage() {
                         ))}
                         <li>
                           <span>Rows in Preview</span>
-                          <span className="value">{previewRows.length}</span>
+                          <span className="value">{workingPreviewRows.length}</span>
                         </li>
                       </ul>
                     </div>
@@ -1028,7 +1042,7 @@ export default function BulkStudentUploadPage() {
                     {showingPreviewSubset ? (
                       <div className="alert alert-info">
                         <i className="fas fa-info-circle mr-2" />
-                        Showing the first {previewRows.length} students in the preview out of {totalRows} rows in the CSV.
+                        Showing the first {workingPreviewRows.length} students in the preview out of {totalRows} rows in the CSV.
                         All validated rows will be included when you confirm the upload.
                       </div>
                     ) : null}
@@ -1047,8 +1061,8 @@ export default function BulkStudentUploadPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {previewRows.length ? (
-                            previewRows.map((row, index) => {
+                          {workingPreviewRows.length ? (
+                            workingPreviewRows.map((row, index) => {
                               const rowKey = String(row.source_row ?? index);
                               const hasRowError = errorRowKeys.has(rowKey);
                               const rowClassName = [
@@ -1236,7 +1250,7 @@ export default function BulkStudentUploadPage() {
         </div>
       )}
 
-      {isDuplicateResolutionOpen && activeDuplicateResolutionGroup ? (
+      {isDuplicateResolutionOpen ? (
         <div className="duplicate-resolution-modal">
           <div className="duplicate-resolution-backdrop" />
           <div className="duplicate-resolution-dialog card height-auto">
@@ -1249,73 +1263,81 @@ export default function BulkStudentUploadPage() {
                 </p>
               </div>
 
-              <div className="duplicate-resolution-status">
-                <span>
-                  Duplicate set {duplicateResolutionIndex + 1} of {duplicateResolutionGroups.length}
-                </span>
-              </div>
+              {activeDuplicateResolutionGroup ? (
+                <>
+                  <div className="duplicate-resolution-status">
+                    <span>
+                      Duplicate set {duplicateResolutionIndex + 1} of {duplicateResolutionGroups.length}
+                    </span>
+                  </div>
 
-              <div className="duplicate-resolution-list">
-                {activeDuplicateResolutionGroup.rows.map((row, index) => {
-                  const rowKey = String(row.source_row ?? index);
-                  const isDeleted = !!rowUpdates[rowKey]?.deleted;
+                  <div className="duplicate-resolution-list">
+                    {activeDuplicateResolutionGroup.rows.map((row, index) => {
+                      const rowKey = String(row.source_row ?? index);
+                      const isDeleted = !!rowUpdates[rowKey]?.deleted;
 
-                  return (
-                    <div key={`duplicate-resolution-${rowKey}`} className="duplicate-resolution-item">
-                      <div className="duplicate-resolution-item-header">
-                        <span className="badge badge-danger">CSV Row {row.source_row ?? index + 1}</span>
-                        <span className="duplicate-resolution-name">{row.name ?? "Unnamed Student"}</span>
-                        <button
-                          type="button"
-                          className={`btn-fill-sm ${isDeleted ? "btn-outline-secondary" : "btn-outline-danger"}`}
-                          onClick={() => handleRowDeleteToggle(rowKey, !isDeleted)}
-                        >
-                          {isDeleted ? "Restore row" : "Delete this row"}
-                        </button>
-                      </div>
-                      <div className="row">
-                        <div className="col-md-6 form-group mb-3">
-                          <label className="mb-2">Admission Number</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            value={rowUpdates[rowKey]?.admission_no ?? ""}
-                            disabled={isDeleted}
-                            onChange={(event) =>
-                              handleAdmissionNumberChange(rowKey, event.target.value)
-                            }
-                          />
+                      return (
+                        <div key={`duplicate-resolution-${rowKey}`} className="duplicate-resolution-item">
+                          <div className="duplicate-resolution-item-header">
+                            <span className="badge badge-danger">CSV Row {row.source_row ?? index + 1}</span>
+                            <span className="duplicate-resolution-name">{row.name ?? "Unnamed Student"}</span>
+                            <button
+                              type="button"
+                              className={`btn-fill-sm ${isDeleted ? "btn-outline-secondary" : "btn-outline-danger"}`}
+                              onClick={() => handleRowDeleteToggle(rowKey, !isDeleted)}
+                            >
+                              {isDeleted ? "Restore row" : "Delete this row"}
+                            </button>
+                          </div>
+                          <div className="row">
+                            <div className="col-md-6 form-group mb-3">
+                              <label className="mb-2">Admission Number</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={rowUpdates[rowKey]?.admission_no ?? ""}
+                                disabled={isDeleted}
+                                onChange={(event) =>
+                                  handleAdmissionNumberChange(rowKey, event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="col-md-6 form-group mb-3">
+                              <label className="mb-2">Class</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={[row.class, row.class_arm].filter(Boolean).join(" / ")}
+                                disabled
+                              />
+                            </div>
+                          </div>
+                          {isDeleted ? (
+                            <div className="alert alert-warning mb-0">
+                              This row will be removed from the upload when you click Done.
+                            </div>
+                          ) : null}
                         </div>
-                        <div className="col-md-6 form-group mb-3">
-                          <label className="mb-2">Class</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            value={[row.class, row.class_arm].filter(Boolean).join(" / ")}
-                            disabled
-                          />
-                        </div>
-                      </div>
-                      {isDeleted ? (
-                        <div className="alert alert-warning mb-0">
-                          This row will be removed from the upload when you click Done.
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="alert alert-success mb-4">
+                  All duplicate rows in the CSV have been handled locally. Click Done to revalidate and return to the main upload screen.
+                </div>
+              )}
 
               <div className="duplicate-resolution-actions">
                 <button
                   type="button"
                   className="btn-fill-lg btn-light text-dark"
                   onClick={handleDuplicateResolutionBack}
-                  disabled={duplicateResolutionIndex === 0 || uploading}
+                  disabled={!activeDuplicateResolutionGroup || duplicateResolutionIndex === 0 || uploading}
                 >
                   Back
                 </button>
-                {duplicateResolutionIndex < duplicateResolutionGroups.length - 1 ? (
+                {activeDuplicateResolutionGroup && duplicateResolutionIndex < duplicateResolutionGroups.length - 1 ? (
                   <button
                     type="button"
                     className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
