@@ -73,8 +73,10 @@ export default function BulkStudentUploadPage() {
   const [uploadCompletion, setUploadCompletion] = useState<UploadCompletionState | null>(null);
   const [validationFailure, setValidationFailure] = useState<BulkPreviewFailure | null>(null);
   const [duplicateDecisions, setDuplicateDecisions] = useState<Record<string, DuplicateAction>>({});
+  const [scrollToFeedbackAfterConfirm, setScrollToFeedbackAfterConfirm] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const feedbackRef = useRef<HTMLDivElement | null>(null);
   const previewCardRef = useRef<HTMLDivElement | null>(null);
 
   // Derived state
@@ -168,6 +170,12 @@ export default function BulkStudentUploadPage() {
     if (!uploadCompletion) return;
     previewCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [uploadCompletion]);
+
+  useEffect(() => {
+    if (!scrollToFeedbackAfterConfirm || !feedback) return;
+    feedbackRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setScrollToFeedbackAfterConfirm(false);
+  }, [feedback, scrollToFeedbackAfterConfirm]);
 
   useEffect(() => {
     if (!preview?.rows?.length) {
@@ -362,6 +370,7 @@ export default function BulkStudentUploadPage() {
       return;
     }
     setConfirming(true);
+    setScrollToFeedbackAfterConfirm(false);
     setFeedback({
       type: "info",
       message: "Creating students. This may take a moment...",
@@ -401,11 +410,13 @@ export default function BulkStudentUploadPage() {
         type: "success",
         message: completionMessage,
       });
+      setScrollToFeedbackAfterConfirm(true);
     } catch (error) {
       setFeedback({
         type: "danger",
         message: error instanceof Error ? error.message : "Bulk upload failed. Please retry.",
       });
+      setScrollToFeedbackAfterConfirm(true);
     } finally {
       setConfirming(false);
     }
@@ -646,7 +657,11 @@ export default function BulkStudentUploadPage() {
               ) : (
                 <>
                   {feedback && (
-                    <div className={`alert alert-${feedback.type}`} role="alert">
+                    <div
+                      ref={feedbackRef}
+                      className={`alert alert-${feedback.type}`}
+                      role="alert"
+                    >
                       {feedback.type === "success" && <i className="fas fa-check-circle mr-2" />}
                       {feedback.type === "danger" && <i className="fas fa-exclamation-circle mr-2" />}
                       {feedback.type === "warning" && <i className="fas fa-exclamation-triangle mr-2" />}
