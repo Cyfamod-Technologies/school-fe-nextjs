@@ -107,6 +107,7 @@ export interface BulkPreviewFailure {
   message: string;
   errors: BulkValidationError[];
   errorCsv?: string | null;
+  previewRows?: BulkPreviewRow[];
 }
 
 export type BulkPreviewResult =
@@ -170,6 +171,9 @@ export async function previewStudentBulkUpload(
           ? payload.errors
           : [],
         errorCsv: payload?.error_csv ?? null,
+        previewRows: Array.isArray(payload?.preview_rows)
+          ? (payload.preview_rows as BulkPreviewRow[])
+          : [],
       },
     };
   }

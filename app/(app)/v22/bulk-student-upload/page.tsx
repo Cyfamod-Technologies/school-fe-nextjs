@@ -349,6 +349,18 @@ export default function BulkStudentUploadPage() {
       const result = await previewStudentBulkUpload(selectedFile, params);
       if (!result.ok) {
         setValidationFailure(result.error);
+        setPreview(
+          result.error.previewRows?.length
+            ? {
+                batchId: "",
+                rows: result.error.previewRows,
+                summary: {
+                  total_rows: result.error.previewRows.length,
+                },
+                expiresAt: null,
+              }
+            : null,
+        );
         setFeedback({
           type: "danger",
           message: result.error.message,
@@ -863,7 +875,7 @@ export default function BulkStudentUploadPage() {
                       type="button"
                       className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
                       onClick={() => handleConfirmUpload().catch(() => undefined)}
-                      disabled={confirming}
+                      disabled={confirming || !preview.batchId || !!validationFailure}
                     >
                       {confirming ? (
                         <>
