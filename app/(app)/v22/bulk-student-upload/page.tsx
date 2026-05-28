@@ -1237,15 +1237,11 @@ export default function BulkStudentUploadPage() {
                 <span>
                   Duplicate set {duplicateResolutionIndex + 1} of {duplicateResolutionGroups.length}
                 </span>
-                <strong>Admission No: {activeDuplicateResolutionGroup.admissionNo}</strong>
               </div>
 
               <div className="duplicate-resolution-list">
                 {activeDuplicateResolutionGroup.rows.map((row, index) => {
                   const rowKey = String(row.source_row ?? index);
-                  const rowErrors = validationErrors.filter(
-                    (error) => String(error.row ?? "").trim() === rowKey,
-                  );
 
                   return (
                     <div key={`duplicate-resolution-${rowKey}`} className="duplicate-resolution-item">
@@ -1258,7 +1254,7 @@ export default function BulkStudentUploadPage() {
                           <label className="mb-2">Admission Number</label>
                           <input
                             type="text"
-                            className={`form-control${rowErrors.length ? " is-invalid" : ""}`}
+                            className="form-control"
                             value={rowUpdates[rowKey]?.admission_no ?? ""}
                             onChange={(event) =>
                               handleAdmissionNumberChange(rowKey, event.target.value)
@@ -1275,15 +1271,6 @@ export default function BulkStudentUploadPage() {
                           />
                         </div>
                       </div>
-                      {rowErrors.length ? (
-                        <div className="alert alert-danger mb-0">
-                          {rowErrors.map((error, errorIndex) => (
-                            <div key={`duplicate-row-error-${rowKey}-${errorIndex}`}>
-                              {error.message}
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
                     </div>
                   );
                 })}
