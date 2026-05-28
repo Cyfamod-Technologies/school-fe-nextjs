@@ -66,6 +66,7 @@ export interface BulkUploadParams {
 
 export interface BulkRowUpdate {
   admission_no?: string;
+  deleted?: boolean;
 }
 
 export interface BulkPreviewRow {

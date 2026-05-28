@@ -49,6 +49,7 @@ interface UploadCompletionState {
 
 interface RowUpdateState {
   admission_no?: string;
+  deleted?: boolean;
 }
 
 interface DuplicateResolutionGroup {
@@ -205,6 +206,7 @@ export default function BulkStudentUploadPage() {
         admission_no: row.admission_no && row.admission_no !== "Auto-generated"
           ? String(row.admission_no)
           : "",
+        deleted: false,
       };
       if (!row.duplicate?.id) return;
       const preferred = row.duplicate_action ?? "allow";
@@ -357,8 +359,11 @@ export default function BulkStudentUploadPage() {
       const sanitizedRowUpdates = Object.entries(rowUpdates).reduce<Record<string, BulkRowUpdate>>(
         (accumulator, [rowKey, update]) => {
           const admissionNumber = update.admission_no?.trim() ?? "";
-          if (admissionNumber) {
-            accumulator[rowKey] = { admission_no: admissionNumber };
+          if (admissionNumber || update.deleted) {
+            accumulator[rowKey] = {
+              ...(admissionNumber ? { admission_no: admissionNumber } : {}),
+              ...(update.deleted ? { deleted: true } : {}),
+            };
           }
           return accumulator;
         },
@@ -616,6 +621,17 @@ export default function BulkStudentUploadPage() {
       [rowKey]: {
         ...prev[rowKey],
         admission_no: value,
+        deleted: false,
+      },
+    }));
+  };
+
+  const handleRowDeleteToggle = (rowKey: string, deleted: boolean) => {
+    setRowUpdates((prev) => ({
+      ...prev,
+      [rowKey]: {
+        ...prev[rowKey],
+        deleted,
       },
     }));
   };
@@ -1242,12 +1258,20 @@ export default function BulkStudentUploadPage() {
               <div className="duplicate-resolution-list">
                 {activeDuplicateResolutionGroup.rows.map((row, index) => {
                   const rowKey = String(row.source_row ?? index);
+                  const isDeleted = !!rowUpdates[rowKey]?.deleted;
 
                   return (
                     <div key={`duplicate-resolution-${rowKey}`} className="duplicate-resolution-item">
                       <div className="duplicate-resolution-item-header">
                         <span className="badge badge-danger">CSV Row {row.source_row ?? index + 1}</span>
                         <span className="duplicate-resolution-name">{row.name ?? "Unnamed Student"}</span>
+                        <button
+                          type="button"
+                          className={`btn-fill-sm ${isDeleted ? "btn-outline-secondary" : "btn-outline-danger"}`}
+                          onClick={() => handleRowDeleteToggle(rowKey, !isDeleted)}
+                        >
+                          {isDeleted ? "Restore row" : "Delete this row"}
+                        </button>
                       </div>
                       <div className="row">
                         <div className="col-md-6 form-group mb-3">
@@ -1256,6 +1280,7 @@ export default function BulkStudentUploadPage() {
                             type="text"
                             className="form-control"
                             value={rowUpdates[rowKey]?.admission_no ?? ""}
+                            disabled={isDeleted}
                             onChange={(event) =>
                               handleAdmissionNumberChange(rowKey, event.target.value)
                             }
@@ -1271,6 +1296,11 @@ export default function BulkStudentUploadPage() {
                           />
                         </div>
                       </div>
+                      {isDeleted ? (
+                        <div className="alert alert-warning mb-0">
+                          This row will be removed from the upload when you click Done.
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
