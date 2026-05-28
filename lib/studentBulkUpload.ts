@@ -199,18 +199,50 @@ export interface BulkCommitResult {
   [key: string]: unknown;
 }
 
-type BulkCommitResponsePayload = BulkCommitResult;
+export interface BulkCommitFailure {
+  message: string;
+  errors: BulkValidationError[];
+}
+
+export class BulkCommitError extends Error {
+  errors: BulkValidationError[];
+
+  constructor(message: string, errors: BulkValidationError[] = []) {
+    super(message);
+    this.name = "BulkCommitError";
+    this.errors = errors;
+  }
+}
+
+interface BulkRowUpdate {
+  admission_no?: string;
+}
+
+type BulkCommitResponsePayload = BulkCommitResult & {
+  errors?: BulkValidationError[];
+};
 
 export async function commitStudentBulkUpload(
   batchId: string,
   decisions?: Record<string, "skip" | "overwrite" | "allow">,
+  rowUpdates?: Record<string, BulkRowUpdate>,
 ): Promise<BulkCommitResult> {
   const headers = buildAuthHeaders();
   headers.set("Content-Type", "application/json");
 
-  const body = decisions && Object.keys(decisions).length
-    ? JSON.stringify({ decisions })
-    : undefined;
+  const payload: {
+    decisions?: Record<string, "skip" | "overwrite" | "allow">;
+    row_updates?: Record<string, BulkRowUpdate>;
+  } = {};
+
+  if (decisions && Object.keys(decisions).length) {
+    payload.decisions = decisions;
+  }
+  if (rowUpdates && Object.keys(rowUpdates).length) {
+    payload.row_updates = rowUpdates;
+  }
+
+  const body = Object.keys(payload).length ? JSON.stringify(payload) : undefined;
 
   const response = await fetch(
     `${BACKEND_URL}${API_ROUTES.studentsBulkCommit}/${encodeURIComponent(batchId)}/commit`,
@@ -230,8 +262,9 @@ export async function commitStudentBulkUpload(
   }
 
   if (!response.ok) {
-    throw new Error(
+    throw new BulkCommitError(
       payload?.message ?? `Bulk upload failed (${response.status}).`,
+      Array.isArray(payload?.errors) ? payload.errors : [],
     );
   }
 

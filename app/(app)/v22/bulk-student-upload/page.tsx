@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import {
+  BulkCommitError,
   BulkPreviewFailure,
   BulkPreviewRow,
   BulkPreviewSummary,
@@ -45,6 +46,10 @@ interface UploadCompletionState {
   skipped: number;
 }
 
+interface RowUpdateState {
+  admission_no?: string;
+}
+
 type DuplicateAction = "skip" | "overwrite" | "allow";
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -73,6 +78,7 @@ export default function BulkStudentUploadPage() {
   const [uploadCompletion, setUploadCompletion] = useState<UploadCompletionState | null>(null);
   const [validationFailure, setValidationFailure] = useState<BulkPreviewFailure | null>(null);
   const [duplicateDecisions, setDuplicateDecisions] = useState<Record<string, DuplicateAction>>({});
+  const [rowUpdates, setRowUpdates] = useState<Record<string, RowUpdateState>>({});
   const [scrollToFeedbackAfterConfirm, setScrollToFeedbackAfterConfirm] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -180,13 +186,20 @@ export default function BulkStudentUploadPage() {
   useEffect(() => {
     if (!preview?.rows?.length) {
       setDuplicateDecisions({});
+      setRowUpdates({});
       return;
     }
 
     const initialDecisions: Record<string, DuplicateAction> = {};
+    const initialRowUpdates: Record<string, RowUpdateState> = {};
     preview.rows.forEach((row, index) => {
-      if (!row.duplicate?.id) return;
       const rowKey = String(row.source_row ?? index);
+      initialRowUpdates[rowKey] = {
+        admission_no: row.admission_no && row.admission_no !== "Auto-generated"
+          ? String(row.admission_no)
+          : "",
+      };
+      if (!row.duplicate?.id) return;
       const preferred = row.duplicate_action ?? "allow";
       if (preferred === "allow" || preferred === "overwrite" || preferred === "skip") {
         initialDecisions[rowKey] = preferred;
@@ -195,6 +208,7 @@ export default function BulkStudentUploadPage() {
       }
     });
     setDuplicateDecisions(initialDecisions);
+    setRowUpdates(initialRowUpdates);
   }, [preview?.rows]);
 
   const summaryItems = useMemo(() => {
@@ -214,6 +228,7 @@ export default function BulkStudentUploadPage() {
     setUploadCompletion(null);
     setValidationFailure(null);
     setFeedback(null);
+    setRowUpdates({});
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -377,12 +392,28 @@ export default function BulkStudentUploadPage() {
     });
 
     try {
-      const result = await commitStudentBulkUpload(preview.batchId, duplicateDecisions);
+      const sanitizedRowUpdates = Object.entries(rowUpdates).reduce<Record<string, RowUpdateState>>(
+        (accumulator, [rowKey, update]) => {
+          const admissionNumber = update.admission_no?.trim() ?? "";
+          if (admissionNumber) {
+            accumulator[rowKey] = { admission_no: admissionNumber };
+          }
+          return accumulator;
+        },
+        {},
+      );
+
+      const result = await commitStudentBulkUpload(
+        preview.batchId,
+        duplicateDecisions,
+        sanitizedRowUpdates,
+      );
       // Keep the success message visible instead of clearing feedback immediately.
       setSelectedFile(null);
       setPreview(null);
       setValidationFailure(null);
       setDuplicateDecisions({});
+      setRowUpdates({});
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -412,6 +443,13 @@ export default function BulkStudentUploadPage() {
       });
       setScrollToFeedbackAfterConfirm(true);
     } catch (error) {
+      if (error instanceof BulkCommitError) {
+        setValidationFailure({
+          message: error.message,
+          errors: error.errors,
+          errorCsv: null,
+        });
+      }
       setFeedback({
         type: "danger",
         message: error instanceof Error ? error.message : "Bulk upload failed. Please retry.",
@@ -456,14 +494,36 @@ export default function BulkStudentUploadPage() {
   };
 
   const previewRows = useMemo(() => preview?.rows ?? [], [preview?.rows]);
-  const validationErrors = validationFailure?.errors ?? [];
+  const validationErrors = useMemo(
+    () => validationFailure?.errors ?? [],
+    [validationFailure?.errors],
+  );
   const totalRows = preview?.summary?.total_rows ?? previewRows.length;
   const showingPreviewSubset = totalRows > previewRows.length;
+  const errorRowKeys = useMemo(
+    () =>
+      new Set(
+        validationErrors
+          .map((error) => String(error.row ?? "").trim())
+          .filter(Boolean),
+      ),
+    [validationErrors],
+  );
 
   const handleDuplicateDecisionChange = (rowKey: string, action: DuplicateAction) => {
     setDuplicateDecisions((prev) => ({
       ...prev,
       [rowKey]: action,
+    }));
+  };
+
+  const handleAdmissionNumberChange = (rowKey: string, value: string) => {
+    setRowUpdates((prev) => ({
+      ...prev,
+      [rowKey]: {
+        ...prev[rowKey],
+        admission_no: value,
+      },
     }));
   };
 
@@ -789,7 +849,7 @@ export default function BulkStudentUploadPage() {
                     <div className="step-badge step-badge-success">Step 3</div>
                     <h4>Review & Confirm</h4>
                     <p className="text-muted mb-0">
-                      Review the parsed data below. Click &quot;Confirm Upload&quot; to create all students.
+                      Review the parsed data below. You can edit admission numbers here before clicking &quot;Confirm Upload&quot;.
                     </p>
                   </div>
                   <div className="d-flex align-items-center">
@@ -853,7 +913,7 @@ export default function BulkStudentUploadPage() {
                       <table className="table display text-nowrap bulk-preview-table">
                         <thead>
                           <tr>
-                            <th>#</th>
+                            <th>CSV Row</th>
                             <th>Name</th>
                             <th>Admission No</th>
                             <th>Session</th>
@@ -865,11 +925,31 @@ export default function BulkStudentUploadPage() {
                         </thead>
                         <tbody>
                           {previewRows.length ? (
-                            previewRows.map((row, index) => (
-                              <tr key={`preview-${index}`}>
-                                <td>{index + 1}</td>
+                            previewRows.map((row, index) => {
+                              const rowKey = String(row.source_row ?? index);
+                              const hasRowError = errorRowKeys.has(rowKey);
+
+                              return (
+                              <tr
+                                key={`preview-${index}`}
+                                className={hasRowError ? "preview-row-error" : undefined}
+                              >
+                                <td>{row.source_row ?? index + 1}</td>
                                 <td>{row.name ?? ""}</td>
-                                <td>{row.admission_no ?? ""}</td>
+                                <td>
+                                  <input
+                                    type="text"
+                                    className={`form-control${hasRowError ? " is-invalid" : ""}`}
+                                    value={rowUpdates[rowKey]?.admission_no ?? ""}
+                                    onChange={(event) =>
+                                      handleAdmissionNumberChange(
+                                        rowKey,
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder={row.admission_no === "Auto-generated" ? "Auto-generated" : ""}
+                                  />
+                                </td>
                                 <td>{row.session ?? ""}</td>
                                 <td>
                                   {[row.class, row.class_arm]
@@ -890,10 +970,10 @@ export default function BulkStudentUploadPage() {
                                   {row.duplicate?.id ? (
                                     <select
                                       className="form-control"
-                                      value={duplicateDecisions[String(row.source_row ?? index)] ?? "allow"}
+                                      value={duplicateDecisions[rowKey] ?? "allow"}
                                       onChange={(event) =>
                                         handleDuplicateDecisionChange(
-                                          String(row.source_row ?? index),
+                                          rowKey,
                                           event.target.value as DuplicateAction
                                         )
                                       }
@@ -907,7 +987,7 @@ export default function BulkStudentUploadPage() {
                                   )}
                                 </td>
                               </tr>
-                            ))
+                            )})
                           ) : (
                             <tr>
                               <td colSpan={8} className="text-center text-muted">
@@ -1321,6 +1401,24 @@ export default function BulkStudentUploadPage() {
         .upload-summary-list li .value {
           font-weight: 700;
           color: #6366f1;
+        }
+
+        :global(.bulk-preview-table tbody tr.preview-row-error) {
+          background: #fef2f2;
+        }
+
+        :global(.bulk-preview-table tbody tr.preview-row-error td) {
+          border-color: #fecaca;
+        }
+
+        :global(.bulk-preview-table tbody tr.preview-row-error td:first-child) {
+          color: #b91c1c;
+          font-weight: 700;
+        }
+
+        :global(.bulk-preview-table .form-control.is-invalid) {
+          border-color: #dc2626;
+          background: #fff5f5;
         }
 
         .bulk-upload-steps {
