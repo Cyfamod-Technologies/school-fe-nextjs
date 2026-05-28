@@ -179,11 +179,11 @@ export default function BulkStudentUploadPage() {
     preview.rows.forEach((row, index) => {
       if (!row.duplicate?.id) return;
       const rowKey = String(row.source_row ?? index);
-      const preferred = row.duplicate_action ?? "skip";
+      const preferred = row.duplicate_action ?? "allow";
       if (preferred === "allow" || preferred === "overwrite" || preferred === "skip") {
         initialDecisions[rowKey] = preferred;
       } else {
-        initialDecisions[rowKey] = "skip";
+        initialDecisions[rowKey] = "allow";
       }
     });
     setDuplicateDecisions(initialDecisions);
@@ -875,7 +875,7 @@ export default function BulkStudentUploadPage() {
                                   {row.duplicate?.id ? (
                                     <select
                                       className="form-control"
-                                      value={duplicateDecisions[String(row.source_row ?? index)] ?? "skip"}
+                                      value={duplicateDecisions[String(row.source_row ?? index)] ?? "allow"}
                                       onChange={(event) =>
                                         handleDuplicateDecisionChange(
                                           String(row.source_row ?? index),
