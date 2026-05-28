@@ -37,6 +37,14 @@ interface PreviewState {
   expiresAt: string | null;
 }
 
+interface UploadCompletionState {
+  message: string;
+  totalProcessed: number;
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
 type DuplicateAction = "skip" | "overwrite" | "allow";
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -62,6 +70,7 @@ export default function BulkStudentUploadPage() {
   const [uploading, setUploading] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [uploadCompletion, setUploadCompletion] = useState<UploadCompletionState | null>(null);
   const [validationFailure, setValidationFailure] = useState<BulkPreviewFailure | null>(null);
   const [duplicateDecisions, setDuplicateDecisions] = useState<Record<string, DuplicateAction>>({});
 
@@ -72,10 +81,10 @@ export default function BulkStudentUploadPage() {
   const canDownloadTemplate = !!selectedSessionId && !!selectedClassId;
   const currentStep = useMemo(() => {
     if (!canDownloadTemplate) return 1;
-    if (!selectedFile && !preview) return 2;
-    if (preview) return 3;
+    if (preview || uploadCompletion) return 3;
+    if (!selectedFile) return 2;
     return 2;
-  }, [canDownloadTemplate, selectedFile, preview]);
+  }, [canDownloadTemplate, preview, selectedFile, uploadCompletion]);
 
   const selectedSession = useMemo(
     () => sessions.find((s) => String(s.id) === selectedSessionId),
@@ -156,6 +165,11 @@ export default function BulkStudentUploadPage() {
   }, [preview]);
 
   useEffect(() => {
+    if (!uploadCompletion) return;
+    previewCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [uploadCompletion]);
+
+  useEffect(() => {
     if (!preview?.rows?.length) {
       setDuplicateDecisions({});
       return;
@@ -189,6 +203,7 @@ export default function BulkStudentUploadPage() {
   const resetUploadState = useCallback(() => {
     setSelectedFile(null);
     setPreview(null);
+    setUploadCompletion(null);
     setValidationFailure(null);
     setFeedback(null);
     if (fileInputRef.current) {
@@ -252,6 +267,7 @@ export default function BulkStudentUploadPage() {
       return;
     }
     setSelectedFile(file);
+    setUploadCompletion(null);
     setFeedback({
       type: "info",
       message: 'File selected. Click "Upload & Preview" to validate.',
@@ -301,6 +317,7 @@ export default function BulkStudentUploadPage() {
       type: "info",
       message: "Validating file. Please wait...",
     });
+    setUploadCompletion(null);
     setValidationFailure(null);
     setPreview(null);
 
@@ -363,6 +380,7 @@ export default function BulkStudentUploadPage() {
       const created = result.summary?.created ?? 0;
       const updated = result.summary?.updated ?? 0;
       const skipped = result.summary?.skipped ?? 0;
+      const totalProcessed = result.summary?.total_processed ?? created + updated + skipped;
       const summaryText = [
         created ? `${created} created` : null,
         updated ? `${updated} updated` : null,
@@ -370,9 +388,18 @@ export default function BulkStudentUploadPage() {
       ]
         .filter(Boolean)
         .join(", ");
+      const completionMessage =
+        result.message ?? `Upload complete! ${summaryText || `${totalProcessed} processed`}.`;
+      setUploadCompletion({
+        message: completionMessage,
+        totalProcessed,
+        created,
+        updated,
+        skipped,
+      });
       setFeedback({
         type: "success",
-        message: result.message ?? `Upload complete! ${summaryText || `${result.summary?.total_processed ?? 0} processed`}.`,
+        message: completionMessage,
       });
     } catch (error) {
       setFeedback({
@@ -419,6 +446,8 @@ export default function BulkStudentUploadPage() {
 
   const previewRows = useMemo(() => preview?.rows ?? [], [preview?.rows]);
   const validationErrors = validationFailure?.errors ?? [];
+  const totalRows = preview?.summary?.total_rows ?? previewRows.length;
+  const showingPreviewSubset = totalRows > previewRows.length;
 
   const handleDuplicateDecisionChange = (rowKey: string, action: DuplicateAction) => {
     setDuplicateDecisions((prev) => ({
@@ -735,134 +764,193 @@ export default function BulkStudentUploadPage() {
       </div>
 
       {/* Step 3: Preview Card */}
-      {preview && (
+      {(preview || uploadCompletion) && (
         <div ref={previewCardRef} id="bulk-preview-card" className="card height-auto mb-4">
           <div className="card-body">
-            <div className="step-card-header d-flex justify-content-between align-items-start">
-              <div>
-                <div className="step-badge step-badge-success">Step 3</div>
-                <h4>Review & Confirm</h4>
-                <p className="text-muted mb-0">
-                  Review the parsed data below. Click &quot;Confirm Upload&quot; to create all students.
-                </p>
-              </div>
-              <div className="d-flex align-items-center">
-                {preview.expiresAt && (
-                  <span className="text-muted small mr-3">
-                    <i className="fas fa-clock mr-1" />
-                    Expires: {formatDateTime(preview.expiresAt)}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                  onClick={() => handleConfirmUpload().catch(() => undefined)}
-                  disabled={confirming}
-                >
-                  {confirming ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <i className="fas fa-check mr-2" />
-                      Confirm Upload
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <div className="row mt-4">
-              <div className="col-lg-3">
-                <div className="upload-summary-card">
-                  <h5>
-                    <i className="fas fa-chart-bar mr-2" />
-                    Upload Summary
-                  </h5>
-                  <ul className="upload-summary-list">
-                    {summaryItems.map((item) => (
-                      <li key={item.label}>
-                        <span>{item.label}</span>
-                        <span className="value">{item.value}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-              <div className="col-lg-9">
-                <div className="table-responsive">
-                  <table className="table display text-nowrap bulk-preview-table">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Name</th>
-                        <th>Admission No</th>
-                        <th>Session</th>
-                        <th>Class</th>
-                        <th>Parent Email</th>
-                        <th>Duplicate</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {previewRows.length ? (
-                        previewRows.map((row, index) => (
-                          <tr key={`preview-${index}`}>
-                            <td>{index + 1}</td>
-                            <td>{row.name ?? ""}</td>
-                            <td>{row.admission_no ?? ""}</td>
-                            <td>{row.session ?? ""}</td>
-                            <td>
-                              {[row.class, row.class_arm]
-                                .filter(Boolean)
-                                .join(" / ")}
-                            </td>
-                            <td>{row.parent_email ?? ""}</td>
-                            <td>
-                              {row.duplicate?.id ? (
-                                <span className="badge badge-warning">
-                                  Duplicate
-                                </span>
-                              ) : (
-                                <span className="badge badge-success">New</span>
-                              )}
-                            </td>
-                            <td>
-                              {row.duplicate?.id ? (
-                                <select
-                                  className="form-control"
-                                  value={duplicateDecisions[String(row.source_row ?? index)] ?? "skip"}
-                                  onChange={(event) =>
-                                    handleDuplicateDecisionChange(
-                                      String(row.source_row ?? index),
-                                      event.target.value as DuplicateAction
-                                    )
-                                  }
-                                >
-                                  <option value="skip">Skip</option>
-                                  <option value="overwrite">Overwrite</option>
-                                  <option value="allow">Allow duplicate</option>
-                                </select>
-                              ) : (
-                                <span className="text-muted small">Create</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))
+            {preview ? (
+              <>
+                <div className="step-card-header d-flex justify-content-between align-items-start">
+                  <div>
+                    <div className="step-badge step-badge-success">Step 3</div>
+                    <h4>Review & Confirm</h4>
+                    <p className="text-muted mb-0">
+                      Review the parsed data below. Click &quot;Confirm Upload&quot; to create all students.
+                    </p>
+                  </div>
+                  <div className="d-flex align-items-center">
+                    {preview.expiresAt && (
+                      <span className="text-muted small mr-3">
+                        <i className="fas fa-clock mr-1" />
+                        Expires: {formatDateTime(preview.expiresAt)}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                      onClick={() => handleConfirmUpload().catch(() => undefined)}
+                      disabled={confirming}
+                    >
+                      {confirming ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true" />
+                          Processing...
+                        </>
                       ) : (
-                        <tr>
-                          <td colSpan={8} className="text-center text-muted">
-                            No preview rows available.
-                          </td>
-                        </tr>
+                        <>
+                          <i className="fas fa-check mr-2" />
+                          Confirm Upload
+                        </>
                       )}
-                    </tbody>
-                  </table>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </div>
+
+                <div className="row mt-4">
+                  <div className="col-lg-3">
+                    <div className="upload-summary-card">
+                      <h5>
+                        <i className="fas fa-chart-bar mr-2" />
+                        Upload Summary
+                      </h5>
+                      <ul className="upload-summary-list">
+                        {summaryItems.map((item) => (
+                          <li key={item.label}>
+                            <span>{item.label}</span>
+                            <span className="value">{item.value}</span>
+                          </li>
+                        ))}
+                        <li>
+                          <span>Rows in Preview</span>
+                          <span className="value">{previewRows.length}</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div className="col-lg-9">
+                    {showingPreviewSubset ? (
+                      <div className="alert alert-info">
+                        <i className="fas fa-info-circle mr-2" />
+                        Showing the first {previewRows.length} students in the preview out of {totalRows} rows in the CSV.
+                        All validated rows will be included when you confirm the upload.
+                      </div>
+                    ) : null}
+                    <div className="table-responsive">
+                      <table className="table display text-nowrap bulk-preview-table">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Admission No</th>
+                            <th>Session</th>
+                            <th>Class</th>
+                            <th>Parent Email</th>
+                            <th>Duplicate</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {previewRows.length ? (
+                            previewRows.map((row, index) => (
+                              <tr key={`preview-${index}`}>
+                                <td>{index + 1}</td>
+                                <td>{row.name ?? ""}</td>
+                                <td>{row.admission_no ?? ""}</td>
+                                <td>{row.session ?? ""}</td>
+                                <td>
+                                  {[row.class, row.class_arm]
+                                    .filter(Boolean)
+                                    .join(" / ")}
+                                </td>
+                                <td>{row.parent_email ?? ""}</td>
+                                <td>
+                                  {row.duplicate?.id ? (
+                                    <span className="badge badge-warning">
+                                      Duplicate
+                                    </span>
+                                  ) : (
+                                    <span className="badge badge-success">New</span>
+                                  )}
+                                </td>
+                                <td>
+                                  {row.duplicate?.id ? (
+                                    <select
+                                      className="form-control"
+                                      value={duplicateDecisions[String(row.source_row ?? index)] ?? "skip"}
+                                      onChange={(event) =>
+                                        handleDuplicateDecisionChange(
+                                          String(row.source_row ?? index),
+                                          event.target.value as DuplicateAction
+                                        )
+                                      }
+                                    >
+                                      <option value="skip">Skip</option>
+                                      <option value="overwrite">Overwrite</option>
+                                      <option value="allow">Allow duplicate</option>
+                                    </select>
+                                  ) : (
+                                    <span className="text-muted small">Create</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={8} className="text-center text-muted">
+                                No preview rows available.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : uploadCompletion ? (
+              <>
+                <div className="step-card-header">
+                  <div className="step-badge step-badge-success">Completed</div>
+                  <h4>Upload Result</h4>
+                  <p className="text-muted mb-0">
+                    The upload request finished. Review the result summary below.
+                  </p>
+                </div>
+
+                <div className="alert alert-success mt-4" role="alert">
+                  <i className="fas fa-check-circle mr-2" />
+                  {uploadCompletion.message}
+                </div>
+
+                <div className="row mt-4">
+                  <div className="col-lg-3">
+                    <div className="upload-summary-card">
+                      <h5>
+                        <i className="fas fa-chart-bar mr-2" />
+                        Result Summary
+                      </h5>
+                      <ul className="upload-summary-list">
+                        <li>
+                          <span>Total Processed</span>
+                          <span className="value">{uploadCompletion.totalProcessed}</span>
+                        </li>
+                        <li>
+                          <span>Created</span>
+                          <span className="value">{uploadCompletion.created}</span>
+                        </li>
+                        <li>
+                          <span>Updated</span>
+                          <span className="value">{uploadCompletion.updated}</span>
+                        </li>
+                        <li>
+                          <span>Skipped</span>
+                          <span className="value">{uploadCompletion.skipped}</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       )}
