@@ -14,6 +14,7 @@ import {
   BulkPreviewFailure,
   BulkPreviewRow,
   BulkPreviewSummary,
+  BulkRowUpdate,
   previewStudentBulkUpload,
   downloadStudentTemplate,
   commitStudentBulkUpload,
@@ -50,6 +51,11 @@ interface RowUpdateState {
   admission_no?: string;
 }
 
+interface DuplicateResolutionGroup {
+  admissionNo: string;
+  rows: BulkPreviewRow[];
+}
+
 type DuplicateAction = "skip" | "overwrite" | "allow";
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -79,6 +85,7 @@ export default function BulkStudentUploadPage() {
   const [validationFailure, setValidationFailure] = useState<BulkPreviewFailure | null>(null);
   const [duplicateDecisions, setDuplicateDecisions] = useState<Record<string, DuplicateAction>>({});
   const [rowUpdates, setRowUpdates] = useState<Record<string, RowUpdateState>>({});
+  const [duplicateResolutionIndex, setDuplicateResolutionIndex] = useState(0);
   const [scrollToFeedbackAfterConfirm, setScrollToFeedbackAfterConfirm] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -229,6 +236,7 @@ export default function BulkStudentUploadPage() {
     setValidationFailure(null);
     setFeedback(null);
     setRowUpdates({});
+    setDuplicateResolutionIndex(0);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -346,7 +354,17 @@ export default function BulkStudentUploadPage() {
 
     try {
       const params = getUploadParams();
-      const result = await previewStudentBulkUpload(selectedFile, params);
+      const sanitizedRowUpdates = Object.entries(rowUpdates).reduce<Record<string, BulkRowUpdate>>(
+        (accumulator, [rowKey, update]) => {
+          const admissionNumber = update.admission_no?.trim() ?? "";
+          if (admissionNumber) {
+            accumulator[rowKey] = { admission_no: admissionNumber };
+          }
+          return accumulator;
+        },
+        {},
+      );
+      const result = await previewStudentBulkUpload(selectedFile, params, sanitizedRowUpdates);
       if (!result.ok) {
         setValidationFailure(result.error);
         setPreview(
@@ -521,11 +539,30 @@ export default function BulkStudentUploadPage() {
       ),
     [validationErrors],
   );
-  const duplicateAdmissionGroupByRowKey = useMemo(() => {
-    const grouped = new Map<string, string[]>();
+  const duplicateResolutionGroups = useMemo<DuplicateResolutionGroup[]>(() => {
+    const duplicateErrorRows = new Set(
+      validationErrors
+        .filter(
+          (error) =>
+            String(error.column ?? "").trim().toLowerCase() === "admission number" &&
+            String(error.message ?? "").toLowerCase().includes("two students with admission number"),
+        )
+        .map((error) => String(error.row ?? "").trim())
+        .filter(Boolean),
+    );
+
+    if (!duplicateErrorRows.size) {
+      return [];
+    }
+
+    const grouped = new Map<string, BulkPreviewRow[]>();
 
     previewRows.forEach((row, index) => {
       const rowKey = String(row.source_row ?? index);
+      if (!duplicateErrorRows.has(rowKey)) {
+        return;
+      }
+
       const admissionNo = (rowUpdates[rowKey]?.admission_no ?? row.admission_no ?? "")
         .toString()
         .trim();
@@ -536,25 +573,35 @@ export default function BulkStudentUploadPage() {
 
       const normalizedAdmissionNo = admissionNo.toLowerCase();
       const currentRows = grouped.get(normalizedAdmissionNo) ?? [];
-      currentRows.push(rowKey);
+      currentRows.push(row);
       grouped.set(normalizedAdmissionNo, currentRows);
     });
 
-    const rowGroupMap = new Map<string, string>();
-    let paletteIndex = 0;
+    return Array.from(grouped.entries())
+      .filter(([, rows]) => rows.length > 1)
+      .map(([admissionNo, rows]) => ({ admissionNo, rows }))
+      .sort((left, right) => {
+        const leftRow = Number(left.rows[0]?.source_row ?? 0);
+        const rightRow = Number(right.rows[0]?.source_row ?? 0);
+        return leftRow - rightRow;
+      });
+  }, [previewRows, rowUpdates, validationErrors]);
+  const isDuplicateResolutionOpen = !!validationFailure && duplicateResolutionGroups.length > 0;
+  const activeDuplicateResolutionGroup = duplicateResolutionGroups[duplicateResolutionIndex] ?? null;
 
-    grouped.forEach((rowKeys) => {
-      if (rowKeys.length < 2) {
-        return;
+  useEffect(() => {
+    if (!isDuplicateResolutionOpen) {
+      setDuplicateResolutionIndex(0);
+      return;
+    }
+
+    setDuplicateResolutionIndex((current) => {
+      if (current < duplicateResolutionGroups.length) {
+        return current;
       }
-
-      const groupClass = `preview-row-duplicate-group-${paletteIndex % 4}`;
-      paletteIndex += 1;
-      rowKeys.forEach((rowKey) => rowGroupMap.set(rowKey, groupClass));
+      return 0;
     });
-
-    return rowGroupMap;
-  }, [previewRows, rowUpdates]);
+  }, [duplicateResolutionGroups.length, isDuplicateResolutionOpen]);
 
   const handleDuplicateDecisionChange = (rowKey: string, action: DuplicateAction) => {
     setDuplicateDecisions((prev) => ({
@@ -571,6 +618,20 @@ export default function BulkStudentUploadPage() {
         admission_no: value,
       },
     }));
+  };
+
+  const handleDuplicateResolutionBack = () => {
+    setDuplicateResolutionIndex((current) => Math.max(0, current - 1));
+  };
+
+  const handleDuplicateResolutionNext = () => {
+    setDuplicateResolutionIndex((current) =>
+      Math.min(duplicateResolutionGroups.length - 1, current + 1),
+    );
+  };
+
+  const handleDuplicateResolutionDone = async () => {
+    await handleUploadPreview();
   };
 
   return (
@@ -974,10 +1035,8 @@ export default function BulkStudentUploadPage() {
                             previewRows.map((row, index) => {
                               const rowKey = String(row.source_row ?? index);
                               const hasRowError = errorRowKeys.has(rowKey);
-                              const duplicateGroupClass = duplicateAdmissionGroupByRowKey.get(rowKey);
                               const rowClassName = [
                                 hasRowError ? "preview-row-error" : "",
-                                duplicateGroupClass ?? "",
                               ]
                                 .filter(Boolean)
                                 .join(" ");
@@ -1160,6 +1219,116 @@ export default function BulkStudentUploadPage() {
           </div>
         </div>
       )}
+
+      {isDuplicateResolutionOpen && activeDuplicateResolutionGroup ? (
+        <div className="duplicate-resolution-modal">
+          <div className="duplicate-resolution-backdrop" />
+          <div className="duplicate-resolution-dialog card height-auto">
+            <div className="card-body">
+              <div className="step-card-header">
+                <div className="step-badge">Resolve Duplicates</div>
+                <h4>Duplicate Admission Number in CSV</h4>
+                <p className="text-muted mb-0">
+                  Review this duplicate group and edit the admission numbers before continuing.
+                </p>
+              </div>
+
+              <div className="duplicate-resolution-status">
+                <span>
+                  Duplicate set {duplicateResolutionIndex + 1} of {duplicateResolutionGroups.length}
+                </span>
+                <strong>Admission No: {activeDuplicateResolutionGroup.admissionNo}</strong>
+              </div>
+
+              <div className="duplicate-resolution-list">
+                {activeDuplicateResolutionGroup.rows.map((row, index) => {
+                  const rowKey = String(row.source_row ?? index);
+                  const rowErrors = validationErrors.filter(
+                    (error) => String(error.row ?? "").trim() === rowKey,
+                  );
+
+                  return (
+                    <div key={`duplicate-resolution-${rowKey}`} className="duplicate-resolution-item">
+                      <div className="duplicate-resolution-item-header">
+                        <span className="badge badge-danger">CSV Row {row.source_row ?? index + 1}</span>
+                        <span className="duplicate-resolution-name">{row.name ?? "Unnamed Student"}</span>
+                      </div>
+                      <div className="row">
+                        <div className="col-md-6 form-group mb-3">
+                          <label className="mb-2">Admission Number</label>
+                          <input
+                            type="text"
+                            className={`form-control${rowErrors.length ? " is-invalid" : ""}`}
+                            value={rowUpdates[rowKey]?.admission_no ?? ""}
+                            onChange={(event) =>
+                              handleAdmissionNumberChange(rowKey, event.target.value)
+                            }
+                          />
+                        </div>
+                        <div className="col-md-6 form-group mb-3">
+                          <label className="mb-2">Class</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={[row.class, row.class_arm].filter(Boolean).join(" / ")}
+                            disabled
+                          />
+                        </div>
+                      </div>
+                      {rowErrors.length ? (
+                        <div className="alert alert-danger mb-0">
+                          {rowErrors.map((error, errorIndex) => (
+                            <div key={`duplicate-row-error-${rowKey}-${errorIndex}`}>
+                              {error.message}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="duplicate-resolution-actions">
+                <button
+                  type="button"
+                  className="btn-fill-lg btn-light text-dark"
+                  onClick={handleDuplicateResolutionBack}
+                  disabled={duplicateResolutionIndex === 0 || uploading}
+                >
+                  Back
+                </button>
+                {duplicateResolutionIndex < duplicateResolutionGroups.length - 1 ? (
+                  <button
+                    type="button"
+                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                    onClick={handleDuplicateResolutionNext}
+                    disabled={uploading}
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                    onClick={() => handleDuplicateResolutionDone().catch(() => undefined)}
+                    disabled={uploading}
+                  >
+                    {uploading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true" />
+                        Revalidating...
+                      </>
+                    ) : (
+                      "Done"
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <style jsx>{`
         .bulk-upload-progress {
@@ -1469,41 +1638,80 @@ export default function BulkStudentUploadPage() {
           font-weight: 700;
         }
 
-        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-0) {
-          background: #fff7ed;
-        }
-
-        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-0 td) {
-          border-color: #fdba74;
-        }
-
-        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-1) {
-          background: #eff6ff;
-        }
-
-        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-1 td) {
-          border-color: #93c5fd;
-        }
-
-        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-2) {
-          background: #f0fdf4;
-        }
-
-        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-2 td) {
-          border-color: #86efac;
-        }
-
-        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-3) {
-          background: #faf5ff;
-        }
-
-        :global(.bulk-preview-table tbody tr.preview-row-duplicate-group-3 td) {
-          border-color: #d8b4fe;
-        }
-
         :global(.bulk-preview-table .form-control.is-invalid) {
           border-color: #dc2626;
           background: #fff5f5;
+        }
+
+        .duplicate-resolution-modal {
+          position: fixed;
+          inset: 0;
+          z-index: 1200;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 1.5rem;
+        }
+
+        .duplicate-resolution-backdrop {
+          position: absolute;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.55);
+        }
+
+        .duplicate-resolution-dialog {
+          position: relative;
+          width: min(920px, 100%);
+          max-height: calc(100vh - 3rem);
+          overflow-y: auto;
+          z-index: 1;
+          border-radius: 16px;
+          box-shadow: 0 20px 60px rgba(15, 23, 42, 0.22);
+        }
+
+        .duplicate-resolution-status {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 1rem;
+          padding: 1rem 1.25rem;
+          border-radius: 12px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          margin-bottom: 1rem;
+        }
+
+        .duplicate-resolution-list {
+          display: grid;
+          gap: 1rem;
+        }
+
+        .duplicate-resolution-item {
+          border: 1px solid #fecaca;
+          border-radius: 14px;
+          padding: 1rem;
+          background: #fff7f7;
+        }
+
+        .duplicate-resolution-item-header {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          margin-bottom: 1rem;
+          flex-wrap: wrap;
+        }
+
+        .duplicate-resolution-name {
+          font-size: 1rem;
+          font-weight: 700;
+          color: #7f1d1d;
+        }
+
+        .duplicate-resolution-actions {
+          margin-top: 1.5rem;
+          display: flex;
+          justify-content: space-between;
+          gap: 1rem;
         }
 
         .bulk-upload-steps {

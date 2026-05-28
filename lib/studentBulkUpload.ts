@@ -64,6 +64,10 @@ export interface BulkUploadParams {
   class_arm_id?: string | number;
 }
 
+export interface BulkRowUpdate {
+  admission_no?: string;
+}
+
 export interface BulkPreviewRow {
   name?: string | null;
   admission_no?: string | null;
@@ -127,6 +131,7 @@ interface BulkPreviewResponsePayload {
 export async function previewStudentBulkUpload(
   file: File,
   params?: BulkUploadParams,
+  rowUpdates?: Record<string, BulkRowUpdate>,
 ): Promise<BulkPreviewResult> {
   const formData = new FormData();
   formData.append("file", file);
@@ -140,6 +145,9 @@ export async function previewStudentBulkUpload(
   }
   if (params?.class_arm_id) {
     formData.append("class_arm_id", String(params.class_arm_id));
+  }
+  if (rowUpdates && Object.keys(rowUpdates).length) {
+    formData.append("row_updates", JSON.stringify(rowUpdates));
   }
 
   const headers = buildAuthHeaders();
@@ -216,10 +224,6 @@ export class BulkCommitError extends Error {
     this.name = "BulkCommitError";
     this.errors = errors;
   }
-}
-
-interface BulkRowUpdate {
-  admission_no?: string;
 }
 
 type BulkCommitResponsePayload = BulkCommitResult & {
