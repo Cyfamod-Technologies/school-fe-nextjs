@@ -22,7 +22,7 @@ const formatLabel = (label: string | null | undefined): string =>
   label && label.trim().length > 0 ? label : "Not specified";
 
 export default function StaffDashboardPage() {
-  const { user, hasPermission } = useAuth();
+  const { user } = useAuth();
   const [data, setData] = useState<TeacherDashboardResponse | null>(null);
   const [schoolContext, setSchoolContext] = useState<SchoolContext | null>(null);
   const [loading, setLoading] = useState(true);
@@ -169,6 +169,27 @@ export default function StaffDashboardPage() {
               </div>
             </div>
           ) : null}
+
+          <div className="row mb-4">
+            <div className="col-12">
+              <div className="card height-auto">
+                <div className="card-body d-flex flex-wrap align-items-center justify-content-between">
+                  <div className="mb-2 mb-md-0">
+                    <h4 className="mb-1">Student Management</h4>
+                    <p className="text-muted mb-0">
+                      Register a new student directly from the teacher dashboard.
+                    </p>
+                  </div>
+                  <Link
+                    href="/v14/add-student"
+                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                  >
+                    Add Student
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div className="row">
             {summaryCards.map((card, index) => (
