@@ -26,8 +26,6 @@ import {
   type StudentSummary,
 } from "@/lib/students";
 import { resolveBackendUrl } from "@/lib/config";
-import { listSubjectAssignments } from "@/lib/subjectAssignments";
-import { exportBroadsheet } from "@/lib/broadsheetExport";
 import { isTeacherUser } from "@/lib/roleChecks";
 import {
   listAssessmentComponents,
@@ -555,10 +553,26 @@ export default function AllStudentsPage() {
   const handleExportBroadsheet = useCallback(async () => {
     if (exportingBroadsheet) return;
 
+    if (!filters.current_session_id) {
+      setBulkFeedback({
+        type: "warning",
+        message: "Please select a Session before printing the broadsheet.",
+      });
+      return;
+    }
+
+    if (!filters.term_id) {
+      setBulkFeedback({
+        type: "warning",
+        message: "Please select a Term before printing the broadsheet.",
+      });
+      return;
+    }
+
     if (!filters.school_class_id) {
       setBulkFeedback({
         type: "warning",
-        message: "Please select a Class before exporting the broadsheet.",
+        message: "Please select a Class before printing the broadsheet.",
       });
       return;
     }
@@ -566,49 +580,35 @@ export default function AllStudentsPage() {
     setExportingBroadsheet(true);
     setBulkFeedback(null);
     try {
-      // Fetch subjects and all students in parallel
-      const [subjectResponse, allStudents] = await Promise.all([
-        listSubjectAssignments({
-          school_class_id: filters.school_class_id,
-          class_arm_id: filters.class_arm_id || undefined,
-          per_page: 200,
-        }),
-        fetchAllStudentsForExport(),
-      ]);
+      const printUrl = new URL("/v14/print-broadsheet", window.location.origin);
+      printUrl.searchParams.set("session_id", filters.current_session_id);
+      printUrl.searchParams.set("term_id", filters.term_id);
+      printUrl.searchParams.set("school_class_id", filters.school_class_id);
+      printUrl.searchParams.set("autoprint", "1");
 
-      const subjects = (subjectResponse.data ?? [])
-        .map((a) => a.subject)
-        .filter((s): s is NonNullable<typeof s> => Boolean(s?.id && s?.name))
-        .filter((s, i, arr) => arr.findIndex((x) => x.id === s.id) === i);
-
-      if (allStudents.length === 0) {
-        setBulkFeedback({ type: "warning", message: "No students found for the selected filters." });
-        return;
+      if (filters.class_arm_id) {
+        printUrl.searchParams.set("class_arm_id", filters.class_arm_id);
       }
 
-      let filename = "broadsheet";
-      const selectedClass = classes.find((c) => String(c.id) === String(filters.school_class_id));
-      if (selectedClass) filename += `_${selectedClass.name}`;
-      const selectedArm = classArms.find((a) => String(a.id) === String(filters.class_arm_id));
-      if (selectedArm) filename += `_${selectedArm.name}`;
-      const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-      filename += `_${timestamp}.csv`;
+      const printWindow = window.open(printUrl.toString(), "_blank");
 
-      exportBroadsheet(allStudents, subjects, filename);
+      if (!printWindow) {
+        throw new Error("Unable to open broadsheet window. Please allow pop-ups for this site.");
+      }
 
       setBulkFeedback({
         type: "success",
-        message: `Broadsheet exported with ${allStudents.length} student(s) and ${subjects.length} subject(s).`,
+        message: "Printable broadsheet opened successfully.",
       });
     } catch (err) {
       setBulkFeedback({
         type: "danger",
-        message: err instanceof Error ? err.message : "Unable to export broadsheet.",
+        message: err instanceof Error ? err.message : "Unable to print broadsheet.",
       });
     } finally {
       setExportingBroadsheet(false);
     }
-  }, [exportingBroadsheet, filters, fetchAllStudentsForExport, classes, classArms]);
+  }, [exportingBroadsheet, filters]);
 
   return (
     <>
@@ -831,11 +831,11 @@ export default function AllStudentsPage() {
                   className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
                   onClick={handleExportBroadsheet}
                   disabled={exportingBroadsheet || !filters.school_class_id}
-                  title={!filters.school_class_id ? "Select a Class to export" : "Export broadsheet for selected class"}
+                  title={!filters.school_class_id ? "Select a Class to print" : "Print broadsheet for selected class"}
                 >
                   {exportingBroadsheet
                     ? "Opening…"
-                    : `Export Broadsheet${data?.total ? ` (${data.total})` : ""}`}
+                    : `Print Broadsheet${data?.total ? ` (${data.total})` : ""}`}
                 </button>
                 {!isTeacher ? (
                   <PermissionGate permission={PERMISSIONS.STUDENTS_DELETE}>
