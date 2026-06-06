@@ -43,6 +43,14 @@ export interface SubjectTeacherAssignmentListResponse {
   [key: string]: unknown;
 }
 
+export interface SubjectTeacherAssignmentCreateResponse {
+  message: string;
+  data: SubjectTeacherAssignment | SubjectTeacherAssignment[];
+  created_count?: number;
+  skipped_count?: number;
+  skipped_subject_ids?: string[];
+}
+
 export interface SubjectTeacherFilters {
   page?: number;
   per_page?: number;
@@ -97,7 +105,8 @@ export async function listSubjectTeacherAssignments(
 }
 
 type AssignmentMutationPayload = {
-  subject_id: string | number;
+  subject_id?: string | number;
+  subject_ids?: Array<string | number>;
   staff_id: string | number;
   session_id: string | number;
   term_id: string | number;
@@ -109,10 +118,10 @@ type AssignmentMutationPayload = {
 
 export async function createSubjectTeacherAssignment(
   payload: AssignmentMutationPayload,
-): Promise<SubjectTeacherAssignment> {
+): Promise<SubjectTeacherAssignmentCreateResponse> {
   const sanitizedPayload = { ...payload };
   delete sanitizedPayload.class_section_id;
-  return apiFetch<SubjectTeacherAssignment>(API_ROUTES.subjectTeacherAssignments, {
+  return apiFetch<SubjectTeacherAssignmentCreateResponse>(API_ROUTES.subjectTeacherAssignments, {
     method: "POST",
     body: JSON.stringify(sanitizedPayload),
   });

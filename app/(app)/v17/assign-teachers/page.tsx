@@ -30,7 +30,7 @@ import {
 } from "@/lib/students";
 
 interface AssignmentForm {
-  subject_id: string;
+  subjectIds: string[];
   staff_id: string;
   session_id: string;
   term_id: string;
@@ -41,7 +41,7 @@ interface AssignmentForm {
 }
 
 const initialForm: AssignmentForm = {
-  subject_id: "",
+  subjectIds: [],
   staff_id: "",
   session_id: "",
   term_id: "",
@@ -107,6 +107,11 @@ export default function AssignTeachersPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const selectedSubjectSet = useMemo(
+    () => new Set(form.subjectIds),
+    [form.subjectIds],
+  );
 
   const ensureTerms = useCallback(
     async (sessionId: string) => {
@@ -318,6 +323,32 @@ export default function AssignTeachersPage() {
     );
   }, [filteredStudents, selectedStudentIds]);
 
+  const handleSubjectToggle = useCallback(
+    (subjectId: string, checked: boolean) => {
+      setForm((prev) => {
+        if (editingId) {
+          return {
+            ...prev,
+            subjectIds: checked ? [subjectId] : [],
+          };
+        }
+
+        const nextIds = new Set(prev.subjectIds);
+        if (checked) {
+          nextIds.add(subjectId);
+        } else {
+          nextIds.delete(subjectId);
+        }
+
+        return {
+          ...prev,
+          subjectIds: Array.from(nextIds),
+        };
+      });
+    },
+    [editingId],
+  );
+
   useEffect(() => {
     listAllSubjects()
       .then(setSubjects)
@@ -398,19 +429,22 @@ export default function AssignTeachersPage() {
   ]);
 
   useEffect(() => {
-    if (!form.subject_id) {
+    if (form.subjectIds.length === 0) {
       return;
     }
-    const exists = subjectsForForm.some(
-      (subject) => String(subject.id) === form.subject_id,
+    const availableSubjectIds = new Set(
+      subjectsForForm.map((subject) => String(subject.id)),
     );
-    if (!exists) {
+    const nextSubjectIds = form.subjectIds.filter((subjectId) =>
+      availableSubjectIds.has(subjectId),
+    );
+    if (nextSubjectIds.length !== form.subjectIds.length) {
       setForm((prev) => ({
         ...prev,
-        subject_id: "",
+        subjectIds: nextSubjectIds,
       }));
     }
-  }, [subjectsForForm, form.subject_id]);
+  }, [subjectsForForm, form.subjectIds]);
 
   useEffect(() => {
     if (filters.school_class_id) {
@@ -498,7 +532,7 @@ export default function AssignTeachersPage() {
     event.preventDefault();
     setFormError(null);
 
-    if (!form.subject_id || !form.staff_id || !form.session_id) {
+    if (form.subjectIds.length === 0 || !form.staff_id || !form.session_id) {
       setFormError("Please complete all required fields.");
       return;
     }
@@ -516,7 +550,9 @@ export default function AssignTeachersPage() {
     }
 
     const payload = {
-      subject_id: form.subject_id,
+      ...(editingId
+        ? { subject_id: form.subjectIds[0] }
+        : { subject_ids: form.subjectIds }),
       staff_id: form.staff_id,
       session_id: form.session_id,
       term_id: derivedTermId,
@@ -581,7 +617,7 @@ export default function AssignTeachersPage() {
 
     startTransition(() => {
       setForm({
-        subject_id: `${assignment.subject_id}`,
+        subjectIds: [`${assignment.subject_id}`],
         staff_id: `${assignment.staff_id}`,
         session_id: sessionId,
         term_id: `${assignment.term_id}`,
@@ -668,7 +704,7 @@ export default function AssignTeachersPage() {
                           school_class_id: value,
                           class_arm_id: "",
                           class_section_id: "",
-                          subject_id: "",
+                          subjectIds: [],
                           staff_id: "",
                           student_ids: [],
                         }));
@@ -704,7 +740,7 @@ export default function AssignTeachersPage() {
                           ...prev,
                           class_arm_id: value,
                           class_section_id: "",
-                          subject_id: "",
+                          subjectIds: [],
                           staff_id: "",
                           student_ids: [],
                         }));
@@ -730,41 +766,51 @@ export default function AssignTeachersPage() {
                     </select>
                   </div>
                   <div className="col-12 form-group">
-                    <label htmlFor="teacher-subject">Subject *</label>
-                    <select
-                      id="teacher-subject"
-                      className="form-control"
-                      value={form.subject_id}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          subject_id: event.target.value,
-                        }))
-                      }
-                      disabled={
-                        !form.school_class_id ||
-                        classSubjectsLoading ||
-                        subjectsForForm.length === 0
-                      }
-                      required
+                    <label>Subjects *</label>
+                    <div
+                      className="border rounded p-2"
+                      style={{ maxHeight: "240px", overflowY: "auto" }}
                     >
-                      <option value="">
-                        {form.school_class_id
-                          ? classSubjectsLoading
-                            ? "Loading subjects..."
-                            : subjectsForForm.length === 0
-                            ? "No subjects assigned to this class"
-                            : "Select subject"
-                          : "Select class first"}
-                      </option>
-                      {subjectsForForm.map((subject) => (
-                        <option key={subject.id} value={subject.id}>
-                          {subject.code
-                            ? `${subject.name} (${subject.code})`
-                            : subject.name}
-                        </option>
-                      ))}
-                    </select>
+                      {!form.school_class_id ? (
+                        <p className="text-muted mb-0">Select class first.</p>
+                      ) : classSubjectsLoading ? (
+                        <p className="text-muted mb-0">Loading subjects...</p>
+                      ) : subjectsForForm.length === 0 ? (
+                        <p className="text-muted mb-0">
+                          No subjects assigned to this class.
+                        </p>
+                      ) : (
+                        subjectsForForm.map((subject) => {
+                          const subjectId = String(subject.id);
+                          return (
+                            <div className="form-check" key={subject.id}>
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                id={`teacher-subject-${subject.id}`}
+                                checked={selectedSubjectSet.has(subjectId)}
+                                onChange={(event) =>
+                                  handleSubjectToggle(subjectId, event.target.checked)
+                                }
+                              />
+                              <label
+                                className="form-check-label"
+                                htmlFor={`teacher-subject-${subject.id}`}
+                              >
+                                {subject.code
+                                  ? `${subject.name} (${subject.code})`
+                                  : subject.name}
+                              </label>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                    <small className="form-text text-muted">
+                      {editingId
+                        ? "Editing supports one subject at a time."
+                        : "Tick one or more subjects to assign to the selected teacher."}
+                    </small>
                   </div>
                   <div className="col-12 form-group">
                     <label htmlFor="teacher-staff">Teacher *</label>
@@ -778,13 +824,13 @@ export default function AssignTeachersPage() {
                           staff_id: event.target.value,
                         }))
                       }
-                      disabled={!form.subject_id}
+                      disabled={form.subjectIds.length === 0}
                       required
                     >
                       <option value="">
-                        {form.subject_id
+                        {form.subjectIds.length > 0
                           ? "Select teacher"
-                          : "Select subject first"}
+                          : "Select at least one subject first"}
                       </option>
                       {teachers.map((teacher) => (
                         <option key={teacher.id} value={teacher.id}>
