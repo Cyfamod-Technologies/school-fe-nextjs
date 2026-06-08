@@ -49,6 +49,16 @@ export interface SubjectTeacherAssignmentCreateResponse {
   created_count?: number;
   skipped_count?: number;
   skipped_subject_ids?: string[];
+  skipped_assignments?: Array<{
+    subject_id: string | number;
+    school_class_id?: string | number | null;
+    class_arm_id?: string | number | null;
+  }>;
+}
+
+export interface SubjectTeacherAssignmentContext {
+  school_class_id: string | number;
+  class_arm_id?: string | number | null;
 }
 
 export interface SubjectTeacherFilters {
@@ -107,6 +117,7 @@ export async function listSubjectTeacherAssignments(
 type AssignmentMutationPayload = {
   subject_id?: string | number;
   subject_ids?: Array<string | number>;
+  contexts?: SubjectTeacherAssignmentContext[];
   staff_id: string | number;
   session_id: string | number;
   term_id: string | number;

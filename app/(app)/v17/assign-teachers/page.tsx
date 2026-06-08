@@ -16,6 +16,7 @@ import {
   createSubjectTeacherAssignment,
   deleteSubjectTeacherAssignment,
   listSubjectTeacherAssignments,
+  type SubjectTeacherAssignmentContext,
   updateSubjectTeacherAssignment,
   type SubjectTeacherAssignment,
   type SubjectTeacherAssignmentListResponse,
@@ -34,6 +35,8 @@ interface AssignmentForm {
   staff_id: string;
   session_id: string;
   term_id: string;
+  selectedClassIds: string[];
+  selectedClassArmIdsByClass: Record<string, string[]>;
   school_class_id: string;
   class_arm_id: string;
   class_section_id: string;
@@ -45,6 +48,8 @@ const initialForm: AssignmentForm = {
   staff_id: "",
   session_id: "",
   term_id: "",
+  selectedClassIds: [],
+  selectedClassArmIdsByClass: {},
   school_class_id: "",
   class_arm_id: "",
   class_section_id: "",
@@ -111,6 +116,11 @@ export default function AssignTeachersPage() {
   const selectedSubjectSet = useMemo(
     () => new Set(form.subjectIds),
     [form.subjectIds],
+  );
+
+  const selectedClassSet = useMemo(
+    () => new Set(form.selectedClassIds),
+    [form.selectedClassIds],
   );
 
   const ensureTerms = useCallback(
@@ -262,13 +272,58 @@ export default function AssignTeachersPage() {
     return classSectionsByKey[key] ?? [];
   }, [classSectionsByKey, form.school_class_id, form.class_arm_id]);
 
+  const selectedContexts = useMemo<SubjectTeacherAssignmentContext[]>(() => {
+    if (editingId) {
+      if (!form.school_class_id) {
+        return [];
+      }
+
+      return [{
+        school_class_id: form.school_class_id,
+        class_arm_id: form.class_arm_id || null,
+      }];
+    }
+
+    return form.selectedClassIds.flatMap<SubjectTeacherAssignmentContext>((classId) => {
+      const armIds = form.selectedClassArmIdsByClass[classId] ?? [];
+      if (armIds.length === 0) {
+        return [{
+          school_class_id: classId,
+          class_arm_id: null,
+        }];
+      }
+
+      return armIds.map((armId) => ({
+        school_class_id: classId,
+        class_arm_id: armId,
+      }));
+    });
+  }, [editingId, form.class_arm_id, form.school_class_id, form.selectedClassArmIdsByClass, form.selectedClassIds]);
+
+  const hasSingleSelectedContext = selectedContexts.length === 1;
+
+  const singleSelectedContext = useMemo(
+    () => hasSingleSelectedContext ? selectedContexts[0] : null,
+    [hasSingleSelectedContext, selectedContexts],
+  );
+
   const subjectsForForm = useMemo(() => {
-    if (!form.school_class_id) {
+    if (selectedContexts.length === 0) {
       return [];
     }
-    const key = `${form.school_class_id}:${form.class_arm_id || "all"}`;
-    return classSubjectsByKey[key] ?? [];
-  }, [classSubjectsByKey, form.school_class_id, form.class_arm_id]);
+
+    const subjectMap = new Map<string, Subject>();
+    selectedContexts.forEach((context) => {
+      const key = `${context.school_class_id}:${context.class_arm_id || "all"}`;
+      (classSubjectsByKey[key] ?? []).forEach((subject) => {
+        if (subject?.id) {
+          subjectMap.set(String(subject.id), subject);
+        }
+      });
+    });
+
+    return Array.from(subjectMap.values());
+  }, [classSubjectsByKey, selectedContexts]);
 
   const filteredStudents = useMemo(() => {
     const term = studentSearch.trim().toLowerCase();
@@ -349,6 +404,93 @@ export default function AssignTeachersPage() {
     [editingId],
   );
 
+  const handleClassToggle = useCallback(
+    (classId: string, checked: boolean) => {
+      setForm((prev) => {
+        if (editingId) {
+          return {
+            ...prev,
+            school_class_id: checked ? classId : "",
+            class_arm_id: "",
+            class_section_id: "",
+            subjectIds: [],
+            staff_id: "",
+            student_ids: [],
+          };
+        }
+
+        const nextClassIds = new Set(prev.selectedClassIds);
+        const nextClassArmIdsByClass = { ...prev.selectedClassArmIdsByClass };
+
+        if (checked) {
+          nextClassIds.add(classId);
+        } else {
+          nextClassIds.delete(classId);
+          delete nextClassArmIdsByClass[classId];
+        }
+
+        return {
+          ...prev,
+          selectedClassIds: Array.from(nextClassIds),
+          selectedClassArmIdsByClass: nextClassArmIdsByClass,
+          class_section_id: "",
+          subjectIds: [],
+          staff_id: "",
+          student_ids: [],
+        };
+      });
+      setSelectedStudentIds({});
+      setStudentSearch("");
+      if (checked) {
+        ensureClassArms(classId).catch((err) => console.error(err));
+      }
+    },
+    [editingId, ensureClassArms],
+  );
+
+  const handleClassArmToggle = useCallback(
+    (classId: string, armId: string, checked: boolean) => {
+      setForm((prev) => {
+        if (editingId) {
+          return {
+            ...prev,
+            class_arm_id: checked ? armId : "",
+            class_section_id: "",
+            subjectIds: [],
+            staff_id: "",
+            student_ids: [],
+          };
+        }
+
+        const existingArmIds = prev.selectedClassArmIdsByClass[classId] ?? [];
+        const nextArmIds = new Set(existingArmIds);
+        if (checked) {
+          nextArmIds.add(armId);
+        } else {
+          nextArmIds.delete(armId);
+        }
+
+        return {
+          ...prev,
+          selectedClassArmIdsByClass: {
+            ...prev.selectedClassArmIdsByClass,
+            [classId]: Array.from(nextArmIds),
+          },
+          class_section_id: "",
+          subjectIds: [],
+          staff_id: "",
+          student_ids: [],
+        };
+      });
+      setSelectedStudentIds({});
+      setStudentSearch("");
+      if (checked) {
+        ensureClassSections(classId, armId).catch((err) => console.error(err));
+      }
+    },
+    [editingId, ensureClassSections],
+  );
+
   useEffect(() => {
     listAllSubjects()
       .then(setSubjects)
@@ -384,10 +526,17 @@ export default function AssignTeachersPage() {
   }, [form.session_id, form.term_id, termsCache]);
 
   useEffect(() => {
-    if (form.school_class_id) {
-      ensureClassArms(form.school_class_id).catch((err) => console.error(err));
+    if (editingId) {
+      if (form.school_class_id) {
+        ensureClassArms(form.school_class_id).catch((err) => console.error(err));
+      }
+      return;
     }
-  }, [form.school_class_id, ensureClassArms]);
+
+    form.selectedClassIds.forEach((classId) => {
+      ensureClassArms(classId).catch((err) => console.error(err));
+    });
+  }, [editingId, form.school_class_id, form.selectedClassIds, ensureClassArms]);
 
   useEffect(() => {
     if (form.school_class_id && form.class_arm_id) {
@@ -398,30 +547,33 @@ export default function AssignTeachersPage() {
   }, [form.school_class_id, form.class_arm_id, ensureClassSections]);
 
   useEffect(() => {
-    if (!form.school_class_id) {
+    if (selectedContexts.length === 0) {
       return;
     }
-    ensureClassSubjects(form.school_class_id, form.class_arm_id || undefined).catch(
-      (err) => console.error(err),
-    );
-  }, [form.school_class_id, form.class_arm_id, ensureClassSubjects]);
+
+    selectedContexts.forEach((context) => {
+      ensureClassSubjects(
+        String(context.school_class_id),
+        context.class_arm_id ? String(context.class_arm_id) : undefined,
+      ).catch((err) => console.error(err));
+    });
+  }, [ensureClassSubjects, selectedContexts]);
 
   useEffect(() => {
-    if (!form.school_class_id) {
+    if (!singleSelectedContext) {
       setStudents([]);
       setSelectedStudentIds({});
       return;
     }
     fetchStudentsForClass(
-      form.school_class_id,
-      form.class_arm_id || undefined,
+      String(singleSelectedContext.school_class_id),
+      singleSelectedContext.class_arm_id ? String(singleSelectedContext.class_arm_id) : undefined,
       form.class_section_id || undefined,
       form.session_id || undefined,
       form.term_id || undefined,
     ).catch((err) => console.error(err));
   }, [
-    form.school_class_id,
-    form.class_arm_id,
+    singleSelectedContext,
     form.class_section_id,
     form.session_id,
     form.term_id,
@@ -536,8 +688,8 @@ export default function AssignTeachersPage() {
       setFormError("Please complete all required fields.");
       return;
     }
-    if (!form.school_class_id) {
-      setFormError("Please select a class for this assignment.");
+    if (selectedContexts.length === 0) {
+      setFormError("Please select at least one class or class arm for this assignment.");
       return;
     }
 
@@ -551,14 +703,19 @@ export default function AssignTeachersPage() {
 
     const payload = {
       ...(editingId
-        ? { subject_id: form.subjectIds[0] }
-        : { subject_ids: form.subjectIds }),
+        ? {
+            subject_id: form.subjectIds[0],
+            school_class_id: form.school_class_id,
+            class_arm_id: form.class_arm_id || null,
+          }
+        : {
+            subject_ids: form.subjectIds,
+            contexts: selectedContexts,
+          }),
       staff_id: form.staff_id,
       session_id: form.session_id,
       term_id: derivedTermId,
-      student_ids: selectedStudentCount ? selectedStudentIdList : null,
-      school_class_id: form.school_class_id,
-      class_arm_id: form.class_arm_id || null,
+      student_ids: hasSingleSelectedContext && selectedStudentCount ? selectedStudentIdList : null,
       class_section_id: form.class_section_id || null,
     };
 
@@ -621,6 +778,12 @@ export default function AssignTeachersPage() {
         staff_id: `${assignment.staff_id}`,
         session_id: sessionId,
         term_id: `${assignment.term_id}`,
+        selectedClassIds: [`${assignment.school_class_id}`].filter(Boolean),
+        selectedClassArmIdsByClass: classId
+          ? {
+              [classId]: armId ? [armId] : [],
+            }
+          : {},
         school_class_id: classId,
         class_arm_id: armId,
         class_section_id: sectionId,
@@ -692,78 +855,116 @@ export default function AssignTeachersPage() {
               <form onSubmit={handleSubmit}>
                 <div className="row">
                   <div className="col-12 form-group">
-                    <label htmlFor="teacher-class">Class *</label>
-                    <select
-                      id="teacher-class"
-                      className="form-control"
-                      value={form.school_class_id}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        setForm((prev) => ({
-                          ...prev,
-                          school_class_id: value,
-                          class_arm_id: "",
-                          class_section_id: "",
-                          subjectIds: [],
-                          staff_id: "",
-                          student_ids: [],
-                        }));
-                        setSelectedStudentIds({});
-                        setStudentSearch("");
-                        if (value) {
-                          ensureClassArms(value).catch((err) =>
-                            console.error(err),
-                          );
-                        }
-                      }}
-                      required
+                    <label>Classes *</label>
+                    <div
+                      className="border rounded p-2"
+                      style={{ maxHeight: "220px", overflowY: "auto" }}
                     >
-                      <option value="">Select class</option>
-                      {classes.map((schoolClass) => (
-                        <option key={schoolClass.id} value={schoolClass.id}>
-                          {schoolClass.name}
-                        </option>
-                      ))}
-                    </select>
+                      {classes.length === 0 ? (
+                        <p className="text-muted mb-0">No classes available.</p>
+                      ) : (
+                        classes.map((schoolClass) => {
+                          const classId = String(schoolClass.id);
+                          const checked = editingId
+                            ? form.school_class_id === classId
+                            : selectedClassSet.has(classId);
+
+                          return (
+                            <div className="form-check" key={schoolClass.id}>
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                id={`teacher-class-${schoolClass.id}`}
+                                checked={checked}
+                                onChange={(event) =>
+                                  handleClassToggle(classId, event.target.checked)
+                                }
+                              />
+                              <label
+                                className="form-check-label"
+                                htmlFor={`teacher-class-${schoolClass.id}`}
+                              >
+                                {schoolClass.name}
+                              </label>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                    <small className="form-text text-muted">
+                      {editingId
+                        ? "Editing supports one class at a time."
+                        : "Tick one or more classes for this teacher assignment."}
+                    </small>
                   </div>
                   <div className="col-12 form-group">
-                    <label htmlFor="teacher-class-arm">
-                      Class Arm <span className="text-muted">(optional)</span>
+                    <label>
+                      Class Arms <span className="text-muted">(optional)</span>
                     </label>
-                    <select
-                      id="teacher-class-arm"
-                      className="form-control"
-                      value={form.class_arm_id}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        setForm((prev) => ({
-                          ...prev,
-                          class_arm_id: value,
-                          class_section_id: "",
-                          subjectIds: [],
-                          staff_id: "",
-                          student_ids: [],
-                        }));
-                        setSelectedStudentIds({});
-                        setStudentSearch("");
-                        if (value && form.school_class_id) {
-                          ensureClassSections(
-                            form.school_class_id,
-                            value,
-                          ).catch((err) => console.error(err));
-                        }
-                      }}
-                      disabled={
-                        !form.school_class_id || classArmsForForm.length === 0
-                      }
-                    >
-                      <option value="">Select class arm (optional)</option>
-                      {classArmsForForm.map((arm) => (
-                        <option key={arm.id} value={arm.id}>
-                          {arm.name}
-                        </option>
-                      ))}
-                    </select>
+                    {!editingId && form.selectedClassIds.length === 0 ? (
+                      <p className="text-muted mb-0">Select class first.</p>
+                    ) : editingId && !form.school_class_id ? (
+                      <p className="text-muted mb-0">Select class first.</p>
+                    ) : (
+                      <div
+                        className="border rounded p-2"
+                        style={{ maxHeight: "260px", overflowY: "auto" }}
+                      >
+                        {(editingId ? [form.school_class_id] : form.selectedClassIds).map((classId) => {
+                          const schoolClass = classes.find(
+                            (item) => String(item.id) === classId,
+                          );
+                          const arms = classArmsByClass[classId] ?? [];
+
+                          return (
+                            <div key={classId} className="mb-2">
+                              <strong className="d-block mb-1">
+                                {schoolClass?.name ?? "Selected Class"}
+                              </strong>
+                              {arms.length === 0 ? (
+                                <small className="text-muted">
+                                  No class arms available. This will assign against the whole class.
+                                </small>
+                              ) : (
+                                arms.map((arm) => {
+                                  const armId = String(arm.id);
+                                  const checked = editingId
+                                    ? form.class_arm_id === armId
+                                    : (form.selectedClassArmIdsByClass[classId] ?? []).includes(armId);
+
+                                  return (
+                                    <div className="form-check" key={arm.id}>
+                                      <input
+                                        className="form-check-input"
+                                        type="checkbox"
+                                        id={`teacher-class-arm-${classId}-${arm.id}`}
+                                        checked={checked}
+                                        onChange={(event) =>
+                                          handleClassArmToggle(
+                                            classId,
+                                            armId,
+                                            event.target.checked,
+                                          )
+                                        }
+                                      />
+                                      <label
+                                        className="form-check-label"
+                                        htmlFor={`teacher-class-arm-${classId}-${arm.id}`}
+                                      >
+                                        {arm.name}
+                                      </label>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <small className="form-text text-muted">
+                      Leave all arms unticked for a selected class to assign against the whole class. Tick arms to target specific arms.
+                    </small>
                   </div>
                   <div className="col-12 form-group">
                     <label>Subjects *</label>
@@ -771,8 +972,8 @@ export default function AssignTeachersPage() {
                       className="border rounded p-2"
                       style={{ maxHeight: "240px", overflowY: "auto" }}
                     >
-                      {!form.school_class_id ? (
-                        <p className="text-muted mb-0">Select class first.</p>
+                      {selectedContexts.length === 0 ? (
+                        <p className="text-muted mb-0">Select class or class arm first.</p>
                       ) : classSubjectsLoading ? (
                         <p className="text-muted mb-0">Loading subjects...</p>
                       ) : subjectsForForm.length === 0 ? (
@@ -853,11 +1054,13 @@ export default function AssignTeachersPage() {
                       placeholder="Search students by name or admission number..."
                       value={studentSearch}
                       onChange={(event) => setStudentSearch(event.target.value)}
-                      disabled={!form.school_class_id}
+                      disabled={!hasSingleSelectedContext}
                     />
                     <div className="d-flex justify-content-between align-items-center mb-2">
                       <small className="text-muted">
-                        {selectedStudentCount
+                        {!hasSingleSelectedContext
+                          ? "Student targeting is available for one class context at a time."
+                          : selectedStudentCount
                           ? `${selectedStudentCount} selected`
                           : "No students selected"}
                       </small>
@@ -865,7 +1068,7 @@ export default function AssignTeachersPage() {
                         type="button"
                         className="btn btn-sm btn-outline-secondary"
                         onClick={handleToggleAllFiltered}
-                        disabled={!filteredStudents.length}
+                        disabled={!hasSingleSelectedContext || !filteredStudents.length}
                       >
                         {allFilteredSelected ? "Clear filtered" : "Select filtered"}
                       </button>
@@ -873,8 +1076,8 @@ export default function AssignTeachersPage() {
                     <div className="border rounded p-2" style={{ maxHeight: "240px", overflowY: "auto" }}>
                       {studentsLoading ? (
                         <p className="text-muted mb-0">Loading students…</p>
-                      ) : !form.school_class_id ? (
-                        <p className="text-muted mb-0">Select a class to load students.</p>
+                      ) : !hasSingleSelectedContext ? (
+                        <p className="text-muted mb-0">Select exactly one class or class arm to load students.</p>
                       ) : filteredStudents.length === 0 ? (
                         <p className="text-muted mb-0">No students found.</p>
                       ) : (
@@ -909,7 +1112,7 @@ export default function AssignTeachersPage() {
                       )}
                     </div>
                     <small className="form-text text-muted">
-                      Leave blank to assign the subject to all students in the class.
+                      Leave blank to assign the subject to all students in the selected class context.
                     </small>
                   </div>
                   {/* Class Section field intentionally hidden */}
