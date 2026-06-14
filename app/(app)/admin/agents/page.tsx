@@ -32,7 +32,7 @@ export default function AdminAgentsPage() {
   const [showRejectionInput, setShowRejectionInput] = useState(false);
 
   useEffect(() => {
-    const userRole = (user?.role || '').toLowerCase();
+    const userRole = String(user?.role || '').toLowerCase();
     if (!authLoading && user && userRole !== 'super_admin' && userRole !== 'admin') {
       router.replace('/v10/dashboard');
     }
