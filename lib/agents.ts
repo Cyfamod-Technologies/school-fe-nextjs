@@ -227,6 +227,14 @@ export const subscriptionApi = {
 
 export const adminApi = {
   // Agents
+  listAgents: async (status?: string, page = 1, perPage = 20) => {
+    let url = `/api/v1/admin/agents?page=${page}&per_page=${perPage}`;
+    if (status && status !== 'all') {
+      url += `&status=${status}`;
+    }
+    return apiClient.get(url, { headers: getAdminAuthHeaders() });
+  },
+
   getPendingAgents: async (page = 1, perPage = 20) => {
     return apiClient.get(
       `/api/v1/admin/agents/pending?page=${page}&per_page=${perPage}`,
@@ -246,6 +254,10 @@ export const adminApi = {
 
   suspendAgent: async (agentId: string) => {
     return apiClient.post(`/api/v1/admin/agents/${agentId}/suspend`, {}, { headers: getAdminAuthHeaders() });
+  },
+
+  resetPending: async (agentId: string) => {
+    return apiClient.post(`/api/v1/admin/agents/${agentId}/reset-pending`, {}, { headers: getAdminAuthHeaders() });
   },
 
   // Commissions
