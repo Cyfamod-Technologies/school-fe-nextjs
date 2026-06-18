@@ -134,8 +134,9 @@
     }
 
     function handleFileSelected(file) {
-        if (!file.name.toLowerCase().endsWith('.csv')) {
-            setFeedback('warning', 'Only CSV files are supported. Please choose a .csv file.');
+        const fileName = file.name.toLowerCase();
+        if (!fileName.endsWith('.csv') && !fileName.endsWith('.xlsx')) {
+            setFeedback('warning', 'Only CSV and XLSX files are supported. Please choose a .csv or .xlsx file.');
             return;
         }
 
@@ -146,7 +147,7 @@
 
     function handleUploadPreview() {
         if (!state.file) {
-            setFeedback('warning', 'Please choose a CSV file before uploading.');
+            setFeedback('warning', 'Please choose a CSV or XLSX file before uploading.');
             return;
         }
 

@@ -285,10 +285,11 @@ export default function BulkStudentUploadPage() {
   }, [getUploadParams, selectedSession, selectedClass, selectedClassArm]);
 
   const handleFileChosen = (file: File) => {
-    if (!file.name.toLowerCase().endsWith(".csv")) {
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith(".csv") && !fileName.endsWith(".xlsx")) {
       setFeedback({
         type: "warning",
-        message: "Only CSV files are supported. Please choose a .csv file.",
+        message: "Only CSV and XLSX files are supported. Please choose a .csv or .xlsx file.",
       });
       return;
     }
@@ -340,7 +341,7 @@ export default function BulkStudentUploadPage() {
     if (!selectedFile) {
       setFeedback({
         type: "warning",
-        message: "Please choose a CSV file before uploading.",
+        message: "Please choose a CSV or XLSX file before uploading.",
       });
       return;
     }
@@ -912,9 +913,9 @@ export default function BulkStudentUploadPage() {
                     <div className="icon">
                       <i className="fas fa-cloud-upload-alt" />
                     </div>
-                    <p className="lead mb-1">Drag & drop your completed CSV here</p>
+                    <p className="lead mb-1">Drag & drop your completed CSV or XLSX here</p>
                     <p className="text-muted small mb-3">
-                      Only .csv files are supported. Maximum size 5MB.
+                      Only .csv and .xlsx files are supported. Maximum size 5MB.
                     </p>
                     <button
                       type="button"
@@ -927,7 +928,7 @@ export default function BulkStudentUploadPage() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".csv,text/csv"
+                      accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                       className="d-none"
                       onChange={handleFileInputChange}
                     />
@@ -1042,7 +1043,7 @@ export default function BulkStudentUploadPage() {
                     {showingPreviewSubset ? (
                       <div className="alert alert-info">
                         <i className="fas fa-info-circle mr-2" />
-                        Showing the first {workingPreviewRows.length} students in the preview out of {totalRows} rows in the CSV.
+                        Showing the first {workingPreviewRows.length} students in the preview out of {totalRows} rows in the file.
                         All validated rows will be included when you confirm the upload.
                       </div>
                     ) : null}
@@ -1050,7 +1051,7 @@ export default function BulkStudentUploadPage() {
                       <table className="table display text-nowrap bulk-preview-table">
                         <thead>
                           <tr>
-                            <th>CSV Row</th>
+                            <th>File Row</th>
                             <th>Name</th>
                             <th>Admission No</th>
                             <th>Session</th>
@@ -1279,7 +1280,7 @@ export default function BulkStudentUploadPage() {
                       return (
                         <div key={`duplicate-resolution-${rowKey}`} className="duplicate-resolution-item">
                           <div className="duplicate-resolution-item-header">
-                            <span className="badge badge-danger">CSV Row {row.source_row ?? index + 1}</span>
+                            <span className="badge badge-danger">File Row {row.source_row ?? index + 1}</span>
                             <span className="duplicate-resolution-name">{row.name ?? "Unnamed Student"}</span>
                             <button
                               type="button"
@@ -1324,7 +1325,7 @@ export default function BulkStudentUploadPage() {
                 </>
               ) : (
                 <div className="alert alert-success mb-4">
-                  All duplicate rows in the CSV have been handled locally. Click Done to revalidate and return to the main upload screen.
+                  All duplicate rows in the file have been handled locally. Click Done to revalidate and return to the main upload screen.
                 </div>
               )}
 
