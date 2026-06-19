@@ -166,12 +166,12 @@ export default function ClassSkillRatingsPage() {
     }
     const allowedIds = new Set<string>();
     teacherDashboard.assignments.forEach((assignment) => {
-      if (assignment.class?.id) {
+      if (assignment.is_class_teacher && assignment.class?.id) {
         allowedIds.add(String(assignment.class.id));
       }
     });
     if (!allowedIds.size) {
-      return classes;
+      return [];
     }
     return classes.filter((schoolClass) =>
       allowedIds.has(String(schoolClass.id)),
@@ -336,8 +336,11 @@ export default function ClassSkillRatingsPage() {
             const dashboard = await fetchTeacherDashboard();
             if (!cancelled) {
               setTeacherDashboard(dashboard);
-              if (!filters.classId && dashboard.assignments.length > 0) {
-                const firstClassId = dashboard.assignments[0].class?.id;
+              const firstClassTeacherAssignment = dashboard.assignments.find(
+                (assignment) => assignment.is_class_teacher && assignment.class?.id,
+              );
+              if (!filters.classId && firstClassTeacherAssignment) {
+                const firstClassId = firstClassTeacherAssignment.class?.id;
                 if (firstClassId) {
                   setFilters((prev) => ({
                     ...prev,
@@ -438,7 +441,9 @@ export default function ClassSkillRatingsPage() {
     if (!selectedSession || !selectedTerm || !selectedClass) {
       setFeedbackKind("warning");
       setFeedback(
-        "Select session, term, and class before loading student skill ratings.",
+        isTeacher && !teacherClassOptions.length
+          ? "Only assigned class teachers can view and grade student skills."
+          : "Select session, term, and class before loading student skill ratings.",
       );
       return;
     }
@@ -525,6 +530,8 @@ export default function ClassSkillRatingsPage() {
     selectedSection,
     selectedSession,
     selectedTerm,
+    isTeacher,
+    teacherClassOptions.length,
     skillTypes,
   ]);
 

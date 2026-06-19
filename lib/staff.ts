@@ -199,6 +199,7 @@ export interface TeacherAssignmentSummary {
   session?: AssignmentMetadata | null;
   term?: AssignmentMetadata | null;
   subjects: TeacherAssignmentSubject[];
+  is_class_teacher?: boolean;
 }
 
 export interface TeacherDashboardStats {
