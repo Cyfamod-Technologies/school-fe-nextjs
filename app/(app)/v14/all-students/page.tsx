@@ -818,14 +818,16 @@ export default function AllStudentsPage() {
                     </Link>
                   </PermissionGate>
                 )}
-                <button
-                  type="button"
-                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
-                  onClick={handleExportAssessmentSheet}
-                  disabled={exporting || students.length === 0}
-                >
-                  {exporting ? "Exporting…" : "Export Assessment Sheet"}
-                </button>
+                {!isTeacher ? (
+                  <button
+                    type="button"
+                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
+                    onClick={handleExportAssessmentSheet}
+                    disabled={exporting || students.length === 0}
+                  >
+                    {exporting ? "Exporting…" : "Export Assessment Sheet"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
@@ -969,28 +971,30 @@ export default function AllStudentsPage() {
                           {student.status ?? "Active"}
                         </td>
                         <td>
-                          <div className="d-flex gap-2">
-                            <Link
-                              href={buildStudentLink(
-                                "/v14/student-details",
-                                student.id,
-                              )}
-                              className="btn btn-sm btn-outline-primary mr-1"
-                            >
-                              View
-                            </Link>
-                            <PermissionGate permission={PERMISSIONS.STUDENTS_UPDATE}>
+                          {!isTeacher ? (
+                            <div className="d-flex gap-2">
                               <Link
                                 href={buildStudentLink(
-                                  "/v14/edit-student",
+                                  "/v14/student-details",
                                   student.id,
                                 )}
-                                className="btn btn-sm btn-outline-secondary"
+                                className="btn btn-sm btn-outline-primary mr-1"
                               >
-                                Edit
+                                View
                               </Link>
-                            </PermissionGate>
-                          </div>
+                              <PermissionGate permission={PERMISSIONS.STUDENTS_UPDATE}>
+                                <Link
+                                  href={buildStudentLink(
+                                    "/v14/edit-student",
+                                    student.id,
+                                  )}
+                                  className="btn btn-sm btn-outline-secondary"
+                                >
+                                  Edit
+                                </Link>
+                              </PermissionGate>
+                            </div>
+                          ) : null}
                         </td>
                       </tr>
                     );
