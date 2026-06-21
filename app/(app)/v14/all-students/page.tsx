@@ -801,14 +801,7 @@ export default function AllStudentsPage() {
           <div className="d-flex justify-content-between align-items-center mb-3">
             <div>
               <div className="d-flex flex-wrap align-items-center">
-                {isTeacher ? (
-                  <Link
-                    href="/v14/add-student"
-                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
-                  >
-                    Add Student
-                  </Link>
-                ) : (
+                {!isTeacher ? (
                   <PermissionGate permission={PERMISSIONS.STUDENTS_CREATE}>
                     <Link
                       href="/v14/add-student"
@@ -817,7 +810,7 @@ export default function AllStudentsPage() {
                       Add Student
                     </Link>
                   </PermissionGate>
-                )}
+                ) : null}
                 {!isTeacher ? (
                   <button
                     type="button"
@@ -828,17 +821,19 @@ export default function AllStudentsPage() {
                     {exporting ? "Exporting…" : "Export Assessment Sheet"}
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
-                  onClick={handleExportBroadsheet}
-                  disabled={exportingBroadsheet || !filters.school_class_id}
-                  title={!filters.school_class_id ? "Select a Class to print" : "Print broadsheet for selected class"}
-                >
-                  {exportingBroadsheet
-                    ? "Opening…"
-                    : `Print Broadsheet${data?.total ? ` (${data.total})` : ""}`}
-                </button>
+                {!isTeacher ? (
+                  <button
+                    type="button"
+                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
+                    onClick={handleExportBroadsheet}
+                    disabled={exportingBroadsheet || !filters.school_class_id}
+                    title={!filters.school_class_id ? "Select a Class to print" : "Print broadsheet for selected class"}
+                  >
+                    {exportingBroadsheet
+                      ? "Opening…"
+                      : `Print Broadsheet${data?.total ? ` (${data.total})` : ""}`}
+                  </button>
+                ) : null}
                 {!isTeacher ? (
                   <PermissionGate permission={PERMISSIONS.STUDENTS_DELETE}>
                     <button
@@ -971,17 +966,17 @@ export default function AllStudentsPage() {
                           {student.status ?? "Active"}
                         </td>
                         <td>
-                          {!isTeacher ? (
-                            <div className="d-flex gap-2">
-                              <Link
-                                href={buildStudentLink(
-                                  "/v14/student-details",
-                                  student.id,
-                                )}
-                                className="btn btn-sm btn-outline-primary mr-1"
-                              >
-                                View
-                              </Link>
+                          <div className="d-flex gap-2">
+                            <Link
+                              href={buildStudentLink(
+                                "/v14/student-details",
+                                student.id,
+                              )}
+                              className="btn btn-sm btn-outline-primary mr-1"
+                            >
+                              View
+                            </Link>
+                            {!isTeacher ? (
                               <PermissionGate permission={PERMISSIONS.STUDENTS_UPDATE}>
                                 <Link
                                   href={buildStudentLink(
@@ -993,8 +988,8 @@ export default function AllStudentsPage() {
                                   Edit
                                 </Link>
                               </PermissionGate>
-                            </div>
-                          ) : null}
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     );
