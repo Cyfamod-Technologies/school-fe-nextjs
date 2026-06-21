@@ -1731,12 +1731,14 @@ export default function StudentDetailsPage() {
               </div>
             </div>
             <div className="btn-group">
-              <Link
-                href={editStudentHref}
-                className="btn btn-outline-primary"
-              >
-                Edit
-              </Link>
+              {!isTeacher ? (
+                <Link
+                  href={editStudentHref}
+                  className="btn btn-outline-primary"
+                >
+                  Edit
+                </Link>
+              ) : null}
               {!isTeacher ? (
                 <button
                   type="button"
@@ -2167,16 +2169,18 @@ export default function StudentDetailsPage() {
                   : "Applies to the selected session and term above."}
               </p>
             </div>
-            <div>
-              <button
-                type="button"
-                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                onClick={() => void handlePreviewResult()}
-                disabled={previewLoading || !selectedSession || !selectedTerm}
-              >
-                {previewLoading ? "Preparing…" : "Preview Result"}
-              </button>
-            </div>
+            {!isTeacher ? (
+              <div>
+                <button
+                  type="button"
+                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                  onClick={() => void handlePreviewResult()}
+                  disabled={previewLoading || !selectedSession || !selectedTerm}
+                >
+                  {previewLoading ? "Preparing…" : "Preview Result"}
+                </button>
+              </div>
+            ) : null}
           </div>
           <form className="mb-3" onSubmit={handleTermSummarySubmit}>
             <div className="row">
