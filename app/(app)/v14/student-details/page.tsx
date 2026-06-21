@@ -53,6 +53,10 @@ import {
   invalidateResultPin,
   type ResultPin,
 } from "@/lib/resultPins";
+import {
+  fetchTeacherDashboard,
+  type TeacherDashboardResponse,
+} from "@/lib/staff";
 import { isTeacherUser } from "@/lib/roleChecks";
 
 const passthroughLoader: ImageLoader = ({ src }) => src;
@@ -395,6 +399,8 @@ export default function StudentDetailsPage() {
   const [skillError, setSkillError] = useState<string | null>(null);
   const [skillValues, setSkillValues] = useState<Record<string, string>>({});
   const [skillsModalOpen, setSkillsModalOpen] = useState(false);
+  const [teacherDashboard, setTeacherDashboard] =
+    useState<TeacherDashboardResponse | null>(null);
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewHtml, setPreviewHtml] = useState("");
@@ -457,6 +463,66 @@ export default function StudentDetailsPage() {
   }, [attendanceReport]);
   const hasManualAttendance =
     termSummary.days_present != null || termSummary.days_absent != null;
+
+  const canManageSkillRatings = useMemo(() => {
+    if (!isTeacher) {
+      return true;
+    }
+    if (!student?.school_class_id || !teacherDashboard) {
+      return false;
+    }
+
+    const classId = String(student.school_class_id);
+    const studentArmId =
+      student.class_arm_id != null ? String(student.class_arm_id) : "";
+    const studentSectionId =
+      student.class_section_id != null ? String(student.class_section_id) : "";
+
+    return teacherDashboard.assignments.some((assignment) => {
+      if (!assignment.is_class_teacher) {
+        return false;
+      }
+      if (String(assignment.class?.id ?? "") !== classId) {
+        return false;
+      }
+
+      const assignmentArmId = assignment.class_arm?.id
+        ? String(assignment.class_arm.id)
+        : "";
+      const assignmentSectionId = assignment.class_section?.id
+        ? String(assignment.class_section.id)
+        : "";
+      const assignmentSessionId = assignment.session?.id
+        ? String(assignment.session.id)
+        : "";
+      const assignmentTermId = assignment.term?.id
+        ? String(assignment.term.id)
+        : "";
+
+      if (assignmentArmId && assignmentArmId !== studentArmId) {
+        return false;
+      }
+      if (assignmentSectionId && assignmentSectionId !== studentSectionId) {
+        return false;
+      }
+      if (assignmentSessionId && selectedSession && assignmentSessionId !== selectedSession) {
+        return false;
+      }
+      if (assignmentTermId && selectedTerm && assignmentTermId !== selectedTerm) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [
+    isTeacher,
+    selectedSession,
+    selectedTerm,
+    student?.class_arm_id,
+    student?.class_section_id,
+    student?.school_class_id,
+    teacherDashboard,
+  ]);
 
   const terms = useMemo(() => {
     if (!selectedSession) {
@@ -769,6 +835,12 @@ export default function StudentDetailsPage() {
   }, [loadSkillRatings]);
 
   useEffect(() => {
+    if (!canManageSkillRatings) {
+      setSkillsModalOpen(false);
+    }
+  }, [canManageSkillRatings]);
+
+  useEffect(() => {
     void loadTermSummary();
   }, [loadTermSummary]);
 
@@ -822,7 +894,12 @@ export default function StudentDetailsPage() {
 
   const saveSkillRating = useCallback(
     async (skillTypeId: string, value: string) => {
-      if (!student?.id || !selectedSession || !selectedTerm) {
+      if (
+        !student?.id ||
+        !selectedSession ||
+        !selectedTerm ||
+        !canManageSkillRatings
+      ) {
         return;
       }
       const trimmedValue = value.trim();
@@ -871,12 +948,18 @@ export default function StudentDetailsPage() {
         );
       }
     },
-    [student?.id, selectedSession, selectedTerm, skillRatings],
+    [
+      canManageSkillRatings,
+      student?.id,
+      selectedSession,
+      selectedTerm,
+      skillRatings,
+    ],
   );
 
   const scheduleSkillSave = useCallback(
     (skillTypeId: string, value: string) => {
-      if (!selectedSession || !selectedTerm) {
+      if (!selectedSession || !selectedTerm || !canManageSkillRatings) {
         return;
       }
       const trimmedValue = value.trim();
@@ -890,11 +973,14 @@ export default function StudentDetailsPage() {
         void saveSkillRating(skillTypeId, trimmedValue);
       }, 400);
     },
-    [saveSkillRating, selectedSession, selectedTerm],
+    [canManageSkillRatings, saveSkillRating, selectedSession, selectedTerm],
   );
 
   const handleSkillValueChange = useCallback(
     (skillTypeId: string) => (event: ChangeEvent<HTMLSelectElement>) => {
+      if (!canManageSkillRatings) {
+        return;
+      }
       const value = event.target.value;
       setSkillValues((prev) => ({
         ...prev,
@@ -902,7 +988,7 @@ export default function StudentDetailsPage() {
       }));
       scheduleSkillSave(skillTypeId, value);
     },
-    [scheduleSkillSave],
+    [canManageSkillRatings, scheduleSkillSave],
   );
 
   const handleTermSummaryChange = (
@@ -1364,6 +1450,34 @@ export default function StudentDetailsPage() {
       active = false;
     };
   }, [user?.school?.result_comment_mode]);
+
+  useEffect(() => {
+    if (!isTeacher) {
+      setTeacherDashboard(null);
+      return;
+    }
+
+    let active = true;
+
+    fetchTeacherDashboard()
+      .then((dashboard) => {
+        if (!active) {
+          return;
+        }
+        setTeacherDashboard(dashboard);
+      })
+      .catch((error) => {
+        console.error("Unable to load teacher assignments", error);
+        if (!active) {
+          return;
+        }
+        setTeacherDashboard(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isTeacher]);
 
   useEffect(() => {
     if (!studentId) {
@@ -1886,13 +2000,19 @@ export default function StudentDetailsPage() {
             </div>
           </div>
           <div className="d-flex justify-content-end align-items-center flex-wrap">
-            <button
-              type="button"
-              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mb-2"
-              onClick={() => setSkillsModalOpen(true)}
-            >
-              Open Skill Ratings
-            </button>
+            {canManageSkillRatings ? (
+              <button
+                type="button"
+                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mb-2"
+                onClick={() => setSkillsModalOpen(true)}
+              >
+                Open Skill Ratings
+              </button>
+            ) : (
+              <span className="text-muted small mb-2">
+                Skill ratings are available only to the assigned class teacher.
+              </span>
+            )}
           </div>
         </div>
       </div>
