@@ -28,6 +28,10 @@ import {
 import { resolveBackendUrl } from "@/lib/config";
 import { isTeacherUser } from "@/lib/roleChecks";
 import {
+  fetchTeacherDashboard,
+  type TeacherDashboardResponse,
+} from "@/lib/staff";
+import {
   listAssessmentComponents,
   type AssessmentComponent,
 } from "@/lib/assessmentComponents";
@@ -101,6 +105,8 @@ export default function AllStudentsPage() {
 
   const [data, setData] = useState<StudentListResponse | null>(null);
   const [students, setStudents] = useState<StudentSummary[]>([]);
+  const [teacherDashboard, setTeacherDashboard] =
+    useState<TeacherDashboardResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bulkFeedback, setBulkFeedback] = useState<{
@@ -204,6 +210,32 @@ export default function AllStudentsPage() {
       })
       .catch((err) => console.error("Unable to load assessment components", err));
   }, []);
+
+  useEffect(() => {
+    if (!isTeacher) {
+      setTeacherDashboard(null);
+      return;
+    }
+
+    let active = true;
+
+    fetchTeacherDashboard()
+      .then((dashboard) => {
+        if (active) {
+          setTeacherDashboard(dashboard);
+        }
+      })
+      .catch((err) => {
+        console.error("Unable to load teacher assignments", err);
+        if (active) {
+          setTeacherDashboard(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isTeacher]);
 
   useEffect(() => {
     if (!isTeacher) {
@@ -377,6 +409,57 @@ export default function AllStudentsPage() {
     }
     return sortDirection === "asc" ? " ▲" : " ▼";
   };
+
+  const canViewStudentRecord = useCallback(
+    (student: StudentSummary) => {
+      if (!isTeacher) {
+        return true;
+      }
+      if (!teacherDashboard) {
+        return false;
+      }
+
+      const classId = String(
+        student.school_class_id ?? student.school_class?.id ?? "",
+      );
+      if (!classId) {
+        return false;
+      }
+
+      const studentArmId = String(
+        student.class_arm_id ?? student.class_arm?.id ?? "",
+      );
+      const studentSectionId = String(
+        student.class_section_id ?? student.class_section?.id ?? "",
+      );
+
+      return teacherDashboard.assignments.some((assignment) => {
+        if (!assignment.is_class_teacher) {
+          return false;
+        }
+        if (String(assignment.class?.id ?? "") !== classId) {
+          return false;
+        }
+
+        const assignmentArmId = assignment.class_arm?.id
+          ? String(assignment.class_arm.id)
+          : "";
+        const assignmentSectionId = assignment.class_section?.id
+          ? String(assignment.class_section.id)
+          : "";
+
+        if (assignmentArmId && assignmentArmId !== studentArmId) {
+          return false;
+        }
+        if (assignmentSectionId && assignmentSectionId !== studentSectionId) {
+          return false;
+        }
+
+        return true;
+      });
+    },
+    [isTeacher, teacherDashboard],
+  );
 
   const handleToggleStudent = useCallback(
     (studentId: string | number) => () => {
@@ -930,6 +1013,7 @@ export default function AllStudentsPage() {
                     const photoSrc = student.photo_url
                       ? resolveBackendUrl(student.photo_url)
                       : "/assets/img/figure/student.png";
+                    const showViewAction = canViewStudentRecord(student);
                     return (
                       <tr key={student.id}>
                         <td>
@@ -967,15 +1051,17 @@ export default function AllStudentsPage() {
                         </td>
                         <td>
                           <div className="d-flex gap-2">
-                            <Link
-                              href={buildStudentLink(
-                                "/v14/student-details",
-                                student.id,
-                              )}
-                              className="btn btn-sm btn-outline-primary mr-1"
-                            >
-                              View
-                            </Link>
+                            {showViewAction ? (
+                              <Link
+                                href={buildStudentLink(
+                                  "/v14/student-details",
+                                  student.id,
+                                )}
+                                className="btn btn-sm btn-outline-primary mr-1"
+                              >
+                                View
+                              </Link>
+                            ) : null}
                             {!isTeacher ? (
                               <PermissionGate permission={PERMISSIONS.STUDENTS_UPDATE}>
                                 <Link

@@ -21,6 +21,9 @@ export interface StudentSummary {
   gender?: string | null;
   photo_url?: string | null;
   status?: string | null;
+  school_class_id?: number | string | null;
+  class_arm_id?: number | string | null;
+  class_section_id?: number | string | null;
   school_class?: StudentName & { class_arm?: StudentName | null };
   class_arm?: StudentName | null;
   class_section?: StudentName | null;
