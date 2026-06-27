@@ -362,9 +362,6 @@ export default function ResultsEntryPage() {
     }
 
     teacherDashboard.assignments.forEach((assignment) => {
-      if (assignment.is_class_teacher) {
-        return;
-      }
       if (String(assignment.class?.id ?? "") !== selectedClass) {
         return;
       }
@@ -384,7 +381,9 @@ export default function ResultsEntryPage() {
       }
 
       assignment.subjects.forEach((subject) => {
-        subjectIds.add(String(subject.id));
+        if (subject.is_subject_teacher ?? !assignment.is_class_teacher) {
+          subjectIds.add(String(subject.id));
+        }
       });
     });
 

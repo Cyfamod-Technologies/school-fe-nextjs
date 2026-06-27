@@ -337,9 +337,6 @@ export default function StudentResultEntryPage() {
       student.class_section_id != null ? String(student.class_section_id) : "";
 
     teacherDashboard.assignments.forEach((assignment) => {
-      if (assignment.is_class_teacher) {
-        return;
-      }
       if (String(assignment.class?.id ?? "") !== classId) {
         return;
       }
@@ -359,7 +356,9 @@ export default function StudentResultEntryPage() {
       }
 
       assignment.subjects.forEach((subject) => {
-        subjectIds.add(String(subject.id));
+        if (subject.is_subject_teacher ?? !assignment.is_class_teacher) {
+          subjectIds.add(String(subject.id));
+        }
       });
     });
 

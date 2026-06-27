@@ -184,6 +184,7 @@ export interface TeacherAssignmentSubject {
   id: string;
   name?: string | null;
   code?: string | null;
+  is_subject_teacher?: boolean;
 }
 
 export interface AssignmentMetadata {
