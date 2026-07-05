@@ -113,7 +113,7 @@ export function LoginForm() {
       setEmail("demo@gmail.com");
       setPassword("12345678");
     } else {
-      setEmail("chika-nnaji@demointernational.edu.ng");
+      setEmail("folake-balarabe@demointernational.edu.ng");
       setPassword("password");
     }
     setError(null);
