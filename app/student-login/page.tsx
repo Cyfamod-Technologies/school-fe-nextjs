@@ -118,7 +118,7 @@ export default function StudentLoginPage() {
   };
 
   const applyDemoCredentials = () => {
-    setAdmissionNo("DIS002-2024/2025/1");
+    setAdmissionNo("DIS001/2026/1");
     setPassword("123456");
     setError(null);
   };
@@ -205,7 +205,7 @@ export default function StudentLoginPage() {
                   className="btn btn-sm btn-outline-secondary"
                   onClick={applyDemoCredentials}
                 >
-                  DIS002-2024/2025/1 / 123456
+                  DIS001/2026/1 / 123456
                 </button>
               </div>
             ) : null}

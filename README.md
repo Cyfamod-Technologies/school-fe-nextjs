@@ -1,99 +1,66 @@
-# Cyfamod Technologies - School Management System Frontend
+# 🎨 School Management System - Frontend App
 
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Next.js](https://img.shields.io/badge/Next.js-15.x-black?logo=next.js)](https://nextjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15.x-black?logo=nextdotjs)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19.x-blue?logo=react)](https://react.dev/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Code of Conduct](https://img.shields.io/badge/Contributor%20Covenant-2.0-4baaaa.svg)](CODE_OF_CONDUCT.md)
 
-A modern, responsive frontend for the School Management System built with Next.js 15.
+Next.js 15 frontend application for the Cyfamod School Management System. It delivers role-based dashboards for administrators, teachers, students, and parents.
 
-## 🚀 Features
+---
 
-- **Modern UI/UX**: Clean, intuitive interface for students, teachers, and administrators
-- **Responsive Design**: Works seamlessly on desktop, tablet, and mobile devices
-- **Real-time Updates**: Live notifications and data synchronization
-- **Dashboard Analytics**: Visual reports and statistics
-- **Multi-role Support**: Different views for Admin, Teacher, and Student roles
+## 🏛️ Architecture Overview
+This application interfaces directly with the Laravel backend API to display role-scoped dashboards:
+- **Admin Dashboard:** Access at `/v10/dashboard`
+- **Teacher Dashboard:** Access at `/v25/staff-dashboard`
+- **Student Dashboard:** Access at `/v26/student-dashboard`
+- **Parent Dashboard:** Access at `/v10/dashboard` (customized parent view)
 
-## 🛠️ Tech Stack
+## 📦 Prerequisites
+- **Node.js** >= 18.x
+- **NPM** >= 9.x or **Yarn**
 
-- **Framework**: [Next.js 15](https://nextjs.org/) with App Router
-- **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **Styling**: CSS Modules / Tailwind CSS
-- **State Management**: React Context / Zustand
-- **API Integration**: REST API with Laravel Backend
+## 🚀 One-Command Local Setup
 
-## 📋 Prerequisites
-
-- Node.js 18.x or higher
-- npm, yarn, pnpm, or bun
-- Git
-
-## 🔧 Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Cyfamod-Technologies/school-fe-nextjs.git
-   cd school-fe-nextjs
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   # or
-   yarn install
-   ```
-
-3. **Set up environment variables**
-   ```bash
-   cp .env.example .env.local
-   ```
-   
-   Configure the environment variables in `.env.local`:
-   ```env
-   NEXT_PUBLIC_API_URL=http://localhost:8000/api
-   ```
-
-4. **Run the development server**
-   ```bash
-   npm run dev
-   ```
-
-5. **Open [http://localhost:3000](http://localhost:3000)** in your browser
-
-## 📁 Project Structure
-
-```
-├── app/                # Next.js App Router pages
-├── components/         # Reusable UI components
-├── contexts/           # React Context providers
-├── lib/                # Utility functions and helpers
-├── public/             # Static assets
-├── styles/             # Global styles
-└── legacy/             # Legacy code (to be migrated)
-```
-
-## 🧪 Available Scripts
+Follow these exact steps to spin up the application on a clean machine:
 
 ```bash
-npm run dev       # Start development server
-npm run build     # Build for production
-npm run start     # Start production server
-npm run lint      # Run ESLint
+# 1. Clone the repository
+git clone https://github.com/Cyfamod-Technologies/school-fe-nextjs.git
+cd school-fe-nextjs
+
+# 2. Install dependencies
+npm install
+
+# 3. Setup your environment
+cp .env.example .env.local
+
+# 4. Boot the development server
+npm run dev
+```
+The application is now running locally at `http://localhost:3000`.
+
+### 🔑 Seeded Login Credentials
+> 💡 **Tip:** Login credentials for the dashboards are seeded on the backend database. Run `php artisan db:seed` in the backend repository to see the login details printed in the terminal.
+
+## 🧪 Running Tests
+
+```bash
+npm run test
 ```
 
 ## 🤝 Contributing
 
-We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before submitting a PR.
+We welcome contributions! Please read our [CONTRIBUTING.md](CONTRIBUTING.md) guide and Code of Conduct before submitting a PR.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## 🔗 Related Projects
 
-- **Backend API**: [school-be-laravel](https://github.com/Cyfamod-Technologies/school-be-laravel)
+Backend API: [school-be-laravel](https://github.com/Cyfamod-Technologies/school-be-laravel)
 
 ## 💬 Support
 
