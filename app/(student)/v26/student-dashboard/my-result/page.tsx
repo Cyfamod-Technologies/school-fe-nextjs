@@ -63,17 +63,6 @@ export default function StudentMyResultPage() {
     return session?.terms ?? [];
   }, [sessions, selectedSession]);
 
-  if (loading || !student) {
-    return (
-      <div className="card">
-        <div className="card-body text-center">
-          <div className="spinner-border text-primary mb-3" role="status" />
-          <p className="text-muted mb-0">Loading results…</p>
-        </div>
-      </div>
-    );
-  }
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
@@ -180,6 +169,17 @@ export default function StudentMyResultPage() {
       setPrintProcessing(false);
     }
   }, [selectedSession, selectedTerm]);
+
+  if (loading || !student) {
+    return (
+      <div className="card">
+        <div className="card-body text-center">
+          <div className="spinner-border text-primary mb-3" role="status" />
+          <p className="text-muted mb-0">Loading results…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
