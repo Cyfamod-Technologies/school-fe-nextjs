@@ -4,10 +4,11 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiError } from "@/lib/apiClient";
-import { publicWebsiteUrl } from "@/lib/config";
+import { publicWebsitePreviewUrl, publicWebsiteUrl } from "@/lib/config";
 import { userHasRole } from "@/lib/roleChecks";
 import {
   createDefaultSchoolWebsite,
+  getPreviewLink,
   getSchoolWebsite,
   saveSchoolWebsite,
   type SchoolWebsite,
@@ -65,6 +66,10 @@ export default function WebsiteManagementPage() {
   const [submittingStatus, setSubmittingStatus] =
     useState<SchoolWebsiteStatus | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!school) {
@@ -317,6 +322,30 @@ export default function WebsiteManagementPage() {
     handleSave(status === "unconfigured" ? "draft" : status);
   };
 
+  const handleOpenPreview = async () => {
+    setPreviewError(null);
+    setPreviewLoading(true);
+    try {
+      const link = await getPreviewLink();
+      const embedUrl = publicWebsitePreviewUrl(school?.slug ?? null, link.url);
+      if (!embedUrl) {
+        throw new Error(
+          "This school has no slug yet, so a preview link can't be built.",
+        );
+      }
+      setPreviewUrl(embedUrl);
+    } catch (error) {
+      console.error("Failed to load preview link", error);
+      setPreviewError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load a preview link. Save a draft first, then try again.",
+      );
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   return (
     <>
       <div className="breadcrumbs-area">
@@ -363,21 +392,42 @@ export default function WebsiteManagementPage() {
                     </p>
                   ) : null}
                 </div>
-                {publicUrl ? (
-                  <a
-                    href={publicUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn-fill-lg bg-blue-dark btn-hover-yellow"
+                <div className="d-flex align-items-center" style={{ gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                    onClick={handleOpenPreview}
+                    disabled={previewLoading || status === "unconfigured"}
+                    title={
+                      status === "unconfigured"
+                        ? "Save as Draft first, then Preview"
+                        : "Shows the last saved draft, not unsaved changes"
+                    }
                   >
-                    View Public Website
-                  </a>
-                ) : (
-                  <p className="mb-0 text-muted">
-                    Public website link unavailable (school has no slug yet).
-                  </p>
-                )}
+                    {previewLoading ? "Loading Preview…" : "Preview"}
+                  </button>
+                  {publicUrl ? (
+                    <a
+                      href={publicUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-fill-lg bg-blue-dark btn-hover-yellow"
+                    >
+                      View Public Website
+                    </a>
+                  ) : (
+                    <p className="mb-0 text-muted">
+                      Public website link unavailable (school has no slug yet).
+                    </p>
+                  )}
+                </div>
               </div>
+
+              {previewError ? (
+                <div className="alert alert-danger mt-3" role="alert">
+                  {previewError}
+                </div>
+              ) : null}
 
               <form
                 id="website-management-form"
@@ -751,6 +801,58 @@ export default function WebsiteManagementPage() {
           reserved.
         </div>
       </footer>
+
+      {previewUrl ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Website preview"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1050,
+            background: "rgba(15, 23, 42, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "2rem",
+          }}
+          onClick={() => setPreviewUrl(null)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              width: "100%",
+              maxWidth: 1100,
+              height: "90vh",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div
+              className="d-flex align-items-center justify-content-between"
+              style={{ padding: "0.75rem 1rem", borderBottom: "1px solid #e2e8f0" }}
+            >
+              <strong>Website Preview</strong>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => setPreviewUrl(null)}
+              >
+                Close
+              </button>
+            </div>
+            <iframe
+              src={previewUrl}
+              title="Website preview"
+              style={{ flex: 1, border: 0, width: "100%" }}
+            />
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
