@@ -218,6 +218,11 @@ export function getMenuSections(enableSessionResultPrint = false): MenuSection[]
       icon: "flaticon-settings",
       links: [
         { label: "School Settings", href: "/v10/profile", requiredRoles: ["admin"] },
+        {
+          label: "Website Management",
+          href: "/v28/website-management",
+          requiredPermissions: "settings.school.view",
+        },
       ],
     },
   ];
