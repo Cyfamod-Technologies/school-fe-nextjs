@@ -75,6 +75,10 @@ export default function DashboardPage() {
     const sessionId = schoolContext.current_session_id;
 
     if (!sessionId) {
+      // Reset derived state when the reactive dependency (session id)
+      // becomes unavailable -- standard effect-driven sync, not a stray
+      // setState.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSessionStudentCount(null);
       setSessionCountLoading(false);
       return;

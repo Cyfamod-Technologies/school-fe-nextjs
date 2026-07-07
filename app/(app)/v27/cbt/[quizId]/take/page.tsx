@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { StudentAuthProvider, useStudentAuth } from '@/contexts/StudentAuthContext';
 import { apiFetch } from '@/lib/apiClient';
+import { getErrorMessage } from "@/lib/errors";
 
 interface QuizQuestion {
   id: string;
@@ -95,8 +96,8 @@ function TakeQuizPageInner() {
         setTimeRemaining(quizResponse.data.duration_minutes * 60);
 
         setError(null);
-      } catch (err: any) {
-        setError(err.message || 'Failed to load quiz');
+      } catch (err) {
+        setError(getErrorMessage(err, 'Failed to load quiz'));
         console.error('Error loading quiz:', err);
       } finally {
         setLoading(false);
@@ -201,8 +202,8 @@ function TakeQuizPageInner() {
 
       // Redirect to results
       router.push(`/cbt/results/${resultId}`);
-    } catch (err: any) {
-      setError(err.message || 'Failed to submit quiz');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to submit quiz'));
       console.error('Error submitting quiz:', err);
     }
   };

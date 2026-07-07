@@ -1,9 +1,11 @@
 'use client';
+import Link from "next/link";
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/apiClient';
+import { getErrorMessage } from "@/lib/errors";
 
 interface Quiz {
   id: string;
@@ -60,8 +62,8 @@ export default function QuizResultsPage() {
 
         setQuiz(quizRes.data);
         setResults(resultsRes.data || []);
-      } catch (err: any) {
-        setError(err.message || 'Failed to load quiz results');
+      } catch (err) {
+        setError(getErrorMessage(err, 'Failed to load quiz results'));
       } finally {
         setLoading(false);
       }
@@ -105,7 +107,7 @@ export default function QuizResultsPage() {
         <h3>Quiz Results</h3>
         <ul>
           <li>
-            <a href="/v27/cbt/admin">Quiz Management</a>
+            <Link href="/v27/cbt/admin">Quiz Management</Link>
           </li>
           <li>Results</li>
         </ul>
