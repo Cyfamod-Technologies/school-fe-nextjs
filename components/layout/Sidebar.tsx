@@ -221,6 +221,7 @@ export function getMenuSections(enableSessionResultPrint = false): MenuSection[]
         {
           label: "Website Management",
           href: "/v28/website-management",
+          requiredRoles: ["admin"],
           requiredPermissions: "settings.school.view",
         },
       ],

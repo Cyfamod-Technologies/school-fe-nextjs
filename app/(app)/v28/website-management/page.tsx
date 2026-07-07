@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiError } from "@/lib/apiClient";
 import { publicWebsiteUrl } from "@/lib/config";
+import { userHasRole } from "@/lib/roleChecks";
 import {
   createDefaultSchoolWebsite,
   getSchoolWebsite,
@@ -40,11 +41,13 @@ const STATUS_BADGE_CLASS: Record<SchoolWebsiteStatus | "unconfigured", string> =
 };
 
 export default function WebsiteManagementPage() {
-  const { schoolContext, hasPermission } = useAuth();
+  const { user, schoolContext, hasPermission } = useAuth();
   const school = schoolContext.school;
 
-  const canView = hasPermission("settings.school.view");
-  const canManage = hasPermission("settings.school.update");
+  const isAdminUser =
+    userHasRole(user, "admin") || userHasRole(user, "super_admin");
+  const canView = isAdminUser && hasPermission("settings.school.view");
+  const canManage = isAdminUser && hasPermission("settings.school.update");
 
   const [form, setForm] = useState<SchoolWebsitePayload | null>(null);
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
