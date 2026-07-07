@@ -39,6 +39,20 @@ function requireStorageUrl(): string {
 
 export const STORAGE_URL = requireStorageUrl();
 
+// Optional: base URL of the public school-website app (school-public-web),
+// used only to build "view public website" links. Not required for the
+// rest of the app to function, so it falls back rather than throwing.
+export const PUBLIC_SITE_URL = (
+  process.env.NEXT_PUBLIC_PUBLIC_SITE_URL || "http://localhost:3000"
+).replace(/\/$/, "");
+
+export function publicWebsiteUrl(schoolSlug: string | null | undefined): string | null {
+  if (!schoolSlug) {
+    return null;
+  }
+  return `${PUBLIC_SITE_URL}/schools/${encodeURIComponent(schoolSlug)}`;
+}
+
 const SCHOOL_REGISTRATION_FLAG = (
   process.env.NEXT_PUBLIC_SCHOOL_REGISTRATION ?? "off"
 )
@@ -102,6 +116,7 @@ export const API_ROUTES = {
   logoutOtherDevices: "/api/v1/logout/other-devices",
   currentUser: "/api/v1/user",
   schoolContext: "/api/v1/school",
+  schoolWebsite: "/api/v1/school/website",
   classes: "/api/v1/classes",
   parents: "/api/v1/parents",
   parentsSearch: "/api/v1/parents",
