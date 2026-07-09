@@ -4,13 +4,43 @@ import { getCookie } from "@/lib/cookies";
 type FetchOptions = RequestInit & {
   skipAuth?: boolean;
   authScope?: "staff" | "student";
+  /**
+   * By default, a 403 on a read-only staff request returns `[]` instead of
+   * throwing, since most callers are list endpoints. Set to `false` for
+   * single-object endpoints where `[]` would be a type-unsafe, misleading
+   * stand-in for "forbidden" (see ApiError below for the correct signal).
+   */
+  treatForbiddenAsEmpty?: boolean;
 };
+
+export class ApiError extends Error {
+  readonly status: number;
+  /** Laravel's per-field validation errors on a 422 response, if present. */
+  readonly errors?: Record<string, string[]>;
+
+  constructor(
+    message: string,
+    status: number,
+    errors?: Record<string, string[]>,
+  ) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.errors = errors;
+  }
+}
 
 export async function apiFetch<T = unknown>(
   path: string,
   options: FetchOptions = {},
 ): Promise<T> {
-  const { skipAuth = false, authScope = "staff", headers, ...rest } = options;
+  const {
+    skipAuth = false,
+    authScope = "staff",
+    treatForbiddenAsEmpty = true,
+    headers,
+    ...rest
+  } = options;
   const tokenName = authScope === "student" ? "student_token" : "token";
   const token = getCookie(tokenName);
   const resolvedHeaders = new Headers(headers);
@@ -43,7 +73,10 @@ export async function apiFetch<T = unknown>(
         );
       }
 
-      throw new Error("Session expired. Re-checking authentication.");
+      throw new ApiError(
+        "Session expired. Re-checking authentication.",
+        response.status,
+      );
     }
 
     // For 403 (Forbidden) errors on read-only staff requests, return empty data
@@ -51,18 +84,31 @@ export async function apiFetch<T = unknown>(
     // the UI can surface proper error feedback.
     const method = (rest.method ?? "GET").toString().toUpperCase();
     const isReadOnlyMethod = method === "GET" || method === "HEAD";
-    if (response.status === 403 && authScope === "staff" && isReadOnlyMethod) {
+    if (
+      response.status === 403 &&
+      authScope === "staff" &&
+      isReadOnlyMethod &&
+      treatForbiddenAsEmpty
+    ) {
       return [] as T;
     }
-    
+
     let message = response.statusText;
+    let validationErrors: Record<string, string[]> | undefined;
     try {
       const data = await response.json();
       message = data.message ?? JSON.stringify(data);
+      if (data.errors && typeof data.errors === "object") {
+        validationErrors = data.errors;
+      }
     } catch {
       // ignore parse errors, fall back to status text
     }
-    throw new Error(message || `Request failed (${response.status})`);
+    throw new ApiError(
+      message || `Request failed (${response.status})`,
+      response.status,
+      validationErrors,
+    );
   }
 
   if (response.status === 204) {
