@@ -360,8 +360,9 @@ export default function StudentAttendancePage() {
         const existingMetadata =
           (existing as StudentAttendanceRecord | undefined)?.metadata ?? null;
         const existingComment =
-          existingMetadata && typeof (existingMetadata as any).comment === "string"
-            ? String((existingMetadata as any).comment)
+          existingMetadata &&
+          typeof (existingMetadata as Record<string, unknown>).comment === "string"
+            ? String((existingMetadata as Record<string, unknown>).comment)
             : "";
         nextMap[key] = {
           status: (existing?.status as StudentAttendanceStatus) ?? "",
@@ -1326,8 +1327,8 @@ export default function StudentAttendancePage() {
                       <td>
                         {record.metadata &&
                         typeof record.metadata === "object" &&
-                        (record.metadata as any).comment
-                          ? String((record.metadata as any).comment)
+                        (record.metadata as Record<string, unknown>).comment
+                          ? String((record.metadata as Record<string, unknown>).comment)
                           : "—"}
                       </td>
                       <td>{record.recorded_by?.name ?? "—"}</td>

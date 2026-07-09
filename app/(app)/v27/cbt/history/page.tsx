@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/apiClient';
+import { getErrorMessage } from "@/lib/errors";
 
 interface AttemptHistory {
   id: string;
@@ -41,8 +42,8 @@ export default function HistoryPage() {
       const response = await apiFetch<{ data: AttemptHistory[] }>('/api/v1/cbt/quiz-attempts');
       setAttempts(response.data || []);
       setError(null);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load history');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to load history'));
       console.error('Error loading history:', err);
     } finally {
       setLoading(false);

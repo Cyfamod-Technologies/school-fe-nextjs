@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/apiClient";
+import { getErrorMessage } from "@/lib/errors";
 
 interface AssessmentComponent {
   id: string;
@@ -38,9 +39,9 @@ export default function CbtLinksOverviewPage() {
         if (active) {
           setComponents(data);
         }
-      } catch (err: any) {
+      } catch (err) {
         if (active) {
-          setError(err?.message ?? "Unable to load assessment components.");
+          setError(getErrorMessage(err, "Unable to load assessment components."));
         }
       } finally {
         if (active) {
@@ -78,7 +79,7 @@ export default function CbtLinksOverviewPage() {
             <a href="/cbt">CBT</a>
           </li>
           <li>
-            <a href="/v27/cbt/admin">Quiz Management</a>
+            <Link href="/v27/cbt/admin">Quiz Management</Link>
           </li>
           <li>CBT Links</li>
         </ul>
