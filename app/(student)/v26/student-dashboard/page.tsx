@@ -366,30 +366,22 @@ export default function StudentDashboardHome() {
     }
   }, [loading, student, router]);
 
-  if (loading || !student) {
-    return (
-      <div className="card">
-        <div className="card-body text-center">
-          <div className="spinner-border text-primary mb-3" role="status" />
-          <p className="text-muted mb-0">Loading your dashboard…</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Get unique subjects to avoid duplicates
+  // Get unique subjects to avoid duplicates. Guards on `student` being null
+  // internally rather than skipping the hook via an early return above --
+  // hooks must run in the same order on every render.
   const uniqueSubjects = useMemo(() => {
-    if (!Array.isArray(student.subjects)) return [];
+    if (!student || !Array.isArray(student.subjects)) return [];
     const seen = new Set<string>();
     return student.subjects.filter((subject) => {
       if (seen.has(subject.id)) return false;
       seen.add(subject.id);
       return true;
     });
-  }, [student.subjects]);
+  }, [student]);
 
-  const summaryCards = useMemo(
-    () => [
+  const summaryCards = useMemo(() => {
+    if (!student) return [];
+    return [
       {
         label: "Current Session",
         value: student.current_session?.name ?? "Not set",
@@ -415,9 +407,19 @@ export default function StudentDashboardHome() {
         value: uniqueSubjects.length,
         icon: "📖",
       },
-    ],
-    [student, uniqueSubjects.length],
-  );
+    ];
+  }, [student, uniqueSubjects.length]);
+
+  if (loading || !student) {
+    return (
+      <div className="card">
+        <div className="card-body text-center">
+          <div className="spinner-border text-primary mb-3" role="status" />
+          <p className="text-muted mb-0">Loading your dashboard…</p>
+        </div>
+      </div>
+    );
+  }
 
   const profileItems = [
     { label: "Admission No", value: student.admission_no },
