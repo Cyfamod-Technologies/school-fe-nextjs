@@ -211,6 +211,25 @@ export async function saveSchoolWebsite(
   return unwrap(response);
 }
 
+export interface SchoolWebsitePreviewLink {
+  url: string;
+  expiresAt: string;
+}
+
+/**
+ * Requests a fresh short-lived signed preview link (SWT-012) for the
+ * authenticated school's current website. 404s (surfaced as a thrown
+ * ApiError) if nothing has been saved yet -- a draft has to exist before
+ * it can be previewed. Always request a fresh link right before showing
+ * the preview; links expire after 10 minutes server-side.
+ */
+export async function getPreviewLink(): Promise<SchoolWebsitePreviewLink> {
+  return apiFetch<SchoolWebsitePreviewLink>(
+    API_ROUTES.schoolWebsitePreviewLink,
+    { method: "POST" },
+  );
+}
+
 const THEME_KEY = "kidza-home-2";
 
 /**

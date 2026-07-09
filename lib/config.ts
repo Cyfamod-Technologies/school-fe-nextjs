@@ -59,6 +59,25 @@ export function publicWebsiteUrl(schoolSlug: string | null | undefined): string 
   return `${PUBLIC_SITE_URL}/schools/${encodeURIComponent(schoolSlug)}`;
 }
 
+/**
+ * Converts a signed backend preview URL (from
+ * POST /api/v1/school/website/preview-link, e.g.
+ * http://backend/api/v1/public/schools/{slug}/website/preview?expires=..&signature=..)
+ * into the equivalent school-public-web page URL, forwarding the same
+ * expires/signature query params so public-web's server-side fetch can
+ * pass them straight through to Laravel, which validates them.
+ */
+export function publicWebsitePreviewUrl(
+  schoolSlug: string | null | undefined,
+  backendSignedUrl: string,
+): string | null {
+  if (!schoolSlug) {
+    return null;
+  }
+  const query = backendSignedUrl.split("?")[1] ?? "";
+  return `${PUBLIC_SITE_URL}/schools/${encodeURIComponent(schoolSlug)}/preview${query ? `?${query}` : ""}`;
+}
+
 const SCHOOL_REGISTRATION_FLAG = (
   process.env.NEXT_PUBLIC_SCHOOL_REGISTRATION ?? "off"
 )
@@ -123,6 +142,7 @@ export const API_ROUTES = {
   currentUser: "/api/v1/user",
   schoolContext: "/api/v1/school",
   schoolWebsite: "/api/v1/school/website",
+  schoolWebsitePreviewLink: "/api/v1/school/website/preview-link",
   classes: "/api/v1/classes",
   parents: "/api/v1/parents",
   parentsSearch: "/api/v1/parents",
