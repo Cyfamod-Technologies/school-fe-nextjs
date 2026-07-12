@@ -233,6 +233,18 @@ export async function getPreviewLink(): Promise<SchoolWebsitePreviewLink> {
 const THEME_KEY = "kidza-home-2";
 
 /**
+ * Kept in sync manually with `themeDefinitions` in
+ * `public-web/src/lib/contracts/website.ts` -- the two repos can't share a
+ * TypeScript import across a network boundary, so this list is the
+ * frontend's own copy. If you add a theme to public-web, add it here too.
+ */
+export const THEME_OPTIONS: { key: string; label: string }[] = [
+  { key: "kidza-home-1", label: "Kidza Home 1" },
+  { key: "kidza-home-2", label: "Kidza Home 2" },
+  { key: "kidza-home-3", label: "Kidza Home 3" },
+];
+
+/**
  * A complete, backend-valid payload for a school that has never configured
  * a website. Only branding/header/hero/status are surfaced in the MVP form,
  * but Laravel's `required` rule rejects empty strings AND empty arrays
