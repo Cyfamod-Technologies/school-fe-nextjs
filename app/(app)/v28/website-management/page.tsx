@@ -11,6 +11,7 @@ import {
   getPreviewLink,
   getSchoolWebsite,
   saveSchoolWebsite,
+  THEME_OPTIONS,
   type SchoolWebsite,
   type SchoolWebsitePayload,
   type SchoolWebsiteStatus,
@@ -171,6 +172,10 @@ export default function WebsiteManagementPage() {
     setForm((prev) =>
       prev ? { ...prev, branding: { ...prev.branding, [key]: value } } : prev,
     );
+  };
+
+  const updateThemeKey = (value: string) => {
+    setForm((prev) => (prev ? { ...prev, themeKey: value } : prev));
   };
 
   const updateHeader = (
@@ -434,6 +439,31 @@ export default function WebsiteManagementPage() {
                 className="new-added-form"
                 onSubmit={handleSubmit}
               >
+                <h4 className="mt-4">Theme</h4>
+                <div className="row">
+                  <div className="col-lg-6 col-12 form-group">
+                    <label htmlFor="website-theme-key">Website Theme *</label>
+                    <select
+                      id="website-theme-key"
+                      className="form-control"
+                      value={form.themeKey}
+                      onChange={(event) => updateThemeKey(event.target.value)}
+                      required
+                    >
+                      {THEME_OPTIONS.map((option) => (
+                        <option key={option.key} value={option.key}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    {fieldError("themeKey") ? (
+                      <small className="text-danger">
+                        {fieldError("themeKey")}
+                      </small>
+                    ) : null}
+                  </div>
+                </div>
+
                 <h4 className="mt-4">Branding</h4>
                 <div className="row">
                   <div className="col-lg-6 col-12 form-group">
