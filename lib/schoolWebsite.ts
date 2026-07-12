@@ -239,6 +239,7 @@ const THEME_KEY = "kidza-home-2";
  * frontend's own copy. If you add a theme to public-web, add it here too.
  */
 export const THEME_OPTIONS: { key: string; label: string }[] = [
+  { key: "kidza-home-1", label: "Kidza Home 1" },
   { key: "kidza-home-2", label: "Kidza Home 2" },
   { key: "kidza-home-3", label: "Kidza Home 3" },
 ];
