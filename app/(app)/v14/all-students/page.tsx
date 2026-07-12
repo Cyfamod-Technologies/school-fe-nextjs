@@ -36,6 +36,7 @@ import {
   type AssessmentComponent,
 } from "@/lib/assessmentComponents";
 import { exportAssessmentSheet } from "@/lib/assessmentSheetExport";
+import { listResults, type ResultRecord } from "@/lib/results";
 
 const passthroughLoader: ImageLoader = ({ src }) => src;
 
@@ -577,6 +578,14 @@ export default function AllStudentsPage() {
       return;
     }
 
+    if (!filters.current_session_id || !filters.term_id) {
+      setBulkFeedback({
+        type: "warning",
+        message: "Please select a Session and Term before exporting the assessment sheet.",
+      });
+      return;
+    }
+
     setExporting(true);
     try {
       // Fetch all students matching current filters
@@ -589,6 +598,24 @@ export default function AllStudentsPage() {
         });
         setExporting(false);
         return;
+      }
+
+      const allResults: ResultRecord[] = [];
+      let resultPage = 1;
+      let hasMoreResults = true;
+
+      while (hasMoreResults) {
+        const response = await listResults({
+          page: resultPage,
+          per_page: 1000,
+          session_id: filters.current_session_id,
+          term_id: filters.term_id,
+          school_class_id: filters.school_class_id || undefined,
+          class_arm_id: filters.class_arm_id || undefined,
+        });
+        allResults.push(...(Array.isArray(response.data) ? response.data : []));
+        hasMoreResults = resultPage < (response.last_page || 1);
+        resultPage += 1;
       }
 
       // Build filename with class and arm if selected
@@ -612,7 +639,7 @@ export default function AllStudentsPage() {
       filename += `_${timestamp}.csv`;
 
       // Export the sheet
-      exportAssessmentSheet(allStudents, assessmentComponents, filename);
+      exportAssessmentSheet(allStudents, assessmentComponents, allResults, filename);
 
       setBulkFeedback({
         type: "success",
@@ -631,7 +658,7 @@ export default function AllStudentsPage() {
     } finally {
       setExporting(false);
     }
-  }, [exporting, assessmentComponents, fetchAllStudentsForExport, filters.school_class_id, filters.class_arm_id, classes, classArms]);
+  }, [exporting, assessmentComponents, fetchAllStudentsForExport, filters.current_session_id, filters.term_id, filters.school_class_id, filters.class_arm_id, classes, classArms]);
 
   const handleExportBroadsheet = useCallback(async () => {
     if (exportingBroadsheet) return;

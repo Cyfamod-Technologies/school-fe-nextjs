@@ -1,5 +1,12 @@
 import { AssessmentComponent } from "@/lib/assessmentComponents";
+import { ResultRecord } from "@/lib/results";
 import { StudentSummary } from "@/lib/students";
+
+interface AssessmentSheetColumn {
+  componentId: string;
+  subjectId: string | null;
+  heading: string;
+}
 
 /**
  * Generate Excel file content as CSV (can be opened in Excel, Google Sheets, etc.)
@@ -8,14 +15,50 @@ import { StudentSummary } from "@/lib/students";
 export function generateAssessmentSheetCSV(
   students: StudentSummary[],
   assessmentComponents: AssessmentComponent[],
+  results: ResultRecord[] = [],
 ): string {
   // Sort components by order
   const sortedComponents = [...assessmentComponents].sort(
     (a, b) => (a.order || 0) - (b.order || 0),
   );
 
-  // Create header row: Admission No, Name, then assessment components
-  const headers = ["Admission No", "Name", ...sortedComponents.map((c) => c.name)];
+  // A component can be assigned to several subjects. Keep each subject/component
+  // combination separate so, for example, English CA is not confused with Maths CA.
+  const columns = sortedComponents.flatMap<AssessmentSheetColumn>((component) => {
+    const subjects = Array.isArray(component.subjects) ? component.subjects : [];
+
+    if (subjects.length === 0) {
+      return [{
+        componentId: String(component.id),
+        subjectId: null,
+        heading: component.name,
+      }];
+    }
+
+    return [...subjects]
+      .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+      .map((subject) => ({
+        componentId: String(component.id),
+        subjectId: String(subject.id),
+        heading: `${subject.name} - ${component.name}`,
+      }));
+  });
+
+  const headers = ["Admission No", "Name", ...columns.map((column) => column.heading)];
+
+  const scoreLookup = new Map<string, number>();
+  results.forEach((result) => {
+    if (result.assessment_component_id === null || result.assessment_component_id === undefined) {
+      return;
+    }
+
+    scoreLookup.set(
+      [result.student_id, result.subject_id, result.assessment_component_id]
+        .map(String)
+        .join(":"),
+      result.total_score,
+    );
+  });
 
   // Create data rows
   const rows = students.map((student) => {
@@ -25,8 +68,20 @@ export function generateAssessmentSheetCSV(
       .trim();
     const admissionNo = student.admission_no || "";
 
-    // Assessment component columns (empty for now, to be filled manually)
-    const componentColumns = sortedComponents.map(() => "");
+    const componentColumns = columns.map((column) => {
+      if (column.subjectId !== null) {
+        return scoreLookup.get(
+          [student.id, column.subjectId, column.componentId].map(String).join(":"),
+        ) ?? "";
+      }
+
+      const matchingResult = results.find(
+        (result) =>
+          String(result.student_id) === String(student.id) &&
+          String(result.assessment_component_id) === column.componentId,
+      );
+      return matchingResult?.total_score ?? "";
+    });
 
     return [admissionNo, name, ...componentColumns];
   });
@@ -40,7 +95,7 @@ export function generateAssessmentSheetCSV(
       row
         .map((cell) => {
           // Escape cells containing commas or quotes
-          const cellStr = String(cell || "");
+          const cellStr = String(cell ?? "");
           if (cellStr.includes(",") || cellStr.includes('"')) {
             return `"${cellStr.replace(/"/g, '""')}"`;
           }
@@ -82,6 +137,7 @@ export function downloadCSVFile(
 export function exportAssessmentSheet(
   students: StudentSummary[],
   assessmentComponents: AssessmentComponent[],
+  results: ResultRecord[] = [],
   filename?: string,
 ): void {
   if (!students || students.length === 0) {
@@ -94,7 +150,7 @@ export function exportAssessmentSheet(
 
   try {
     // Always use CSV to ensure reliable download
-    const csv = generateAssessmentSheetCSV(students, assessmentComponents);
+    const csv = generateAssessmentSheetCSV(students, assessmentComponents, results);
     const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     downloadCSVFile(
       csv,
