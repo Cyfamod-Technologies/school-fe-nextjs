@@ -2,12 +2,6 @@ import { AssessmentComponent } from "@/lib/assessmentComponents";
 import { ResultRecord } from "@/lib/results";
 import { StudentSummary } from "@/lib/students";
 
-interface AssessmentSheetColumn {
-  componentId: string;
-  subjectId: string | null;
-  heading: string;
-}
-
 /**
  * Generate Excel file content as CSV (can be opened in Excel, Google Sheets, etc.)
  * This approach doesn't require any external dependencies
@@ -22,29 +16,11 @@ export function generateAssessmentSheetCSV(
     (a, b) => (a.order || 0) - (b.order || 0),
   );
 
-  // A component can be assigned to several subjects. Keep each subject/component
-  // combination separate so, for example, English CA is not confused with Maths CA.
-  const columns = sortedComponents.flatMap<AssessmentSheetColumn>((component) => {
-    const subjects = Array.isArray(component.subjects) ? component.subjects : [];
-
-    if (subjects.length === 0) {
-      return [{
-        componentId: String(component.id),
-        subjectId: null,
-        heading: component.name,
-      }];
-    }
-
-    return [...subjects]
-      .sort((a, b) => String(a.name).localeCompare(String(b.name)))
-      .map((subject) => ({
-        componentId: String(component.id),
-        subjectId: String(subject.id),
-        heading: `${subject.name} - ${component.name}`,
-      }));
-  });
-
-  const headers = ["Admission No", "Name", ...columns.map((column) => column.heading)];
+  const headers = [
+    "Admission No",
+    "Name",
+    ...sortedComponents.map((component) => component.name),
+  ];
 
   const scoreLookup = new Map<string, number>();
   results.forEach((result) => {
@@ -52,12 +28,10 @@ export function generateAssessmentSheetCSV(
       return;
     }
 
-    scoreLookup.set(
-      [result.student_id, result.subject_id, result.assessment_component_id]
-        .map(String)
-        .join(":"),
-      result.total_score,
-    );
+    const key = [result.student_id, result.assessment_component_id]
+      .map(String)
+      .join(":");
+    scoreLookup.set(key, (scoreLookup.get(key) ?? 0) + Number(result.total_score));
   });
 
   // Create data rows
@@ -68,20 +42,9 @@ export function generateAssessmentSheetCSV(
       .trim();
     const admissionNo = student.admission_no || "";
 
-    const componentColumns = columns.map((column) => {
-      if (column.subjectId !== null) {
-        return scoreLookup.get(
-          [student.id, column.subjectId, column.componentId].map(String).join(":"),
-        ) ?? "";
-      }
-
-      const matchingResult = results.find(
-        (result) =>
-          String(result.student_id) === String(student.id) &&
-          String(result.assessment_component_id) === column.componentId,
-      );
-      return matchingResult?.total_score ?? "";
-    });
+    const componentColumns = sortedComponents.map((component) =>
+      scoreLookup.get([student.id, component.id].map(String).join(":")) ?? "",
+    );
 
     return [admissionNo, name, ...componentColumns];
   });
