@@ -31,12 +31,6 @@ import {
   fetchTeacherDashboard,
   type TeacherDashboardResponse,
 } from "@/lib/staff";
-import {
-  listAssessmentComponents,
-  type AssessmentComponent,
-} from "@/lib/assessmentComponents";
-import { exportAssessmentSheet } from "@/lib/assessmentSheetExport";
-import { listResults, type ResultRecord } from "@/lib/results";
 
 const passthroughLoader: ImageLoader = ({ src }) => src;
 
@@ -98,10 +92,6 @@ export default function AllStudentsPage() {
   const [classSections, setClassSections] = useState<ClassArmSection[]>([]);
   void classSections;
 
-  const [assessmentComponents, setAssessmentComponents] = useState<
-    AssessmentComponent[]
-  >([]);
-  const [exporting, setExporting] = useState(false);
   const [exportingBroadsheet, setExportingBroadsheet] = useState(false);
 
   const [data, setData] = useState<StudentListResponse | null>(null);
@@ -145,45 +135,20 @@ export default function AllStudentsPage() {
     }
   }, [filters, page, perPage, sortBy, sortDirection]);
 
-  const fetchAllStudentsForExport = useCallback(async () => {
-    try {
-      let allStudents: StudentSummary[] = [];
-      let currentPage = 1;
-      let hasMore = true;
-
-      while (hasMore) {
-        const response = await listStudents({
-          page: currentPage,
-          per_page: 1000, // Large per_page to minimize API calls
-          sortBy,
-          sortDirection,
-          search: filters.search || undefined,
-          current_session_id: filters.current_session_id || undefined,
-          school_class_id: filters.school_class_id || undefined,
-          class_arm_id: filters.class_arm_id || undefined,
-        });
-
-        const students = Array.isArray(response.data) ? response.data : [];
-        allStudents = [...allStudents, ...students];
-
-        // Check if there are more pages
-        hasMore = currentPage < (response.last_page || 1);
-        currentPage++;
-      }
-
-      return allStudents;
-    } catch (err) {
-      console.error("Unable to load all students for export", err);
-      throw new Error(
-        err instanceof Error ? err.message : "Unable to load students for export.",
-      );
-    }
-  }, [filters, sortBy, sortDirection]);
-
   const terms = useMemo(() => {
     if (!filters.current_session_id) return [];
     return termsCache[filters.current_session_id] ?? [];
   }, [filters.current_session_id, termsCache]);
+
+  const assessmentSheetHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (filters.current_session_id) params.set("session_id", filters.current_session_id);
+    if (filters.term_id) params.set("term_id", filters.term_id);
+    if (filters.school_class_id) params.set("class_id", filters.school_class_id);
+    if (filters.class_arm_id) params.set("arm_id", filters.class_arm_id);
+    const query = params.toString();
+    return query ? `/v14/assessment-sheet?${query}` : "/v14/assessment-sheet";
+  }, [filters.current_session_id, filters.term_id, filters.school_class_id, filters.class_arm_id]);
 
   useEffect(() => {
     if (!filters.current_session_id || termsCache[filters.current_session_id]) return;
@@ -201,15 +166,6 @@ export default function AllStudentsPage() {
     listClasses()
       .then(setClasses)
       .catch((err) => console.error("Unable to load classes", err));
-    listAssessmentComponents()
-      .then((response) => {
-        const components =
-          (response && response.data && Array.isArray(response.data)
-            ? response.data
-            : []) || [];
-        setAssessmentComponents(components);
-      })
-      .catch((err) => console.error("Unable to load assessment components", err));
   }, []);
 
   useEffect(() => {
@@ -565,101 +521,6 @@ export default function AllStudentsPage() {
     }
   }, [deletingSelected, fetchStudents, page, selectedStudentIdList, students.length]);
 
-  const handleExportAssessmentSheet = useCallback(async () => {
-    if (exporting) {
-      return;
-    }
-
-    if (!assessmentComponents || assessmentComponents.length === 0) {
-      setBulkFeedback({
-        type: "danger",
-        message: "No assessment components found. Please ensure assessment components are configured in the system.",
-      });
-      return;
-    }
-
-    if (!filters.current_session_id || !filters.term_id) {
-      setBulkFeedback({
-        type: "warning",
-        message: "Please select a Session and Term before exporting the assessment sheet.",
-      });
-      return;
-    }
-
-    setExporting(true);
-    try {
-      // Fetch all students matching current filters
-      const allStudents = await fetchAllStudentsForExport();
-
-      if (!allStudents || allStudents.length === 0) {
-        setBulkFeedback({
-          type: "warning",
-          message: "No students found matching the current filters.",
-        });
-        setExporting(false);
-        return;
-      }
-
-      const allResults: ResultRecord[] = [];
-      let resultPage = 1;
-      let hasMoreResults = true;
-
-      while (hasMoreResults) {
-        const response = await listResults({
-          page: resultPage,
-          per_page: 1000,
-          session_id: filters.current_session_id,
-          term_id: filters.term_id,
-          school_class_id: filters.school_class_id || undefined,
-          class_arm_id: filters.class_arm_id || undefined,
-        });
-        allResults.push(...(Array.isArray(response.data) ? response.data : []));
-        hasMoreResults = resultPage < (response.last_page || 1);
-        resultPage += 1;
-      }
-
-      // Build filename with class and arm if selected
-      let filename = "assessment_sheet";
-      
-      if (filters.school_class_id) {
-        const selectedClass = classes.find((c) => String(c.id) === String(filters.school_class_id));
-        if (selectedClass) {
-          filename += `_${selectedClass.name}`;
-        }
-      }
-      
-      if (filters.class_arm_id) {
-        const selectedArm = classArms.find((a) => String(a.id) === String(filters.class_arm_id));
-        if (selectedArm) {
-          filename += `_${selectedArm.name}`;
-        }
-      }
-
-      const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-      filename += `_${timestamp}.csv`;
-
-      // Export the sheet
-      exportAssessmentSheet(allStudents, assessmentComponents, allResults, filename);
-
-      setBulkFeedback({
-        type: "success",
-        message: `Assessment sheet exported successfully with ${allStudents.length} student${allStudents.length === 1 ? "" : "s"}.`,
-      });
-    } catch (err) {
-      console.error("Unable to export assessment sheet", err);
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "Unable to export assessment sheet. Please try again.";
-      setBulkFeedback({
-        type: "danger",
-        message: errorMessage,
-      });
-    } finally {
-      setExporting(false);
-    }
-  }, [exporting, assessmentComponents, fetchAllStudentsForExport, filters.current_session_id, filters.term_id, filters.school_class_id, filters.class_arm_id, classes, classArms]);
-
   const handleExportBroadsheet = useCallback(async () => {
     if (exportingBroadsheet) return;
 
@@ -922,14 +783,12 @@ export default function AllStudentsPage() {
                   </PermissionGate>
                 ) : null}
                 {!isTeacher ? (
-                  <button
-                    type="button"
+                  <Link
+                    href={assessmentSheetHref}
                     className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
-                    onClick={handleExportAssessmentSheet}
-                    disabled={exporting || students.length === 0}
                   >
-                    {exporting ? "Exporting…" : "Export Assessment Sheet"}
-                  </button>
+                    Assessment Sheet
+                  </Link>
                 ) : null}
                 {!isTeacher ? (
                   <button
