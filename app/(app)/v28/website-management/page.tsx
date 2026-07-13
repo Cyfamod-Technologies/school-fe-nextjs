@@ -329,6 +329,14 @@ export default function WebsiteManagementPage() {
 
   const handleOpenPreview = async () => {
     setPreviewError(null);
+
+    if (hasUnsavedChanges) {
+      setPreviewError(
+        "You have unsaved changes -- Preview only shows what's already saved. Click \"Save as Draft\" first, then Preview.",
+      );
+      return;
+    }
+
     setPreviewLoading(true);
     try {
       const link = await getPreviewLink();
@@ -349,6 +357,24 @@ export default function WebsiteManagementPage() {
     } finally {
       setPreviewLoading(false);
     }
+  };
+
+  // Unlike Preview, Publish always saves the current form state -- it has
+  // no stale-data risk to warn about. This is a deliberate confirmation
+  // step instead: publishing goes live immediately, so a heads-up before
+  // that happens (especially with edits still uncommitted to a draft) is
+  // worth the extra click.
+  const handlePublishClick = () => {
+    if (
+      hasUnsavedChanges &&
+      !window.confirm(
+        "You have unsaved changes. Publishing will save and make these changes live immediately -- continue?",
+      )
+    ) {
+      return;
+    }
+
+    handleSave("published");
   };
 
   return (
@@ -795,7 +821,7 @@ export default function WebsiteManagementPage() {
                       type="button"
                       className="btn-fill-lg bg-blue-dark btn-hover-yellow"
                       disabled={submittingStatus !== null}
-                      onClick={() => handleSave("published")}
+                      onClick={handlePublishClick}
                     >
                       {submittingStatus === "published"
                         ? "Publishing…"
