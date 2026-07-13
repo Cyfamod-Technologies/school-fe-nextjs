@@ -359,6 +359,24 @@ export default function WebsiteManagementPage() {
     }
   };
 
+  // Unlike Preview, Publish always saves the current form state -- it has
+  // no stale-data risk to warn about. This is a deliberate confirmation
+  // step instead: publishing goes live immediately, so a heads-up before
+  // that happens (especially with edits still uncommitted to a draft) is
+  // worth the extra click.
+  const handlePublishClick = () => {
+    if (
+      hasUnsavedChanges &&
+      !window.confirm(
+        "You have unsaved changes. Publishing will save and make these changes live immediately -- continue?",
+      )
+    ) {
+      return;
+    }
+
+    handleSave("published");
+  };
+
   return (
     <>
       <div className="breadcrumbs-area">
@@ -803,7 +821,7 @@ export default function WebsiteManagementPage() {
                       type="button"
                       className="btn-fill-lg bg-blue-dark btn-hover-yellow"
                       disabled={submittingStatus !== null}
-                      onClick={() => handleSave("published")}
+                      onClick={handlePublishClick}
                     >
                       {submittingStatus === "published"
                         ? "Publishing…"
