@@ -329,6 +329,14 @@ export default function WebsiteManagementPage() {
 
   const handleOpenPreview = async () => {
     setPreviewError(null);
+
+    if (hasUnsavedChanges) {
+      setPreviewError(
+        "You have unsaved changes -- Preview only shows what's already saved. Click \"Save as Draft\" first, then Preview.",
+      );
+      return;
+    }
+
     setPreviewLoading(true);
     try {
       const link = await getPreviewLink();
