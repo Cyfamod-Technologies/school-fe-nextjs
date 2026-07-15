@@ -64,7 +64,12 @@ export function getMenuSections(enableSessionResultPrint = false): MenuSection[]
   const studentLinks: MenuLink[] = [
     { label: "View Student", href: "/v14/all-students", requiredPermissions: "students.view" },
     { label: "Add Student", href: "/v14/add-student", requiredPermissions: "students.create" },
-    { label: "Assessment Sheet", href: "/v14/assessment-sheet", requiredPermissions: "results.view" },
+    {
+      label: "Assessment Sheet",
+      href: "/v14/assessment-sheet",
+      requiredPermissions: "results.view",
+      excludeRoles: "teacher",
+    },
     { label: "Bulk Result Print", href: "/v14/bulk-results", requiredPermissions: "results.bulk.view", excludeRoles: "teacher" },
     ...(enableSessionResultPrint
       ? [
