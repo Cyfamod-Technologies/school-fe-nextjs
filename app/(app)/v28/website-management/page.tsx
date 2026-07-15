@@ -400,61 +400,137 @@ export default function WebsiteManagementPage() {
         </div>
       ) : null}
 
+      <div
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 500,
+          background: "#fff",
+          boxShadow: "0 2px 8px rgba(15, 23, 42, 0.08)",
+          borderRadius: 8,
+          padding: "1rem 1.25rem",
+          marginBottom: "1.5rem",
+        }}
+      >
+        <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: 12 }}>
+          <div>
+            <h3 className="mb-0">
+              Website Status:{" "}
+              <span className={STATUS_BADGE_CLASS[status]}>
+                {STATUS_LABELS[status]}
+              </span>
+            </h3>
+            {publishedAt ? (
+              <p className="mb-0">
+                Last published {new Date(publishedAt).toLocaleString()}
+              </p>
+            ) : null}
+            {hasUnsavedChanges ? (
+              <span className="text-warning">You have unsaved changes.</span>
+            ) : null}
+          </div>
+          <div
+            className="d-flex align-items-center flex-wrap"
+            style={{ gap: 20 }}
+          >
+            {/* Secondary/utility actions -- smaller, outline style, demoted
+                relative to the primary Save/Publish actions below. */}
+            <div className="d-flex align-items-center flex-wrap" style={{ gap: 8 }}>
+              <button
+                type="button"
+                className="btn-fill-sm"
+                style={{ color: "#172033", background: "#f1f5f9" }}
+                onClick={handleOpenPreview}
+                disabled={previewLoading || status === "unconfigured"}
+                title={
+                  status === "unconfigured"
+                    ? "Save as Draft first, then Preview"
+                    : "Shows the last saved draft, not unsaved changes"
+                }
+              >
+                {previewLoading ? "Loading Preview…" : "Preview"}
+              </button>
+              {publicUrl ? (
+                <a
+                  href={publicUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-fill-sm"
+                  style={{ color: "#172033", background: "#f1f5f9" }}
+                >
+                  View Public Website
+                </a>
+              ) : (
+                <p className="mb-0 text-muted">
+                  Public website link unavailable (school has no slug yet).
+                </p>
+              )}
+            </div>
+
+            {canManage ? (
+              <div className="d-flex align-items-center flex-wrap" style={{ gap: 8 }}>
+                {/* Primary actions -- full size, solid fill, most visually prominent. */}
+                <button
+                  type="submit"
+                  form="website-management-form"
+                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                  disabled={submittingStatus !== null}
+                >
+                  {submittingStatus === "draft" ? "Saving…" : "Save as Draft"}
+                </button>
+                <button
+                  type="button"
+                  className="btn-fill-lg bg-blue-dark btn-hover-yellow"
+                  disabled={submittingStatus !== null}
+                  onClick={handlePublishClick}
+                >
+                  {submittingStatus === "published"
+                    ? "Publishing…"
+                    : "Publish Website"}
+                </button>
+                {status === "published" ? (
+                  // Destructive, rarely-used action -- deliberately smaller
+                  // and muted, and set apart with extra left margin so it
+                  // doesn't visually compete with Save/Publish.
+                  <button
+                    type="button"
+                    className="btn-fill-sm"
+                    style={{
+                      color: "#b91c1c",
+                      background: "#fee2e2",
+                      marginLeft: 12,
+                    }}
+                    disabled={submittingStatus !== null}
+                    onClick={() => handleSave("unpublished")}
+                  >
+                    {submittingStatus === "unpublished"
+                      ? "Unpublishing…"
+                      : "Unpublish Website"}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {previewError ? (
+          <div className="alert alert-danger mt-3 mb-0" role="alert">
+            {previewError}
+          </div>
+        ) : null}
+
+        {!canManage ? (
+          <p className="text-muted mt-3 mb-0">
+            You have read-only access to Website Management and cannot save
+            changes.
+          </p>
+        ) : null}
+      </div>
+
       <div className="row">
         <div className="col-12">
           <div className="card">
             <div className="card-body">
-              <div className="heading-layout1">
-                <div className="item-title">
-                  <h3>
-                    Website Status:{" "}
-                    <span className={STATUS_BADGE_CLASS[status]}>
-                      {STATUS_LABELS[status]}
-                    </span>
-                  </h3>
-                  {publishedAt ? (
-                    <p className="mb-0">
-                      Last published {new Date(publishedAt).toLocaleString()}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="d-flex align-items-center" style={{ gap: 8 }}>
-                  <button
-                    type="button"
-                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                    onClick={handleOpenPreview}
-                    disabled={previewLoading || status === "unconfigured"}
-                    title={
-                      status === "unconfigured"
-                        ? "Save as Draft first, then Preview"
-                        : "Shows the last saved draft, not unsaved changes"
-                    }
-                  >
-                    {previewLoading ? "Loading Preview…" : "Preview"}
-                  </button>
-                  {publicUrl ? (
-                    <a
-                      href={publicUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn-fill-lg bg-blue-dark btn-hover-yellow"
-                    >
-                      View Public Website
-                    </a>
-                  ) : (
-                    <p className="mb-0 text-muted">
-                      Public website link unavailable (school has no slug yet).
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {previewError ? (
-                <div className="alert alert-danger mt-3" role="alert">
-                  {previewError}
-                </div>
-              ) : null}
-
               <form
                 id="website-management-form"
                 className="new-added-form"
@@ -796,51 +872,6 @@ export default function WebsiteManagementPage() {
                   </div>
                 </div>
 
-                {!canManage ? (
-                  <p className="text-muted mt-3">
-                    You have read-only access to Website Management and cannot
-                    save changes.
-                  </p>
-                ) : (
-                  <div className="col-12 form-group mg-t-8">
-                    <button
-                      type="submit"
-                      className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                      disabled={submittingStatus !== null}
-                    >
-                      {submittingStatus === "draft"
-                        ? "Saving…"
-                        : "Save as Draft"}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-fill-lg bg-blue-dark btn-hover-yellow"
-                      disabled={submittingStatus !== null}
-                      onClick={handlePublishClick}
-                    >
-                      {submittingStatus === "published"
-                        ? "Publishing…"
-                        : "Publish Website"}
-                    </button>
-                    {status === "published" ? (
-                      <button
-                        type="button"
-                        className="btn-fill-lg bg-dark-pastel-green btn-hover-yellow"
-                        disabled={submittingStatus !== null}
-                        onClick={() => handleSave("unpublished")}
-                      >
-                        {submittingStatus === "unpublished"
-                          ? "Unpublishing…"
-                          : "Unpublish Website"}
-                      </button>
-                    ) : null}
-                    {hasUnsavedChanges ? (
-                      <span className="text-warning ml-2">
-                        You have unsaved changes.
-                      </span>
-                    ) : null}
-                  </div>
-                )}
               </form>
             </div>
           </div>
@@ -889,7 +920,11 @@ export default function WebsiteManagementPage() {
             <div className="d-flex justify-content-end" style={{ gap: 8 }}>
               <button
                 type="button"
-                className="btn btn-secondary"
+                className="btn-fill-lg"
+                style={{
+                  color: "#172033",
+                  background: "#f1f5f9",
+                }}
                 onClick={() => setShowPublishConfirm(false)}
                 disabled={submittingStatus !== null}
               >
