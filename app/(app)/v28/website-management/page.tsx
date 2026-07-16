@@ -69,8 +69,8 @@ export default function WebsiteManagementPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<
-    "theme" | "branding" | "homepage" | "sections"
-  >("theme");
+    "branding" | "homepage" | "sections"
+  >("branding");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -492,7 +492,6 @@ export default function WebsiteManagementPage() {
                 >
                   {(
                     [
-                      ["theme", "Theme"],
                       ["branding", "Branding"],
                       ["homepage", "Homepage"],
                       ["sections", "Sections"],
@@ -524,7 +523,7 @@ export default function WebsiteManagementPage() {
                   All fields are required unless marked (optional).
                 </p>
 
-                <div style={{ display: activeTab === "theme" ? "block" : "none" }}>
+                <div style={{ display: activeTab === "branding" ? "block" : "none" }}>
                 <div className="row">
                   <div className="col-lg-6 col-12 form-group">
                     <label htmlFor="website-theme-key">Website Theme</label>
@@ -548,9 +547,6 @@ export default function WebsiteManagementPage() {
                     ) : null}
                   </div>
                 </div>
-                </div>
-
-                <div style={{ display: activeTab === "branding" ? "block" : "none" }}>
                 <div className="row">
                   <div className="col-lg-6 col-12 form-group">
                     <label htmlFor="branding-primary-color">Primary Colour</label>
