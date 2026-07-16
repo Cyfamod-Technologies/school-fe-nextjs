@@ -69,9 +69,16 @@ export default function WebsiteManagementPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<
-    "branding" | "homepage" | "about" | "admissions" | "contact" | "sections"
+    "branding" | "homepage" | "about" | "admissions" | "contact" | "programmes"
   >("branding");
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<
+    { type: "highlight" | "programme"; index: number } | null
+  >(null);
+  const [justMoved, setJustMoved] = useState<
+    { type: "highlight" | "programme"; id: string } | null
+  >(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -287,6 +294,112 @@ export default function WebsiteManagementPage() {
     );
   };
 
+  const updateHighlight = (
+    index: number,
+    key: "title" | "description" | "iconUrl",
+    value: string,
+  ) => {
+    setForm((prev) => {
+      if (!prev) return prev;
+      const items = [...prev.highlights];
+      items[index] = {
+        ...items[index],
+        [key]: key === "iconUrl" ? value || null : value,
+      };
+      return { ...prev, highlights: items };
+    });
+  };
+
+  const addHighlight = () => {
+    setForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            highlights: [
+              ...prev.highlights,
+              { id: crypto.randomUUID(), title: "", description: "", iconUrl: null },
+            ],
+          }
+        : prev,
+    );
+  };
+
+  const removeHighlight = (index: number) => {
+    setForm((prev) => {
+      if (!prev || prev.highlights.length <= 1) return prev;
+      return {
+        ...prev,
+        highlights: prev.highlights.filter((_, i) => i !== index),
+      };
+    });
+  };
+
+  const moveHighlight = (index: number, direction: "up" | "down") => {
+    setForm((prev) => {
+      if (!prev) return prev;
+      const items = [...prev.highlights];
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (target < 0 || target >= items.length) return prev;
+      [items[index], items[target]] = [items[target], items[index]];
+      setJustMoved({ type: "highlight", id: items[target].id });
+      setTimeout(() => setJustMoved(null), 900);
+      return { ...prev, highlights: items };
+    });
+  };
+
+  const updateProgramme = (
+    index: number,
+    key: "name" | "summary" | "imageUrl",
+    value: string,
+  ) => {
+    setForm((prev) => {
+      if (!prev) return prev;
+      const items = [...prev.programmes];
+      items[index] = {
+        ...items[index],
+        [key]: key === "imageUrl" ? value || null : value,
+      };
+      return { ...prev, programmes: items };
+    });
+  };
+
+  const addProgramme = () => {
+    setForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            programmes: [
+              ...prev.programmes,
+              { id: crypto.randomUUID(), name: "", summary: "", imageUrl: null },
+            ],
+          }
+        : prev,
+    );
+  };
+
+  const removeProgramme = (index: number) => {
+    setForm((prev) => {
+      if (!prev || prev.programmes.length <= 1) return prev;
+      return {
+        ...prev,
+        programmes: prev.programmes.filter((_, i) => i !== index),
+      };
+    });
+  };
+
+  const moveProgramme = (index: number, direction: "up" | "down") => {
+    setForm((prev) => {
+      if (!prev) return prev;
+      const items = [...prev.programmes];
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (target < 0 || target >= items.length) return prev;
+      [items[index], items[target]] = [items[target], items[index]];
+      setJustMoved({ type: "programme", id: items[target].id });
+      setTimeout(() => setJustMoved(null), 900);
+      return { ...prev, programmes: items };
+    });
+  };
+
   const updateHeroAction = (
     which: "primaryAction" | "secondaryAction",
     key: "label" | "href",
@@ -345,6 +458,11 @@ export default function WebsiteManagementPage() {
           }
         : prev,
     );
+  };
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 2500);
   };
 
   const fieldError = (key: string): string | null => {
@@ -570,8 +688,8 @@ export default function WebsiteManagementPage() {
                       ["homepage", "Homepage"],
                       ["about", "About"],
                       ["admissions", "Admissions"],
+                      ["programmes", "Programmes"],
                       ["contact", "Contact"],
-                      ["sections", "Sections"],
                     ] as const
                   ).map(([key, label]) => (
                     <button
@@ -596,7 +714,7 @@ export default function WebsiteManagementPage() {
                     color: #172033;
                   }
                 `}</style>
-                <p className="text-muted mt-3 mb-0" style={{ fontSize: "0.85rem" }}>
+                <p className="text-muted mt-3 mb-0" style={{ fontSize: "13px" }}>
                   All fields are required unless marked (optional).
                 </p>
 
@@ -1232,7 +1350,7 @@ export default function WebsiteManagementPage() {
                 </div>
 
                 <h5 className="mt-4">Social Links</h5>
-                <p className="text-muted" style={{ fontSize: "0.85rem" }}>
+                <p className="text-muted" style={{ fontSize: "13px" }}>
                   All optional.
                 </p>
                 <div
@@ -1269,59 +1387,291 @@ export default function WebsiteManagementPage() {
                 </div>
                 </div>
 
-                <div style={{ display: activeTab === "sections" ? "block" : "none" }}>
-                <h4 className="mt-4">Sections</h4>
-                <p className="text-muted mb-3">
-                  Turn sections on or off on the public website. These
-                  sections will move to their own tabs too once their
-                  editors are built.
-                </p>
+                <div style={{ display: activeTab === "programmes" ? "block" : "none" }}>
+                <div className="d-flex align-items-center justify-content-between mt-4">
+                  <h4 className="mb-0" style={{ fontWeight: "bold", textTransform: "uppercase", fontSize: "16px", letterSpacing: "0.02em" }}>Programmes</h4>
+                  <label
+                    htmlFor="enabled-section-programmes"
+                    style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+                  >
+                    <span style={{ fontWeight: 600, color: "#212529" }}>
+                      Show Programmes section
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="permission-checkbox"
+                      id="enabled-section-programmes"
+                      checked={form.enabledSections.programmes}
+                      onChange={(event) =>
+                        updateEnabledSection("programmes", event.target.checked)
+                      }
+                    />
+                  </label>
+                </div>
                 <div
-                  style={{
-                    border: "1px solid #e2e8f0",
-                    borderRadius: 8,
-                    overflow: "hidden",
-                  }}
+                  style={
+                    form.enabledSections.programmes
+                      ? undefined
+                      : { opacity: 0.5, pointerEvents: "none" }
+                  }
                 >
-                  {(
-                    [
-                      ["highlights", "Highlights", "No editor yet -- shows placeholder content"],
-                      ["programmes", "Programmes", "No editor yet -- shows placeholder content"],
-                    ] as const
-                  ).map(([key, label, note], index) => (
-                    <label
-                      key={key}
-                      htmlFor={`enabled-section-${key}`}
+                  {form.programmes.map((programme, index) => (
+                    <div
+                      key={programme.id}
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 12,
-                        padding: "0.85rem 1rem",
-                        borderTop: index === 0 ? undefined : "1px solid #e2e8f0",
-                        cursor: "pointer",
+                        border:
+                          justMoved?.type === "programme" &&
+                          justMoved.id === programme.id
+                            ? "2px solid #172033"
+                            : "1px solid #e2e8f0",
+                        borderRadius: 8,
+                        padding: "1rem",
+                        marginBottom: "0.75rem",
+                        background:
+                          justMoved?.type === "programme" &&
+                          justMoved.id === programme.id
+                            ? "#f1f5f9"
+                            : undefined,
+                        transition: "background 0.2s ease, border-color 0.2s ease",
                       }}
                     >
-                      <div>
-                        <div style={{ fontWeight: 600, color: "#212529" }}>
-                          {label}
+                      <div className="row">
+                        <div className="col-lg-6 col-12 form-group">
+                          <label htmlFor={`programme-name-${index}`}>Name</label>
+                          <input
+                            id={`programme-name-${index}`}
+                            type="text"
+                            className="form-control"
+                            value={programme.name}
+                            onChange={(event) =>
+                              updateProgramme(index, "name", event.target.value)
+                            }
+                            required
+                          />
                         </div>
-                        {note ? (
-                          <small style={{ color: "#6c757d" }}>{note}</small>
+                        <div className="col-lg-6 col-12 form-group">
+                          <label htmlFor={`programme-image-${index}`}>
+                            Image URL <span style={{ fontWeight: 400, color: "#6c757d" }}>(optional)</span>
+                          </label>
+                          <input
+                            id={`programme-image-${index}`}
+                            type="url"
+                            className="form-control"
+                            value={programme.imageUrl ?? ""}
+                            onChange={(event) =>
+                              updateProgramme(index, "imageUrl", event.target.value)
+                            }
+                          />
+                        </div>
+                        <div className="col-12 form-group">
+                          <label htmlFor={`programme-summary-${index}`}>Summary</label>
+                          <textarea
+                            id={`programme-summary-${index}`}
+                            className="textarea form-control"
+                            rows={2}
+                            value={programme.summary}
+                            onChange={(event) =>
+                              updateProgramme(index, "summary", event.target.value)
+                            }
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="d-flex justify-content-end" style={{ gap: 8 }}>
+                        {form.programmes.length > 1 ? (
+                          <>
+                            <button
+                              type="button"
+                              className="btn-fill-sm"
+                              style={{ color: "#172033", background: "#f1f5f9" }}
+                              onClick={() =>
+                                index === 0
+                                  ? showToast("This is already at the top.")
+                                  : moveProgramme(index, "up")
+                              }
+                            >
+                              Move Up
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-fill-sm"
+                              style={{ color: "#172033", background: "#f1f5f9" }}
+                              onClick={() =>
+                                index === form.programmes.length - 1
+                                  ? showToast("This is already at the bottom.")
+                                  : moveProgramme(index, "down")
+                              }
+                            >
+                              Move Down
+                            </button>
+                          </>
+                        ) : null}
+                        {index > 0 ? (
+                          <button
+                            type="button"
+                            className="btn-fill-sm"
+                            style={{ color: "#b91c1c", background: "#fee2e2" }}
+                            onClick={() => setRemoveTarget({ type: "programme", index })}
+                          >
+                            Remove
+                          </button>
                         ) : null}
                       </div>
-                      <input
-                        type="checkbox"
-                        className="permission-checkbox"
-                        id={`enabled-section-${key}`}
-                        checked={form.enabledSections[key]}
-                        onChange={(event) =>
-                          updateEnabledSection(key, event.target.checked)
-                        }
-                        style={{ flexShrink: 0 }}
-                      />
-                    </label>
+                    </div>
                   ))}
+                  <button
+                    type="button"
+                    className="btn-fill-sm"
+                    style={{ color: "#172033", background: "#f1f5f9" }}
+                    onClick={addProgramme}
+                  >
+                    + Add Programme
+                  </button>
+                </div>
+
+                <hr className="mt-4" />
+
+                <div className="d-flex align-items-center justify-content-between mt-4">
+                  <h4 className="mb-0" style={{ fontWeight: "bold", textTransform: "uppercase", fontSize: "16px", letterSpacing: "0.02em" }}>Highlights</h4>
+                  <label
+                    htmlFor="enabled-section-highlights"
+                    style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+                  >
+                    <span style={{ fontWeight: 600, color: "#212529" }}>
+                      Show Highlights section
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="permission-checkbox"
+                      id="enabled-section-highlights"
+                      checked={form.enabledSections.highlights}
+                      onChange={(event) =>
+                        updateEnabledSection("highlights", event.target.checked)
+                      }
+                    />
+                  </label>
+                </div>
+                <div
+                  style={
+                    form.enabledSections.highlights
+                      ? undefined
+                      : { opacity: 0.5, pointerEvents: "none" }
+                  }
+                >
+                  {form.highlights.map((highlight, index) => (
+                    <div
+                      key={highlight.id}
+                      style={{
+                        border:
+                          justMoved?.type === "highlight" &&
+                          justMoved.id === highlight.id
+                            ? "2px solid #172033"
+                            : "1px solid #e2e8f0",
+                        borderRadius: 8,
+                        padding: "1rem",
+                        marginBottom: "0.75rem",
+                        background:
+                          justMoved?.type === "highlight" &&
+                          justMoved.id === highlight.id
+                            ? "#f1f5f9"
+                            : undefined,
+                        transition: "background 0.2s ease, border-color 0.2s ease",
+                      }}
+                    >
+                      <div className="row">
+                        <div className="col-lg-6 col-12 form-group">
+                          <label htmlFor={`highlight-title-${index}`}>Title</label>
+                          <input
+                            id={`highlight-title-${index}`}
+                            type="text"
+                            className="form-control"
+                            value={highlight.title}
+                            onChange={(event) =>
+                              updateHighlight(index, "title", event.target.value)
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="col-lg-6 col-12 form-group">
+                          <label htmlFor={`highlight-icon-${index}`}>
+                            Icon URL <span style={{ fontWeight: 400, color: "#6c757d" }}>(optional)</span>
+                          </label>
+                          <input
+                            id={`highlight-icon-${index}`}
+                            type="url"
+                            className="form-control"
+                            value={highlight.iconUrl ?? ""}
+                            onChange={(event) =>
+                              updateHighlight(index, "iconUrl", event.target.value)
+                            }
+                          />
+                        </div>
+                        <div className="col-12 form-group">
+                          <label htmlFor={`highlight-description-${index}`}>
+                            Description
+                          </label>
+                          <textarea
+                            id={`highlight-description-${index}`}
+                            className="textarea form-control"
+                            rows={2}
+                            value={highlight.description}
+                            onChange={(event) =>
+                              updateHighlight(index, "description", event.target.value)
+                            }
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="d-flex justify-content-end" style={{ gap: 8 }}>
+                        {form.highlights.length > 1 ? (
+                          <>
+                            <button
+                              type="button"
+                              className="btn-fill-sm"
+                              style={{ color: "#172033", background: "#f1f5f9" }}
+                              onClick={() =>
+                                index === 0
+                                  ? showToast("This is already at the top.")
+                                  : moveHighlight(index, "up")
+                              }
+                            >
+                              Move Up
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-fill-sm"
+                              style={{ color: "#172033", background: "#f1f5f9" }}
+                              onClick={() =>
+                                index === form.highlights.length - 1
+                                  ? showToast("This is already at the bottom.")
+                                  : moveHighlight(index, "down")
+                              }
+                            >
+                              Move Down
+                            </button>
+                          </>
+                        ) : null}
+                        {index > 0 ? (
+                          <button
+                            type="button"
+                            className="btn-fill-sm"
+                            style={{ color: "#b91c1c", background: "#fee2e2" }}
+                            onClick={() => setRemoveTarget({ type: "highlight", index })}
+                          >
+                            Remove
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn-fill-sm"
+                    style={{ color: "#172033", background: "#f1f5f9" }}
+                    onClick={addHighlight}
+                  >
+                    + Add Highlight
+                  </button>
                 </div>
                 </div>
 
@@ -1418,7 +1768,11 @@ export default function WebsiteManagementPage() {
             <div className="d-flex justify-content-end" style={{ gap: 8 }}>
               <button
                 type="button"
-                className="btn btn-secondary"
+                className="btn-fill-lg"
+                style={{
+                  color: "#172033",
+                  background: "#f1f5f9",
+                }}
                 onClick={() => setShowPublishConfirm(false)}
                 disabled={submittingStatus !== null}
               >
@@ -1431,6 +1785,93 @@ export default function WebsiteManagementPage() {
                 disabled={submittingStatus !== null}
               >
                 {submittingStatus === "published" ? "Publishing…" : "Yes, publish"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {toastMessage ? (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            top: 24,
+            right: 24,
+            zIndex: 1100,
+            background: "#042954",
+            color: "#fff",
+            padding: "16px 24px",
+            borderRadius: 8,
+            fontSize: "16px",
+            fontWeight: 600,
+            borderLeft: "5px solid #fbd540",
+            boxShadow: "0 12px 32px rgba(4, 41, 84, 0.35)",
+            maxWidth: 360,
+          }}
+        >
+          {toastMessage}
+        </div>
+      ) : null}
+
+      {removeTarget ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm remove"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1060,
+            background: "rgba(15, 23, 42, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "2rem",
+          }}
+          onClick={() => setRemoveTarget(null)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              width: "100%",
+              maxWidth: 480,
+              padding: "1.5rem",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h5 className="mb-3">
+              Remove this {removeTarget.type}?
+            </h5>
+            <p className="mb-4">
+              This cannot be undone. The {removeTarget.type} will be removed
+              once you save.
+            </p>
+            <div className="d-flex justify-content-end" style={{ gap: 8 }}>
+              <button
+                type="button"
+                className="btn-fill-lg"
+                style={{ color: "#172033", background: "#f1f5f9" }}
+                onClick={() => setRemoveTarget(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-fill-lg"
+                style={{ color: "#fff", background: "#b91c1c" }}
+                onClick={() => {
+                  if (removeTarget.type === "highlight") {
+                    removeHighlight(removeTarget.index);
+                  } else {
+                    removeProgramme(removeTarget.index);
+                  }
+                  setRemoveTarget(null);
+                }}
+              >
+                Yes, remove
               </button>
             </div>
           </div>
