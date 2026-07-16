@@ -69,7 +69,7 @@ export default function WebsiteManagementPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<
-    "branding" | "homepage" | "about" | "admissions" | "sections"
+    "branding" | "homepage" | "about" | "admissions" | "contact" | "sections"
   >("branding");
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -247,6 +247,40 @@ export default function WebsiteManagementPage() {
             admissions: {
               ...prev.admissions,
               action: { ...prev.admissions.action, [key]: value },
+            },
+          }
+        : prev,
+    );
+  };
+
+  const updateContact = (
+    key: "address" | "phone" | "email" | "mapUrl",
+    value: string,
+  ) => {
+    setForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            contact: {
+              ...prev.contact,
+              [key]: key === "mapUrl" ? value || null : value,
+            },
+          }
+        : prev,
+    );
+  };
+
+  const updateSocialLink = (
+    platform: "facebook" | "instagram" | "linkedin" | "youtube" | "x",
+    value: string,
+  ) => {
+    setForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            socialLinks: {
+              ...prev.socialLinks,
+              [platform]: value || null,
             },
           }
         : prev,
@@ -536,6 +570,7 @@ export default function WebsiteManagementPage() {
                       ["homepage", "Homepage"],
                       ["about", "About"],
                       ["admissions", "Admissions"],
+                      ["contact", "Contact"],
                       ["sections", "Sections"],
                     ] as const
                   ).map(([key, label]) => (
@@ -1111,6 +1146,129 @@ export default function WebsiteManagementPage() {
                 </div>
                 </div>
 
+                <div style={{ display: activeTab === "contact" ? "block" : "none" }}>
+                <div className="d-flex align-items-center justify-content-between mt-4">
+                  <h4 className="mb-0">Contact</h4>
+                  <label
+                    htmlFor="enabled-section-contact"
+                    style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+                  >
+                    <span style={{ fontWeight: 600, color: "#212529" }}>
+                      Show Contact section
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="permission-checkbox"
+                      id="enabled-section-contact"
+                      checked={form.enabledSections.contact}
+                      onChange={(event) =>
+                        updateEnabledSection("contact", event.target.checked)
+                      }
+                    />
+                  </label>
+                </div>
+                <div
+                  className="row"
+                  style={
+                    form.enabledSections.contact
+                      ? undefined
+                      : { opacity: 0.5, pointerEvents: "none" }
+                  }
+                >
+                  <div className="col-lg-6 col-12 form-group">
+                    <label htmlFor="contact-address">Address</label>
+                    <input
+                      id="contact-address"
+                      type="text"
+                      className="form-control"
+                      value={form.contact.address}
+                      onChange={(event) =>
+                        updateContact("address", event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="col-lg-6 col-12 form-group">
+                    <label htmlFor="contact-phone">Phone</label>
+                    <input
+                      id="contact-phone"
+                      type="text"
+                      className="form-control"
+                      value={form.contact.phone}
+                      onChange={(event) =>
+                        updateContact("phone", event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="col-lg-6 col-12 form-group">
+                    <label htmlFor="contact-email">Email</label>
+                    <input
+                      id="contact-email"
+                      type="email"
+                      className="form-control"
+                      value={form.contact.email}
+                      onChange={(event) =>
+                        updateContact("email", event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="col-lg-6 col-12 form-group">
+                    <label htmlFor="contact-map-url">
+                      Map URL <span style={{ fontWeight: 400, color: "#6c757d" }}>(optional)</span>
+                    </label>
+                    <input
+                      id="contact-map-url"
+                      type="url"
+                      className="form-control"
+                      value={form.contact.mapUrl ?? ""}
+                      onChange={(event) =>
+                        updateContact("mapUrl", event.target.value)
+                      }
+                      placeholder="https://maps.google.com/..."
+                    />
+                  </div>
+                </div>
+
+                <h5 className="mt-4">Social Links</h5>
+                <p className="text-muted" style={{ fontSize: "0.85rem" }}>
+                  All optional.
+                </p>
+                <div
+                  className="row"
+                  style={
+                    form.enabledSections.contact
+                      ? undefined
+                      : { opacity: 0.5, pointerEvents: "none" }
+                  }
+                >
+                  {(
+                    [
+                      ["facebook", "Facebook"],
+                      ["instagram", "Instagram"],
+                      ["linkedin", "LinkedIn"],
+                      ["youtube", "YouTube"],
+                      ["x", "X (Twitter)"],
+                    ] as const
+                  ).map(([platform, label]) => (
+                    <div className="col-lg-4 col-12 form-group" key={platform}>
+                      <label htmlFor={`social-${platform}`}>{label}</label>
+                      <input
+                        id={`social-${platform}`}
+                        type="url"
+                        className="form-control"
+                        value={form.socialLinks[platform] ?? ""}
+                        onChange={(event) =>
+                          updateSocialLink(platform, event.target.value)
+                        }
+                        placeholder={`https://${platform === "x" ? "x" : platform}.com/yourschool`}
+                      />
+                    </div>
+                  ))}
+                </div>
+                </div>
+
                 <div style={{ display: activeTab === "sections" ? "block" : "none" }}>
                 <h4 className="mt-4">Sections</h4>
                 <p className="text-muted mb-3">
@@ -1129,7 +1287,6 @@ export default function WebsiteManagementPage() {
                     [
                       ["highlights", "Highlights", "No editor yet -- shows placeholder content"],
                       ["programmes", "Programmes", "No editor yet -- shows placeholder content"],
-                      ["contact", "Contact", "No editor yet -- shows placeholder content"],
                     ] as const
                   ).map(([key, label, note], index) => (
                     <label
