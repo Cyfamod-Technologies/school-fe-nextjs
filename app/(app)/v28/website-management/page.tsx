@@ -69,7 +69,7 @@ export default function WebsiteManagementPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<
-    "branding" | "homepage" | "sections"
+    "branding" | "homepage" | "about" | "sections"
   >("branding");
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -201,6 +201,23 @@ export default function WebsiteManagementPage() {
             ...prev,
             hero: {
               ...prev.hero,
+              [key]: key === "imageUrl" ? value || null : value,
+            },
+          }
+        : prev,
+    );
+  };
+
+  const updateAbout = (
+    key: "eyebrow" | "title" | "description" | "imageUrl" | "mission" | "vision",
+    value: string,
+  ) => {
+    setForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            about: {
+              ...prev.about,
               [key]: key === "imageUrl" ? value || null : value,
             },
           }
@@ -489,6 +506,7 @@ export default function WebsiteManagementPage() {
                     [
                       ["branding", "Branding"],
                       ["homepage", "Homepage"],
+                      ["about", "About"],
                       ["sections", "Sections"],
                     ] as const
                   ).map(([key, label]) => (
@@ -855,6 +873,118 @@ export default function WebsiteManagementPage() {
                 </div>
                 </div>
 
+                <div style={{ display: activeTab === "about" ? "block" : "none" }}>
+                <div className="d-flex align-items-center justify-content-between mt-4">
+                  <h4 className="mb-0">About</h4>
+                  <label
+                    htmlFor="enabled-section-about"
+                    style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+                  >
+                    <span style={{ fontWeight: 600, color: "#212529" }}>
+                      Show About section
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="permission-checkbox"
+                      id="enabled-section-about"
+                      checked={form.enabledSections.about}
+                      onChange={(event) =>
+                        updateEnabledSection("about", event.target.checked)
+                      }
+                    />
+                  </label>
+                </div>
+                <div
+                  className="row"
+                  style={
+                    form.enabledSections.about
+                      ? undefined
+                      : { opacity: 0.5, pointerEvents: "none" }
+                  }
+                >
+                  <div className="col-lg-6 col-12 form-group">
+                    <label htmlFor="about-eyebrow">Eyebrow</label>
+                    <input
+                      id="about-eyebrow"
+                      type="text"
+                      className="form-control"
+                      value={form.about.eyebrow}
+                      onChange={(event) =>
+                        updateAbout("eyebrow", event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="col-lg-6 col-12 form-group">
+                    <label htmlFor="about-title">Title</label>
+                    <input
+                      id="about-title"
+                      type="text"
+                      className="form-control"
+                      value={form.about.title}
+                      onChange={(event) =>
+                        updateAbout("title", event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="col-12 form-group">
+                    <label htmlFor="about-description">Description</label>
+                    <textarea
+                      id="about-description"
+                      className="textarea form-control"
+                      rows={4}
+                      value={form.about.description}
+                      onChange={(event) =>
+                        updateAbout("description", event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="col-12 form-group">
+                    <label htmlFor="about-image-url">
+                      About Image URL <span style={{ fontWeight: 400, color: "#6c757d" }}>(optional)</span>
+                    </label>
+                    <input
+                      id="about-image-url"
+                      type="url"
+                      className="form-control"
+                      value={form.about.imageUrl ?? ""}
+                      onChange={(event) =>
+                        updateAbout("imageUrl", event.target.value)
+                      }
+                      placeholder="https://example.com/about.jpg"
+                    />
+                  </div>
+                  <div className="col-lg-6 col-12 form-group">
+                    <label htmlFor="about-mission">Mission</label>
+                    <textarea
+                      id="about-mission"
+                      className="textarea form-control"
+                      rows={3}
+                      value={form.about.mission}
+                      onChange={(event) =>
+                        updateAbout("mission", event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="col-lg-6 col-12 form-group">
+                    <label htmlFor="about-vision">Vision</label>
+                    <textarea
+                      id="about-vision"
+                      className="textarea form-control"
+                      rows={3}
+                      value={form.about.vision}
+                      onChange={(event) =>
+                        updateAbout("vision", event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                </div>
+                </div>
+
                 <div style={{ display: activeTab === "sections" ? "block" : "none" }}>
                 <h4 className="mt-4">Sections</h4>
                 <p className="text-muted mb-3">
@@ -872,7 +1002,6 @@ export default function WebsiteManagementPage() {
                   {(
                     [
                       ["highlights", "Highlights", "No editor yet -- shows placeholder content"],
-                      ["about", "About", "No editor yet -- shows placeholder content"],
                       ["programmes", "Programmes", "No editor yet -- shows placeholder content"],
                       ["admissions", "Admissions", "No editor yet -- shows placeholder content"],
                       ["contact", "Contact", "No editor yet -- shows placeholder content"],
