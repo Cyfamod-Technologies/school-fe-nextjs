@@ -68,6 +68,7 @@ export default function WebsiteManagementPage() {
     useState<SchoolWebsiteStatus | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -359,21 +360,15 @@ export default function WebsiteManagementPage() {
     }
   };
 
-  // Unlike Preview, Publish always saves the current form state -- it has
-  // no stale-data risk to warn about. This is a deliberate confirmation
-  // step instead: publishing goes live immediately, so a heads-up before
-  // that happens (especially with edits still uncommitted to a draft) is
-  // worth the extra click.
+  // Publish always saves the current form state and goes live immediately,
+  // so every click gets a confirmation -- not just when there are unsaved
+  // changes -- to guard against accidental publishes in general.
   const handlePublishClick = () => {
-    if (
-      hasUnsavedChanges &&
-      !window.confirm(
-        "You have unsaved changes. Publishing will save and make these changes live immediately -- continue?",
-      )
-    ) {
-      return;
-    }
+    setShowPublishConfirm(true);
+  };
 
+  const handleConfirmPublish = () => {
+    setShowPublishConfirm(false);
     handleSave("published");
   };
 
@@ -857,6 +852,61 @@ export default function WebsiteManagementPage() {
           reserved.
         </div>
       </footer>
+
+      {showPublishConfirm ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm publish"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1060,
+            background: "rgba(15, 23, 42, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "2rem",
+          }}
+          onClick={() => setShowPublishConfirm(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              width: "100%",
+              maxWidth: 480,
+              padding: "1.5rem",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h5 className="mb-3">Publish this website?</h5>
+            <p className="mb-4">
+              {hasUnsavedChanges
+                ? "You have unsaved changes. Publishing will save them and make the website live immediately."
+                : "This will make the website live immediately."}
+            </p>
+            <div className="d-flex justify-content-end" style={{ gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowPublishConfirm(false)}
+                disabled={submittingStatus !== null}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-fill-lg bg-blue-dark btn-hover-yellow"
+                onClick={handleConfirmPublish}
+                disabled={submittingStatus !== null}
+              >
+                {submittingStatus === "published" ? "Publishing…" : "Yes, publish"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {previewUrl ? (
         <div
