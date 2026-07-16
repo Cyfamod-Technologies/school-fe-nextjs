@@ -69,7 +69,7 @@ export default function WebsiteManagementPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<
-    "branding" | "homepage" | "about" | "sections"
+    "branding" | "homepage" | "about" | "admissions" | "sections"
   >("branding");
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -219,6 +219,34 @@ export default function WebsiteManagementPage() {
             about: {
               ...prev.about,
               [key]: key === "imageUrl" ? value || null : value,
+            },
+          }
+        : prev,
+    );
+  };
+
+  const updateAdmissions = (
+    key: "eyebrow" | "title" | "description",
+    value: string,
+  ) => {
+    setForm((prev) =>
+      prev
+        ? { ...prev, admissions: { ...prev.admissions, [key]: value } }
+        : prev,
+    );
+  };
+
+  const updateAdmissionsAction = (
+    key: "label" | "href",
+    value: string,
+  ) => {
+    setForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            admissions: {
+              ...prev.admissions,
+              action: { ...prev.admissions.action, [key]: value },
             },
           }
         : prev,
@@ -507,6 +535,7 @@ export default function WebsiteManagementPage() {
                       ["branding", "Branding"],
                       ["homepage", "Homepage"],
                       ["about", "About"],
+                      ["admissions", "Admissions"],
                       ["sections", "Sections"],
                     ] as const
                   ).map(([key, label]) => (
@@ -985,6 +1014,103 @@ export default function WebsiteManagementPage() {
                 </div>
                 </div>
 
+                <div style={{ display: activeTab === "admissions" ? "block" : "none" }}>
+                <div className="d-flex align-items-center justify-content-between mt-4">
+                  <h4 className="mb-0">Admissions</h4>
+                  <label
+                    htmlFor="enabled-section-admissions"
+                    style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+                  >
+                    <span style={{ fontWeight: 600, color: "#212529" }}>
+                      Show Admissions section
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="permission-checkbox"
+                      id="enabled-section-admissions"
+                      checked={form.enabledSections.admissions}
+                      onChange={(event) =>
+                        updateEnabledSection("admissions", event.target.checked)
+                      }
+                    />
+                  </label>
+                </div>
+                <div
+                  className="row"
+                  style={
+                    form.enabledSections.admissions
+                      ? undefined
+                      : { opacity: 0.5, pointerEvents: "none" }
+                  }
+                >
+                  <div className="col-lg-6 col-12 form-group">
+                    <label htmlFor="admissions-eyebrow">Eyebrow</label>
+                    <input
+                      id="admissions-eyebrow"
+                      type="text"
+                      className="form-control"
+                      value={form.admissions.eyebrow}
+                      onChange={(event) =>
+                        updateAdmissions("eyebrow", event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="col-lg-6 col-12 form-group">
+                    <label htmlFor="admissions-title">Title</label>
+                    <input
+                      id="admissions-title"
+                      type="text"
+                      className="form-control"
+                      value={form.admissions.title}
+                      onChange={(event) =>
+                        updateAdmissions("title", event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="col-12 form-group">
+                    <label htmlFor="admissions-description">Description</label>
+                    <textarea
+                      id="admissions-description"
+                      className="textarea form-control"
+                      rows={4}
+                      value={form.admissions.description}
+                      onChange={(event) =>
+                        updateAdmissions("description", event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="col-lg-6 col-12 form-group">
+                    <label htmlFor="admissions-action-label">Action Label</label>
+                    <input
+                      id="admissions-action-label"
+                      type="text"
+                      className="form-control"
+                      value={form.admissions.action.label}
+                      onChange={(event) =>
+                        updateAdmissionsAction("label", event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="col-lg-6 col-12 form-group">
+                    <label htmlFor="admissions-action-href">Action Link</label>
+                    <input
+                      id="admissions-action-href"
+                      type="text"
+                      className="form-control"
+                      value={form.admissions.action.href}
+                      onChange={(event) =>
+                        updateAdmissionsAction("href", event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                </div>
+                </div>
+
                 <div style={{ display: activeTab === "sections" ? "block" : "none" }}>
                 <h4 className="mt-4">Sections</h4>
                 <p className="text-muted mb-3">
@@ -1003,7 +1129,6 @@ export default function WebsiteManagementPage() {
                     [
                       ["highlights", "Highlights", "No editor yet -- shows placeholder content"],
                       ["programmes", "Programmes", "No editor yet -- shows placeholder content"],
-                      ["admissions", "Admissions", "No editor yet -- shows placeholder content"],
                       ["contact", "Contact", "No editor yet -- shows placeholder content"],
                     ] as const
                   ).map(([key, label, note], index) => (
