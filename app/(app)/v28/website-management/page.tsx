@@ -68,6 +68,9 @@ export default function WebsiteManagementPage() {
     useState<SchoolWebsiteStatus | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const [activeTab, setActiveTab] = useState<
+    "branding" | "homepage" | "sections"
+  >("branding");
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -251,6 +254,20 @@ export default function WebsiteManagementPage() {
     });
   };
 
+  const updateEnabledSection = (
+    key: keyof SchoolWebsitePayload["enabledSections"],
+    value: boolean,
+  ) => {
+    setForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            enabledSections: { ...prev.enabledSections, [key]: value },
+          }
+        : prev,
+    );
+  };
+
   const fieldError = (key: string): string | null => {
     const messages = fieldErrors?.[key];
     return messages && messages.length > 0 ? messages[0] : null;
@@ -284,6 +301,10 @@ export default function WebsiteManagementPage() {
     const payload: SchoolWebsitePayload = {
       ...form,
       hero: { ...form.hero, title: heroTitle, trustItems },
+      // Main Banner (hero) isn't optional -- there's no UI to turn it off,
+      // so force it true here too in case an older record was saved with
+      // it false before that control was removed.
+      enabledSections: { ...form.enabledSections, hero: true },
       seo: {
         ...form.seo,
         title: heroTitle,
@@ -460,10 +481,47 @@ export default function WebsiteManagementPage() {
                 className="new-added-form"
                 onSubmit={handleSubmit}
               >
-                <h4 className="mt-4">Theme</h4>
+                <div
+                  className="d-flex flex-wrap"
+                  style={{ gap: 8, borderBottom: "1px solid #e2e8f0", paddingBottom: "1rem" }}
+                >
+                  {(
+                    [
+                      ["branding", "Branding"],
+                      ["homepage", "Homepage"],
+                      ["sections", "Sections"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className="btn-fill-sm"
+                      style={
+                        activeTab === key
+                          ? { color: "#fff", background: "#172033", fontWeight: 700 }
+                          : { color: "#172033", background: "#f1f5f9", fontWeight: 700 }
+                      }
+                      onClick={() => setActiveTab(key)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                <style>{`
+                  #website-management-form label:not(.custom-control-label) {
+                    font-weight: 600;
+                    color: #172033;
+                  }
+                `}</style>
+                <p className="text-muted mt-3 mb-0" style={{ fontSize: "0.85rem" }}>
+                  All fields are required unless marked (optional).
+                </p>
+
+                <div style={{ display: activeTab === "branding" ? "block" : "none" }}>
                 <div className="row">
                   <div className="col-lg-6 col-12 form-group">
-                    <label htmlFor="website-theme-key">Website Theme *</label>
+                    <label htmlFor="website-theme-key">Website Theme</label>
                     <select
                       id="website-theme-key"
                       className="form-control"
@@ -484,11 +542,9 @@ export default function WebsiteManagementPage() {
                     ) : null}
                   </div>
                 </div>
-
-                <h4 className="mt-4">Branding</h4>
                 <div className="row">
                   <div className="col-lg-6 col-12 form-group">
-                    <label htmlFor="branding-primary-color">Primary Colour *</label>
+                    <label htmlFor="branding-primary-color">Primary Colour</label>
                     <div className="d-flex align-items-center">
                       <input
                         id="branding-primary-color"
@@ -518,7 +574,7 @@ export default function WebsiteManagementPage() {
                   </div>
                   <div className="col-lg-6 col-12 form-group">
                     <label htmlFor="branding-secondary-color">
-                      Secondary Colour *
+                      Secondary Colour
                     </label>
                     <div className="d-flex align-items-center">
                       <input
@@ -548,11 +604,12 @@ export default function WebsiteManagementPage() {
                     ) : null}
                   </div>
                 </div>
+                </div>
 
-                <h4 className="mt-4">Header</h4>
+                <div style={{ display: activeTab === "homepage" ? "block" : "none" }}>
                 <div className="row">
                   <div className="col-lg-4 col-12 form-group">
-                    <label htmlFor="header-welcome-text">Welcome Text *</label>
+                    <label htmlFor="header-welcome-text">Welcome Text</label>
                     <input
                       id="header-welcome-text"
                       type="text"
@@ -565,7 +622,7 @@ export default function WebsiteManagementPage() {
                     />
                   </div>
                   <div className="col-lg-4 col-12 form-group">
-                    <label htmlFor="header-utility-text">Utility Text *</label>
+                    <label htmlFor="header-utility-text">Utility Text</label>
                     <input
                       id="header-utility-text"
                       type="text"
@@ -578,7 +635,7 @@ export default function WebsiteManagementPage() {
                     />
                   </div>
                   <div className="col-lg-4 col-12 form-group">
-                    <label htmlFor="header-tagline">Tagline *</label>
+                    <label htmlFor="header-tagline">Tagline</label>
                     <input
                       id="header-tagline"
                       type="text"
@@ -592,10 +649,9 @@ export default function WebsiteManagementPage() {
                   </div>
                 </div>
 
-                <h4 className="mt-4">Hero</h4>
                 <div className="row">
                   <div className="col-lg-6 col-12 form-group">
-                    <label htmlFor="hero-eyebrow">Eyebrow *</label>
+                    <label htmlFor="hero-eyebrow">Eyebrow</label>
                     <input
                       id="hero-eyebrow"
                       type="text"
@@ -608,7 +664,7 @@ export default function WebsiteManagementPage() {
                     />
                   </div>
                   <div className="col-lg-6 col-12 form-group">
-                    <label htmlFor="hero-title">Title *</label>
+                    <label htmlFor="hero-title">Title</label>
                     <input
                       id="hero-title"
                       type="text"
@@ -619,7 +675,7 @@ export default function WebsiteManagementPage() {
                     />
                   </div>
                   <div className="col-12 form-group">
-                    <label htmlFor="hero-description">Description *</label>
+                    <label htmlFor="hero-description">Description</label>
                     <textarea
                       id="hero-description"
                       className="textarea form-control"
@@ -632,7 +688,9 @@ export default function WebsiteManagementPage() {
                     />
                   </div>
                   <div className="col-12 form-group">
-                    <label htmlFor="hero-image-url">Hero Image URL</label>
+                    <label htmlFor="hero-image-url">
+                      Hero Image URL <span style={{ fontWeight: 400, color: "#6c757d" }}>(optional)</span>
+                    </label>
                     <input
                       id="hero-image-url"
                       type="url"
@@ -651,7 +709,7 @@ export default function WebsiteManagementPage() {
 
                   <div className="col-lg-6 col-12 form-group">
                     <label htmlFor="hero-primary-action-label">
-                      Primary Action Label *
+                      Primary Action Label
                     </label>
                     <input
                       id="hero-primary-action-label"
@@ -670,7 +728,7 @@ export default function WebsiteManagementPage() {
                   </div>
                   <div className="col-lg-6 col-12 form-group">
                     <label htmlFor="hero-primary-action-href">
-                      Primary Action Link *
+                      Primary Action Link
                     </label>
                     <input
                       id="hero-primary-action-href"
@@ -689,7 +747,7 @@ export default function WebsiteManagementPage() {
                   </div>
                   <div className="col-lg-6 col-12 form-group">
                     <label htmlFor="hero-secondary-action-label">
-                      Secondary Action Label *
+                      Secondary Action Label
                     </label>
                     <input
                       id="hero-secondary-action-label"
@@ -708,7 +766,7 @@ export default function WebsiteManagementPage() {
                   </div>
                   <div className="col-lg-6 col-12 form-group">
                     <label htmlFor="hero-secondary-action-href">
-                      Secondary Action Link *
+                      Secondary Action Link
                     </label>
                     <input
                       id="hero-secondary-action-href"
@@ -727,7 +785,7 @@ export default function WebsiteManagementPage() {
                   </div>
 
                   <div className="col-12 form-group">
-                    <label>Trust Items *</label>
+                    <label>Trust Items</label>
                     <div className="row">
                       {[0, 1, 2].map((index) => (
                         <div className="col-lg-4 col-12" key={index}>
@@ -751,7 +809,7 @@ export default function WebsiteManagementPage() {
 
                   <div className="col-lg-4 col-12 form-group">
                     <label htmlFor="hero-info-card-label">
-                      Info Card Label *
+                      Info Card Label
                     </label>
                     <input
                       id="hero-info-card-label"
@@ -766,7 +824,7 @@ export default function WebsiteManagementPage() {
                   </div>
                   <div className="col-lg-4 col-12 form-group">
                     <label htmlFor="hero-info-card-title">
-                      Info Card Title *
+                      Info Card Title
                     </label>
                     <input
                       id="hero-info-card-title"
@@ -781,7 +839,7 @@ export default function WebsiteManagementPage() {
                   </div>
                   <div className="col-lg-4 col-12 form-group">
                     <label htmlFor="hero-info-card-description">
-                      Info Card Description *
+                      Info Card Description
                     </label>
                     <input
                       id="hero-info-card-description"
@@ -794,6 +852,66 @@ export default function WebsiteManagementPage() {
                       required
                     />
                   </div>
+                </div>
+                </div>
+
+                <div style={{ display: activeTab === "sections" ? "block" : "none" }}>
+                <h4 className="mt-4">Sections</h4>
+                <p className="text-muted mb-3">
+                  Turn sections on or off on the public website. These
+                  sections will move to their own tabs too once their
+                  editors are built.
+                </p>
+                <div
+                  style={{
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 8,
+                    overflow: "hidden",
+                  }}
+                >
+                  {(
+                    [
+                      ["highlights", "Highlights", "No editor yet -- shows placeholder content"],
+                      ["about", "About", "No editor yet -- shows placeholder content"],
+                      ["programmes", "Programmes", "No editor yet -- shows placeholder content"],
+                      ["admissions", "Admissions", "No editor yet -- shows placeholder content"],
+                      ["contact", "Contact", "No editor yet -- shows placeholder content"],
+                    ] as const
+                  ).map(([key, label, note], index) => (
+                    <label
+                      key={key}
+                      htmlFor={`enabled-section-${key}`}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        padding: "0.85rem 1rem",
+                        borderTop: index === 0 ? undefined : "1px solid #e2e8f0",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600, color: "#212529" }}>
+                          {label}
+                        </div>
+                        {note ? (
+                          <small style={{ color: "#6c757d" }}>{note}</small>
+                        ) : null}
+                      </div>
+                      <input
+                        type="checkbox"
+                        className="permission-checkbox"
+                        id={`enabled-section-${key}`}
+                        checked={form.enabledSections[key]}
+                        onChange={(event) =>
+                          updateEnabledSection(key, event.target.checked)
+                        }
+                        style={{ flexShrink: 0 }}
+                      />
+                    </label>
+                  ))}
+                </div>
                 </div>
 
                 {!canManage ? (
