@@ -8,10 +8,15 @@ import { publicWebsitePreviewUrl, publicWebsiteUrl } from "@/lib/config";
 import { userHasRole } from "@/lib/roleChecks";
 import {
   createDefaultSchoolWebsite,
+  getGoLiveStatus,
   getPreviewLink,
   getSchoolWebsite,
+  GoLiveCooldownError,
+  GoLiveDomainNotReadyError,
+  requestGoLive,
   saveSchoolWebsite,
   THEME_OPTIONS,
+  type GoLiveRequest,
   type SchoolWebsite,
   type SchoolWebsitePayload,
   type SchoolWebsiteStatus,
@@ -82,6 +87,43 @@ export default function WebsiteManagementPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+
+  const [goLiveRequest, setGoLiveRequest] = useState<GoLiveRequest | null>(
+    null,
+  );
+  const [goLiveLoading, setGoLiveLoading] = useState(true);
+  const [goLiveActionLoading, setGoLiveActionLoading] = useState(false);
+  const [goLiveError, setGoLiveError] = useState<string | null>(null);
+  const [showGoLiveConfirm, setShowGoLiveConfirm] = useState(false);
+
+  useEffect(() => {
+    if (!school) {
+      return;
+    }
+
+    let cancelled = false;
+
+    getGoLiveStatus()
+      .then((request) => {
+        if (!cancelled) {
+          setGoLiveRequest(request);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error("Failed to load Go Live status", error);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setGoLiveLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [school]);
 
   useEffect(() => {
     if (!school) {
@@ -578,6 +620,57 @@ export default function WebsiteManagementPage() {
     }
   };
 
+  const handleGoLiveClick = () => {
+    setGoLiveError(null);
+    setShowGoLiveConfirm(true);
+  };
+
+  const submitGoLiveRequest = async () => {
+    setGoLiveActionLoading(true);
+    setGoLiveError(null);
+    try {
+      const request = await requestGoLive();
+      setGoLiveRequest(request);
+      showToast(
+        goLiveRequest
+          ? "Resent -- we've notified our team again."
+          : "Go Live request sent -- we'll notify you once your website is live.",
+      );
+    } catch (error) {
+      console.error("Failed to request Go Live", error);
+      if (error instanceof GoLiveDomainNotReadyError) {
+        setGoLiveError(error.message);
+      } else if (error instanceof GoLiveCooldownError) {
+        setGoLiveError(
+          "You'll be able to resend 48 hours after your last request.",
+        );
+      } else if (error instanceof ApiError && error.status === 409) {
+        // Already activated server-side (e.g. approved moments ago) --
+        // refresh instead of showing a stale action failure.
+        getGoLiveStatus()
+          .then(setGoLiveRequest)
+          .catch(() => undefined);
+      } else {
+        setGoLiveError(
+          error instanceof Error
+            ? error.message
+            : "Unable to submit your Go Live request. Please try again.",
+        );
+      }
+    } finally {
+      setGoLiveActionLoading(false);
+    }
+  };
+
+  const handleConfirmGoLive = () => {
+    setShowGoLiveConfirm(false);
+    submitGoLiveRequest();
+  };
+
+  const handleResendGoLive = () => {
+    submitGoLiveRequest();
+  };
+
   // Publish always saves the current form state and goes live immediately,
   // so every click gets a confirmation -- not just when there are unsaved
   // changes -- to guard against accidental publishes in general.
@@ -672,6 +765,80 @@ export default function WebsiteManagementPage() {
                   {previewError}
                 </div>
               ) : null}
+
+              <div
+                className="d-flex flex-wrap align-items-center justify-content-between mt-3 pt-3"
+                style={{ borderTop: "1px solid #e2e8f0", gap: 12 }}
+              >
+                <div>
+                  <h4 className="mb-1" style={{ fontSize: "18px" }}>
+                    Go Live
+                  </h4>
+                  {goLiveLoading ? (
+                    <p className="mb-0 text-muted">Checking status…</p>
+                  ) : goLiveRequest === null ? (
+                    <p className="mb-0 text-muted">
+                      Ready for the world to see your school online? Go Live
+                      makes it happen.
+                    </p>
+                  ) : goLiveRequest.status === "activated" ? (
+                    <p className="mb-0">
+                      <span className="badge badge-success">Live</span>{" "}
+                      Your website is live.
+                    </p>
+                  ) : goLiveRequest.shouldEscalate ? (
+                    <p className="mb-0">
+                      Still waiting? Reach out to us directly at{" "}
+                      <a href="mailto:contact@cyfamod.com">
+                        contact@cyfamod.com
+                      </a>{" "}
+                      and we&apos;ll help you get live.
+                    </p>
+                  ) : (
+                    <p className="mb-0 text-muted">
+                      Your Go Live request is pending review. We&apos;ll
+                      notify you once your website is live.
+                    </p>
+                  )}
+                  {goLiveError ? (
+                    <p className="mb-0 mt-1" style={{ color: "#dc2626" }}>
+                      {goLiveError}
+                    </p>
+                  ) : null}
+                </div>
+                {!goLiveLoading && goLiveRequest?.status !== "activated" ? (
+                  <div>
+                    {goLiveRequest === null ? (
+                      <button
+                        type="button"
+                        className="btn-fill-lg bg-blue-dark btn-hover-yellow"
+                        onClick={handleGoLiveClick}
+                        disabled={goLiveActionLoading}
+                      >
+                        {goLiveActionLoading ? "Submitting…" : "Go Live"}
+                      </button>
+                    ) : !goLiveRequest.shouldEscalate ? (
+                      <button
+                        type="button"
+                        className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                        onClick={handleResendGoLive}
+                        disabled={
+                          goLiveActionLoading || !goLiveRequest.canResend
+                        }
+                        title={
+                          goLiveRequest.canResend
+                            ? undefined
+                            : "You'll be able to resend 48 hours after your last request."
+                        }
+                      >
+                        {goLiveActionLoading
+                          ? "Resending…"
+                          : "Resend notification"}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
 
               <form
                 id="website-management-form"
@@ -1785,6 +1952,65 @@ export default function WebsiteManagementPage() {
                 disabled={submittingStatus !== null}
               >
                 {submittingStatus === "published" ? "Publishing…" : "Yes, publish"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showGoLiveConfirm ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm Go Live"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1060,
+            background: "rgba(15, 23, 42, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "2rem",
+          }}
+          onClick={() => setShowGoLiveConfirm(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              width: "100%",
+              maxWidth: 480,
+              padding: "1.5rem",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h5 className="mb-3">Go Live?</h5>
+            <p className="mb-4">
+              This lets your school&apos;s website become publicly reachable
+              online. We&apos;ll review your request and notify you as soon
+              as it&apos;s live.
+            </p>
+            <div className="d-flex justify-content-end" style={{ gap: 8 }}>
+              <button
+                type="button"
+                className="btn-fill-lg"
+                style={{
+                  color: "#172033",
+                  background: "#f1f5f9",
+                }}
+                onClick={() => setShowGoLiveConfirm(false)}
+                disabled={goLiveActionLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-fill-lg bg-blue-dark btn-hover-yellow"
+                onClick={handleConfirmGoLive}
+                disabled={goLiveActionLoading}
+              >
+                {goLiveActionLoading ? "Submitting…" : "Yes, go live"}
               </button>
             </div>
           </div>

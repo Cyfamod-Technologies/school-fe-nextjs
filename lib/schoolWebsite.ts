@@ -230,6 +230,95 @@ export async function getPreviewLink(): Promise<SchoolWebsitePreviewLink> {
   );
 }
 
+export type GoLiveRequestStatus = "pending" | "activated";
+
+export interface GoLiveRequest {
+  status: GoLiveRequestStatus;
+  requestedAt: string;
+  resendCount: number;
+  canResend: boolean;
+  shouldEscalate: boolean;
+}
+
+/** Raw shape returned by sms-enterprise-edition, forwarded as-is by school-be-laravel. */
+interface GoLiveRequestRaw {
+  status: GoLiveRequestStatus;
+  requested_at: string;
+  resend_count: number;
+  can_resend: boolean;
+  should_escalate: boolean;
+}
+
+function toGoLiveRequest(raw: GoLiveRequestRaw): GoLiveRequest {
+  return {
+    status: raw.status,
+    requestedAt: raw.requested_at,
+    resendCount: raw.resend_count,
+    canResend: raw.can_resend,
+    shouldEscalate: raw.should_escalate,
+  };
+}
+
+/**
+ * Current Go Live status for the authenticated school -- `null` means Go
+ * Live has never been requested. Distinct from website `status`
+ * (draft/published/unpublished): this is about the custom domain being
+ * reachable, not the content itself -- see the Go Live section of the
+ * roadmap for why the two are never conflated in this UI.
+ */
+export async function getGoLiveStatus(): Promise<GoLiveRequest | null> {
+  const payload = await apiFetch<{ request: GoLiveRequestRaw | null }>(
+    API_ROUTES.schoolWebsiteGoLive,
+  );
+  return payload.request ? toGoLiveRequest(payload.request) : null;
+}
+
+/** Thrown when the school has no `custom_domain` on file yet -- Cyfamod
+ * hasn't finished setting up their site (see `schools:set-domain` in
+ * school-be-laravel). The caller should show a friendly "still being set
+ * up" message, never the raw backend text. */
+export class GoLiveDomainNotReadyError extends Error {}
+
+/** Thrown when a resend is attempted before the cooldown has passed. */
+export class GoLiveCooldownError extends Error {
+  constructor(
+    message: string,
+    readonly hoursUntilResendAvailable: number,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Requests Go Live (first time) or resends the notification for an
+ * existing pending request. Never called again once `activated`.
+ */
+export async function requestGoLive(): Promise<GoLiveRequest> {
+  try {
+    const payload = await apiFetch<{ request: GoLiveRequestRaw }>(
+      API_ROUTES.schoolWebsiteGoLive,
+      { method: "POST" },
+    );
+    return toGoLiveRequest(payload.request);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 422) {
+      throw new GoLiveDomainNotReadyError(
+        "Your website is still being set up -- we'll notify you when it's ready to go live.",
+      );
+    }
+    if (error instanceof ApiError && error.status === 429) {
+      const body = error.body as
+        | { hours_until_resend_available?: number }
+        | undefined;
+      throw new GoLiveCooldownError(
+        error.message,
+        Number(body?.hours_until_resend_available ?? 0),
+      );
+    }
+    throw error;
+  }
+}
+
 const THEME_KEY = "kidza-home-2";
 
 /**
