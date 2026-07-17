@@ -720,15 +720,26 @@ export default function WebsiteManagementPage() {
             <div className="card-body">
               <div className="heading-layout1" style={{ flexWrap: "wrap", rowGap: 12 }}>
                 <div className="item-title">
-                  <h3 className="mb-1" style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
-                    <span>
+                  <h3
+                    className="mb-0"
+                    style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}
+                  >
+                    <span
+                      title={
+                        publishedAt
+                          ? `Last published ${new Date(publishedAt).toLocaleString("en-NG", { timeZone: "Africa/Lagos" })}`
+                          : undefined
+                      }
+                    >
                       Website Status:{" "}
                       <span className={STATUS_BADGE_CLASS[status]}>
                         {STATUS_LABELS[status]}
                       </span>
                     </span>
                     <span style={{ fontSize: 14, fontWeight: 400 }}>
-                      {goLiveLoading ? (
+                      {goLiveError ? (
+                        <span style={{ color: "#dc2626" }}>{goLiveError}</span>
+                      ) : goLiveLoading ? (
                         <span className="text-muted">Checking Go Live…</span>
                       ) : goLiveRequest === null ? (
                         <span className="text-muted">Not live yet.</span>
@@ -744,23 +755,7 @@ export default function WebsiteManagementPage() {
                         <span className="text-muted">Pending review.</span>
                       )}
                     </span>
-                    {publishedAt ? (
-                      <span
-                        className="text-muted"
-                        style={{ fontSize: 13, fontWeight: 400 }}
-                      >
-                        Last published{" "}
-                        {new Date(publishedAt).toLocaleString("en-NG", {
-                          timeZone: "Africa/Lagos",
-                        })}
-                      </span>
-                    ) : null}
                   </h3>
-                  {goLiveError ? (
-                    <p className="mb-0" style={{ color: "#dc2626", fontSize: 13 }}>
-                      {goLiveError}
-                    </p>
-                  ) : null}
                 </div>
                 <div
                   className="d-flex align-items-center"
