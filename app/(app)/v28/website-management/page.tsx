@@ -933,7 +933,7 @@ export default function WebsiteManagementPage() {
                 <div style={{ display: activeTab === "branding" ? "block" : "none" }}>
                 <div className="row">
                   <div className="col-lg-6 col-12 form-group">
-                    <label htmlFor="website-theme-key">Website Theme</label>
+                    <label htmlFor="website-theme-key">Theme</label>
                     <select
                       id="website-theme-key"
                       className="form-control"
@@ -2190,7 +2190,7 @@ export default function WebsiteManagementPage() {
               className="d-flex align-items-center justify-content-between"
               style={{ padding: "0.75rem 1rem", borderBottom: "1px solid #e2e8f0" }}
             >
-              <strong>Website Preview</strong>
+              <strong>Preview</strong>
               <button
                 type="button"
                 className="btn btn-sm btn-outline-secondary"
