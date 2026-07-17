@@ -718,7 +718,7 @@ export default function WebsiteManagementPage() {
         <div className="col-12">
           <div className="card">
             <div className="card-body">
-              <div className="heading-layout1">
+              <div className="heading-layout1" style={{ flexWrap: "wrap", rowGap: 12 }}>
                 <div className="item-title">
                   <h3 className="mb-1" style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
                     <span>
@@ -732,15 +732,7 @@ export default function WebsiteManagementPage() {
                         <span className="text-muted">Checking Go Live…</span>
                       ) : goLiveRequest === null ? (
                         <span className="text-muted">Not live yet.</span>
-                      ) : goLiveRequest.status === "activated" ? (
-                        <span
-                          className="d-inline-flex align-items-center"
-                          style={{ gap: 6, color: "#16a34a", fontWeight: 600 }}
-                        >
-                          <span className="live-dot" aria-hidden="true" />
-                          Live
-                        </span>
-                      ) : goLiveRequest.shouldEscalate ? (
+                      ) : goLiveRequest.status === "activated" ? null : goLiveRequest.shouldEscalate ? (
                         <span className="text-muted">
                           No response yet? Email{" "}
                           <a href="mailto:contact@cyfamod.com">
@@ -770,7 +762,10 @@ export default function WebsiteManagementPage() {
                     </p>
                   ) : null}
                 </div>
-                <div className="d-flex align-items-center" style={{ gap: 8 }}>
+                <div
+                  className="d-flex align-items-center"
+                  style={{ gap: 8, flexWrap: "wrap" }}
+                >
                   <button
                     type="button"
                     className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
@@ -790,10 +785,11 @@ export default function WebsiteManagementPage() {
                       href={`https://${school.custom_domain}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="btn-fill-lg bg-blue-dark btn-hover-yellow"
-                      style={{ padding: "8px 20px", fontSize: 13 }}
+                      className="btn-fill-lg bg-blue-dark btn-hover-yellow d-inline-flex align-items-center"
+                      style={{ padding: "8px 20px", fontSize: 13, gap: 8 }}
                     >
-                      View Public Website
+                      <span className="live-dot" aria-hidden="true" />
+                      View Website
                     </a>
                   ) : null}
                   {!goLiveLoading && goLiveRequest?.status !== "activated" ? (
