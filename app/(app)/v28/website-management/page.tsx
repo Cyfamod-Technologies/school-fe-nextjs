@@ -40,11 +40,11 @@ const STATUS_LABELS: Record<SchoolWebsiteStatus | "unconfigured", string> = {
   unpublished: "Unpublished",
 };
 
-const STATUS_BADGE_CLASS: Record<SchoolWebsiteStatus | "unconfigured", string> = {
-  unconfigured: "badge badge-secondary",
-  draft: "badge badge-warning",
-  published: "badge badge-success",
-  unpublished: "badge badge-danger",
+const STATUS_DOT_COLOR: Record<SchoolWebsiteStatus | "unconfigured", string> = {
+  unconfigured: "#adb5bd",
+  draft: "#ffc107",
+  published: "#16a34a",
+  unpublished: "#dc3545",
 };
 
 export default function WebsiteManagementPage() {
@@ -720,42 +720,55 @@ export default function WebsiteManagementPage() {
             <div className="card-body">
               <div className="heading-layout1" style={{ flexWrap: "wrap", rowGap: 12 }}>
                 <div className="item-title">
-                  <h3
-                    className="mb-0"
-                    style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: 12,
+                      fontSize: 12,
+                      color: "#6c757d",
+                    }}
                   >
                     <span
+                      className="d-inline-flex align-items-center"
+                      style={{ gap: 6 }}
                       title={
                         publishedAt
                           ? `Last published ${new Date(publishedAt).toLocaleString("en-NG", { timeZone: "Africa/Lagos" })}`
                           : undefined
                       }
                     >
-                      Website Status:{" "}
-                      <span className={STATUS_BADGE_CLASS[status]}>
-                        {STATUS_LABELS[status]}
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: "50%",
+                          background: STATUS_DOT_COLOR[status],
+                          display: "inline-block",
+                        }}
+                      />
+                      {STATUS_LABELS[status]}
+                    </span>
+                    {goLiveError ? (
+                      <span style={{ color: "#dc2626" }}>{goLiveError}</span>
+                    ) : goLiveLoading ? (
+                      <span>Checking Go Live…</span>
+                    ) : goLiveRequest === null ? (
+                      <span>Not live yet.</span>
+                    ) : goLiveRequest.status === "activated" ? null : goLiveRequest.shouldEscalate ? (
+                      <span>
+                        No response yet? Email{" "}
+                        <a href="mailto:contact@cyfamod.com">
+                          contact@cyfamod.com
+                        </a>
+                        .
                       </span>
-                    </span>
-                    <span style={{ fontSize: 14, fontWeight: 400 }}>
-                      {goLiveError ? (
-                        <span style={{ color: "#dc2626" }}>{goLiveError}</span>
-                      ) : goLiveLoading ? (
-                        <span className="text-muted">Checking Go Live…</span>
-                      ) : goLiveRequest === null ? (
-                        <span className="text-muted">Not live yet.</span>
-                      ) : goLiveRequest.status === "activated" ? null : goLiveRequest.shouldEscalate ? (
-                        <span className="text-muted">
-                          No response yet? Email{" "}
-                          <a href="mailto:contact@cyfamod.com">
-                            contact@cyfamod.com
-                          </a>
-                          .
-                        </span>
-                      ) : (
-                        <span className="text-muted">Pending review.</span>
-                      )}
-                    </span>
-                  </h3>
+                    ) : (
+                      <span>Pending review.</span>
+                    )}
+                  </div>
                 </div>
                 <div
                   className="d-flex align-items-center"
