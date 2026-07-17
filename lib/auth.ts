@@ -55,6 +55,7 @@ export interface School {
   id: number;
   name: string;
   slug?: string | null;
+  custom_domain?: string | null;
   logo_url?: string | null;
   email?: string | null;
   phone?: string | null;

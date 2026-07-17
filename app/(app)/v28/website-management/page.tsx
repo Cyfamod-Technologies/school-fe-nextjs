@@ -4,7 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiError } from "@/lib/apiClient";
-import { publicWebsitePreviewUrl, publicWebsiteUrl } from "@/lib/config";
+import { publicWebsitePreviewUrl } from "@/lib/config";
 import { userHasRole } from "@/lib/roleChecks";
 import {
   createDefaultSchoolWebsite,
@@ -187,8 +187,6 @@ export default function WebsiteManagementPage() {
     }
     return JSON.stringify(form) !== savedSnapshot;
   }, [form, savedSnapshot]);
-
-  const publicUrl = publicWebsiteUrl(school?.slug ?? null);
 
   if (!canView) {
     return (
@@ -722,15 +720,42 @@ export default function WebsiteManagementPage() {
             <div className="card-body">
               <div className="heading-layout1">
                 <div className="item-title">
-                  <h3 className="mb-1">
-                    Website Status:{" "}
-                    <span className={STATUS_BADGE_CLASS[status]}>
-                      {STATUS_LABELS[status]}
+                  <h3 className="mb-1" style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
+                    <span>
+                      Website Status:{" "}
+                      <span className={STATUS_BADGE_CLASS[status]}>
+                        {STATUS_LABELS[status]}
+                      </span>
+                    </span>
+                    <span style={{ fontSize: 14, fontWeight: 400 }}>
+                      {goLiveLoading ? (
+                        <span className="text-muted">Checking Go Live…</span>
+                      ) : goLiveRequest === null ? (
+                        <span className="text-muted">Not live yet.</span>
+                      ) : goLiveRequest.status === "activated" ? (
+                        <span
+                          className="d-inline-flex align-items-center"
+                          style={{ gap: 6, color: "#16a34a", fontWeight: 600 }}
+                        >
+                          <span className="live-dot" aria-hidden="true" />
+                          Live
+                        </span>
+                      ) : goLiveRequest.shouldEscalate ? (
+                        <span className="text-muted">
+                          No response yet? Email{" "}
+                          <a href="mailto:contact@cyfamod.com">
+                            contact@cyfamod.com
+                          </a>
+                          .
+                        </span>
+                      ) : (
+                        <span className="text-muted">Pending review.</span>
+                      )}
                     </span>
                     {publishedAt ? (
                       <span
                         className="text-muted"
-                        style={{ fontSize: 13, fontWeight: 400, marginLeft: 10 }}
+                        style={{ fontSize: 13, fontWeight: 400 }}
                       >
                         Last published{" "}
                         {new Date(publishedAt).toLocaleString("en-NG", {
@@ -739,39 +764,17 @@ export default function WebsiteManagementPage() {
                       </span>
                     ) : null}
                   </h3>
-                  <div style={{ fontSize: 14 }}>
-                    {goLiveLoading ? (
-                      <span className="text-muted">
-                        Checking Go Live status…
-                      </span>
-                    ) : goLiveRequest === null ? (
-                      <span className="text-muted">Not live yet.</span>
-                    ) : goLiveRequest.status === "activated" ? (
-                      <span className="badge badge-success">Live</span>
-                    ) : goLiveRequest.shouldEscalate ? (
-                      <span className="text-muted">
-                        Still waiting? Contact us directly at{" "}
-                        <a href="mailto:contact@cyfamod.com">
-                          contact@cyfamod.com
-                        </a>
-                        .
-                      </span>
-                    ) : (
-                      <span className="text-muted">
-                        Go Live request pending review.
-                      </span>
-                    )}
-                    {goLiveError ? (
-                      <span className="d-block" style={{ color: "#dc2626" }}>
-                        {goLiveError}
-                      </span>
-                    ) : null}
-                  </div>
+                  {goLiveError ? (
+                    <p className="mb-0" style={{ color: "#dc2626", fontSize: 13 }}>
+                      {goLiveError}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="d-flex align-items-center" style={{ gap: 8 }}>
                   <button
                     type="button"
-                    className="btn-fill-md btn-gradient-yellow btn-hover-bluedark"
+                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                    style={{ padding: "8px 20px", fontSize: 13 }}
                     onClick={handleOpenPreview}
                     disabled={previewLoading || status === "unconfigured"}
                     title={
@@ -782,12 +785,13 @@ export default function WebsiteManagementPage() {
                   >
                     {previewLoading ? "Loading Preview…" : "Preview"}
                   </button>
-                  {goLiveRequest?.status === "activated" && publicUrl ? (
+                  {goLiveRequest?.status === "activated" && school?.custom_domain ? (
                     <a
-                      href={publicUrl}
+                      href={`https://${school.custom_domain}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="btn-fill-md bg-blue-dark btn-hover-yellow"
+                      className="btn-fill-lg bg-blue-dark btn-hover-yellow"
+                      style={{ padding: "8px 20px", fontSize: 13 }}
                     >
                       View Public Website
                     </a>
@@ -796,7 +800,7 @@ export default function WebsiteManagementPage() {
                     goLiveRequest === null ? (
                       <button
                         type="button"
-                        className="btn-fill-md bg-blue-dark btn-hover-yellow"
+                        className="go-live-cta"
                         onClick={handleGoLiveClick}
                         disabled={goLiveActionLoading}
                       >
@@ -806,7 +810,8 @@ export default function WebsiteManagementPage() {
                       goLiveRequest.canResend ? (
                         <button
                           type="button"
-                          className="btn-fill-md btn-gradient-yellow btn-hover-bluedark"
+                          className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                          style={{ padding: "8px 20px", fontSize: 13 }}
                           onClick={handleResendGoLive}
                           disabled={goLiveActionLoading}
                         >
@@ -814,7 +819,7 @@ export default function WebsiteManagementPage() {
                         </button>
                       ) : (
                         <span className="text-muted" style={{ fontSize: 13 }}>
-                          Resend available in 48 hours.
+                          Resend in 48h.
                         </span>
                       )
                     ) : null
@@ -827,6 +832,54 @@ export default function WebsiteManagementPage() {
                   {previewError}
                 </div>
               ) : null}
+
+              <style jsx>{`
+                .live-dot {
+                  width: 8px;
+                  height: 8px;
+                  border-radius: 50%;
+                  background: #16a34a;
+                  animation: live-pulse 1.6s ease-in-out infinite;
+                }
+                @keyframes live-pulse {
+                  0%,
+                  100% {
+                    opacity: 1;
+                    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5);
+                  }
+                  50% {
+                    opacity: 0.5;
+                    box-shadow: 0 0 0 4px rgba(22, 163, 74, 0);
+                  }
+                }
+                .go-live-cta {
+                  display: inline-block;
+                  border: none;
+                  border-radius: 4px;
+                  color: #172033;
+                  font-weight: 700;
+                  letter-spacing: 0.5px;
+                  padding: 8px 24px;
+                  font-size: 13px;
+                  cursor: pointer;
+                  background: #ffae01;
+                  animation: go-live-attention 2.2s ease-in-out infinite;
+                }
+                .go-live-cta:disabled {
+                  cursor: default;
+                  opacity: 0.7;
+                  animation: none;
+                }
+                @keyframes go-live-attention {
+                  0%,
+                  100% {
+                    opacity: 1;
+                  }
+                  50% {
+                    opacity: 0.72;
+                  }
+                }
+              `}</style>
 
               <form
                 id="website-management-form"
@@ -1211,8 +1264,7 @@ export default function WebsiteManagementPage() {
                 </div>
 
                 <div style={{ display: activeTab === "about" ? "block" : "none" }}>
-                <div className="d-flex align-items-center justify-content-between mt-4">
-                  <h4 className="mb-0">About</h4>
+                <div className="d-flex align-items-center justify-content-end mt-4">
                   <label
                     htmlFor="enabled-section-about"
                     style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
@@ -1323,8 +1375,7 @@ export default function WebsiteManagementPage() {
                 </div>
 
                 <div style={{ display: activeTab === "admissions" ? "block" : "none" }}>
-                <div className="d-flex align-items-center justify-content-between mt-4">
-                  <h4 className="mb-0">Admissions</h4>
+                <div className="d-flex align-items-center justify-content-end mt-4">
                   <label
                     htmlFor="enabled-section-admissions"
                     style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
@@ -1420,8 +1471,7 @@ export default function WebsiteManagementPage() {
                 </div>
 
                 <div style={{ display: activeTab === "contact" ? "block" : "none" }}>
-                <div className="d-flex align-items-center justify-content-between mt-4">
-                  <h4 className="mb-0">Contact</h4>
+                <div className="d-flex align-items-center justify-content-end mt-4">
                   <label
                     htmlFor="enabled-section-contact"
                     style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
@@ -1504,10 +1554,12 @@ export default function WebsiteManagementPage() {
                   </div>
                 </div>
 
-                <h5 className="mt-4">Social Links</h5>
-                <p className="text-muted" style={{ fontSize: "13px" }}>
-                  All optional.
-                </p>
+                <h4
+                  className="mb-0 mt-4"
+                  style={{ fontWeight: "bold", textTransform: "uppercase", fontSize: "16px", letterSpacing: "0.02em" }}
+                >
+                  Social Links
+                </h4>
                 <div
                   className="row"
                   style={
@@ -1543,8 +1595,7 @@ export default function WebsiteManagementPage() {
                 </div>
 
                 <div style={{ display: activeTab === "programmes" ? "block" : "none" }}>
-                <div className="d-flex align-items-center justify-content-between mt-4">
-                  <h4 className="mb-0" style={{ fontWeight: "bold", textTransform: "uppercase", fontSize: "16px", letterSpacing: "0.02em" }}>Programmes</h4>
+                <div className="d-flex align-items-center justify-content-end mt-4">
                   <label
                     htmlFor="enabled-section-programmes"
                     style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
@@ -1846,44 +1897,37 @@ export default function WebsiteManagementPage() {
                         ? "Saving…"
                         : "Save as Draft"}
                     </button>
-                    <button
-                      type="button"
-                      className="btn-fill-lg bg-blue-dark btn-hover-yellow"
-                      disabled={
-                        submittingStatus !== null ||
-                        goLiveRequest?.status !== "activated"
-                      }
-                      onClick={handlePublishClick}
-                      title={
-                        goLiveRequest?.status !== "activated"
-                          ? "Go Live first -- publishing has no visible effect until your website is live."
-                          : undefined
-                      }
-                    >
-                      {submittingStatus === "published"
-                        ? "Publishing…"
-                        : "Publish Website"}
-                    </button>
-                    {status === "published" ? (
-                      <button
-                        type="button"
-                        className="btn-fill-lg bg-dark-pastel-green btn-hover-yellow"
-                        disabled={
-                          submittingStatus !== null ||
-                          goLiveRequest?.status !== "activated"
-                        }
-                        onClick={() => handleSave("unpublished")}
-                        title={
-                          goLiveRequest?.status !== "activated"
-                            ? "Go Live first -- publishing has no visible effect until your website is live."
-                            : undefined
-                        }
-                      >
-                        {submittingStatus === "unpublished"
-                          ? "Unpublishing…"
-                          : "Unpublish Website"}
-                      </button>
-                    ) : null}
+                    {goLiveRequest?.status === "activated" ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn-fill-lg bg-blue-dark btn-hover-yellow"
+                          disabled={submittingStatus !== null}
+                          onClick={handlePublishClick}
+                        >
+                          {submittingStatus === "published"
+                            ? "Publishing…"
+                            : "Publish Website"}
+                        </button>
+                        {status === "published" ? (
+                          <button
+                            type="button"
+                            className="btn-fill-lg bg-dark-pastel-green btn-hover-yellow"
+                            disabled={submittingStatus !== null}
+                            onClick={() => handleSave("unpublished")}
+                          >
+                            {submittingStatus === "unpublished"
+                              ? "Unpublishing…"
+                              : "Unpublish Website"}
+                          </button>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span className="text-muted" style={{ fontSize: 13 }}>
+                        Publish becomes available once your website has gone
+                        live.
+                      </span>
+                    )}
                     {hasUnsavedChanges ? (
                       <span className="text-warning ml-2">
                         You have unsaved changes.
