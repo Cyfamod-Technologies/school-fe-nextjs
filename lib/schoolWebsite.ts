@@ -303,7 +303,7 @@ export async function requestGoLive(): Promise<GoLiveRequest> {
   } catch (error) {
     if (error instanceof ApiError && error.status === 422) {
       throw new GoLiveDomainNotReadyError(
-        "Your website is still being set up -- we'll notify you when it's ready to go live.",
+        "Your website is still being set up -- we will notify you when it is ready to go live.",
       );
     }
     if (error instanceof ApiError && error.status === 429) {

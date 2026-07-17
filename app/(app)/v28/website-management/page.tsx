@@ -112,6 +112,11 @@ export default function WebsiteManagementPage() {
       .catch((error) => {
         if (!cancelled) {
           console.error("Failed to load Go Live status", error);
+          setGoLiveError(
+            error instanceof Error
+              ? error.message
+              : "Unable to check Go Live status. Please refresh the page.",
+          );
         }
       })
       .finally(() => {
@@ -633,8 +638,8 @@ export default function WebsiteManagementPage() {
       setGoLiveRequest(request);
       showToast(
         goLiveRequest
-          ? "Resent -- we've notified our team again."
-          : "Go Live request sent -- we'll notify you once your website is live.",
+          ? "Resent -- we have notified our team again."
+          : "Go Live request sent -- we will notify you once your website is live.",
       );
     } catch (error) {
       console.error("Failed to request Go Live", error);
@@ -642,7 +647,7 @@ export default function WebsiteManagementPage() {
         setGoLiveError(error.message);
       } else if (error instanceof GoLiveCooldownError) {
         setGoLiveError(
-          "You'll be able to resend 48 hours after your last request.",
+          "You will be able to resend 48 hours after your last request.",
         );
       } else if (error instanceof ApiError && error.status === 409) {
         // Already activated server-side (e.g. approved moments ago) --
@@ -717,22 +722,56 @@ export default function WebsiteManagementPage() {
             <div className="card-body">
               <div className="heading-layout1">
                 <div className="item-title">
-                  <h3>
+                  <h3 className="mb-1">
                     Website Status:{" "}
                     <span className={STATUS_BADGE_CLASS[status]}>
                       {STATUS_LABELS[status]}
                     </span>
+                    {publishedAt ? (
+                      <span
+                        className="text-muted"
+                        style={{ fontSize: 13, fontWeight: 400, marginLeft: 10 }}
+                      >
+                        Last published{" "}
+                        {new Date(publishedAt).toLocaleString("en-NG", {
+                          timeZone: "Africa/Lagos",
+                        })}
+                      </span>
+                    ) : null}
                   </h3>
-                  {publishedAt ? (
-                    <p className="mb-0">
-                      Last published {new Date(publishedAt).toLocaleString()}
-                    </p>
-                  ) : null}
+                  <div style={{ fontSize: 14 }}>
+                    {goLiveLoading ? (
+                      <span className="text-muted">
+                        Checking Go Live status…
+                      </span>
+                    ) : goLiveRequest === null ? (
+                      <span className="text-muted">Not live yet.</span>
+                    ) : goLiveRequest.status === "activated" ? (
+                      <span className="badge badge-success">Live</span>
+                    ) : goLiveRequest.shouldEscalate ? (
+                      <span className="text-muted">
+                        Still waiting? Contact us directly at{" "}
+                        <a href="mailto:contact@cyfamod.com">
+                          contact@cyfamod.com
+                        </a>
+                        .
+                      </span>
+                    ) : (
+                      <span className="text-muted">
+                        Go Live request pending review.
+                      </span>
+                    )}
+                    {goLiveError ? (
+                      <span className="d-block" style={{ color: "#dc2626" }}>
+                        {goLiveError}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="d-flex align-items-center" style={{ gap: 8 }}>
                   <button
                     type="button"
-                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                    className="btn-fill-md btn-gradient-yellow btn-hover-bluedark"
                     onClick={handleOpenPreview}
                     disabled={previewLoading || status === "unconfigured"}
                     title={
@@ -743,20 +782,43 @@ export default function WebsiteManagementPage() {
                   >
                     {previewLoading ? "Loading Preview…" : "Preview"}
                   </button>
-                  {publicUrl ? (
+                  {goLiveRequest?.status === "activated" && publicUrl ? (
                     <a
                       href={publicUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="btn-fill-lg bg-blue-dark btn-hover-yellow"
+                      className="btn-fill-md bg-blue-dark btn-hover-yellow"
                     >
                       View Public Website
                     </a>
-                  ) : (
-                    <p className="mb-0 text-muted">
-                      Public website link unavailable (school has no slug yet).
-                    </p>
-                  )}
+                  ) : null}
+                  {!goLiveLoading && goLiveRequest?.status !== "activated" ? (
+                    goLiveRequest === null ? (
+                      <button
+                        type="button"
+                        className="btn-fill-md bg-blue-dark btn-hover-yellow"
+                        onClick={handleGoLiveClick}
+                        disabled={goLiveActionLoading}
+                      >
+                        {goLiveActionLoading ? "Submitting…" : "Go Live"}
+                      </button>
+                    ) : !goLiveRequest.shouldEscalate ? (
+                      goLiveRequest.canResend ? (
+                        <button
+                          type="button"
+                          className="btn-fill-md btn-gradient-yellow btn-hover-bluedark"
+                          onClick={handleResendGoLive}
+                          disabled={goLiveActionLoading}
+                        >
+                          {goLiveActionLoading ? "Resending…" : "Resend"}
+                        </button>
+                      ) : (
+                        <span className="text-muted" style={{ fontSize: 13 }}>
+                          Resend available in 48 hours.
+                        </span>
+                      )
+                    ) : null
+                  ) : null}
                 </div>
               </div>
 
@@ -765,80 +827,6 @@ export default function WebsiteManagementPage() {
                   {previewError}
                 </div>
               ) : null}
-
-              <div
-                className="d-flex flex-wrap align-items-center justify-content-between mt-3 pt-3"
-                style={{ borderTop: "1px solid #e2e8f0", gap: 12 }}
-              >
-                <div>
-                  <h4 className="mb-1" style={{ fontSize: "18px" }}>
-                    Go Live
-                  </h4>
-                  {goLiveLoading ? (
-                    <p className="mb-0 text-muted">Checking status…</p>
-                  ) : goLiveRequest === null ? (
-                    <p className="mb-0 text-muted">
-                      Ready for the world to see your school online? Go Live
-                      makes it happen.
-                    </p>
-                  ) : goLiveRequest.status === "activated" ? (
-                    <p className="mb-0">
-                      <span className="badge badge-success">Live</span>{" "}
-                      Your website is live.
-                    </p>
-                  ) : goLiveRequest.shouldEscalate ? (
-                    <p className="mb-0">
-                      Still waiting? Reach out to us directly at{" "}
-                      <a href="mailto:contact@cyfamod.com">
-                        contact@cyfamod.com
-                      </a>{" "}
-                      and we&apos;ll help you get live.
-                    </p>
-                  ) : (
-                    <p className="mb-0 text-muted">
-                      Your Go Live request is pending review. We&apos;ll
-                      notify you once your website is live.
-                    </p>
-                  )}
-                  {goLiveError ? (
-                    <p className="mb-0 mt-1" style={{ color: "#dc2626" }}>
-                      {goLiveError}
-                    </p>
-                  ) : null}
-                </div>
-                {!goLiveLoading && goLiveRequest?.status !== "activated" ? (
-                  <div>
-                    {goLiveRequest === null ? (
-                      <button
-                        type="button"
-                        className="btn-fill-lg bg-blue-dark btn-hover-yellow"
-                        onClick={handleGoLiveClick}
-                        disabled={goLiveActionLoading}
-                      >
-                        {goLiveActionLoading ? "Submitting…" : "Go Live"}
-                      </button>
-                    ) : !goLiveRequest.shouldEscalate ? (
-                      <button
-                        type="button"
-                        className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                        onClick={handleResendGoLive}
-                        disabled={
-                          goLiveActionLoading || !goLiveRequest.canResend
-                        }
-                        title={
-                          goLiveRequest.canResend
-                            ? undefined
-                            : "You'll be able to resend 48 hours after your last request."
-                        }
-                      >
-                        {goLiveActionLoading
-                          ? "Resending…"
-                          : "Resend notification"}
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
 
               <form
                 id="website-management-form"
@@ -1861,8 +1849,16 @@ export default function WebsiteManagementPage() {
                     <button
                       type="button"
                       className="btn-fill-lg bg-blue-dark btn-hover-yellow"
-                      disabled={submittingStatus !== null}
+                      disabled={
+                        submittingStatus !== null ||
+                        goLiveRequest?.status !== "activated"
+                      }
                       onClick={handlePublishClick}
+                      title={
+                        goLiveRequest?.status !== "activated"
+                          ? "Go Live first -- publishing has no visible effect until your website is live."
+                          : undefined
+                      }
                     >
                       {submittingStatus === "published"
                         ? "Publishing…"
@@ -1872,8 +1868,16 @@ export default function WebsiteManagementPage() {
                       <button
                         type="button"
                         className="btn-fill-lg bg-dark-pastel-green btn-hover-yellow"
-                        disabled={submittingStatus !== null}
+                        disabled={
+                          submittingStatus !== null ||
+                          goLiveRequest?.status !== "activated"
+                        }
                         onClick={() => handleSave("unpublished")}
+                        title={
+                          goLiveRequest?.status !== "activated"
+                            ? "Go Live first -- publishing has no visible effect until your website is live."
+                            : undefined
+                        }
                       >
                         {submittingStatus === "unpublished"
                           ? "Unpublishing…"
@@ -1987,9 +1991,9 @@ export default function WebsiteManagementPage() {
           >
             <h5 className="mb-3">Go Live?</h5>
             <p className="mb-4">
-              This lets your school&apos;s website become publicly reachable
-              online. We&apos;ll review your request and notify you as soon
-              as it&apos;s live.
+              This makes your school&apos;s website publicly reachable
+              online. We will review your request and notify you as soon as
+              it is live.
             </p>
             <div className="d-flex justify-content-end" style={{ gap: 8 }}>
               <button
