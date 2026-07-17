@@ -17,16 +17,22 @@ export class ApiError extends Error {
   readonly status: number;
   /** Laravel's per-field validation errors on a 422 response, if present. */
   readonly errors?: Record<string, string[]>;
+  /** The full parsed JSON body, for endpoints that return extra fields
+   * beyond `message`/`errors` on a non-2xx response (e.g. a 429's
+   * `hours_until_resend_available`). */
+  readonly body?: unknown;
 
   constructor(
     message: string,
     status: number,
     errors?: Record<string, string[]>,
+    body?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.errors = errors;
+    this.body = body;
   }
 }
 
@@ -95,8 +101,10 @@ export async function apiFetch<T = unknown>(
 
     let message = response.statusText;
     let validationErrors: Record<string, string[]> | undefined;
+    let body: unknown;
     try {
       const data = await response.json();
+      body = data;
       message = data.message ?? JSON.stringify(data);
       if (data.errors && typeof data.errors === "object") {
         validationErrors = data.errors;
@@ -108,6 +116,7 @@ export async function apiFetch<T = unknown>(
       message || `Request failed (${response.status})`,
       response.status,
       validationErrors,
+      body,
     );
   }
 

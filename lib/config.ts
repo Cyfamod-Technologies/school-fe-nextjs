@@ -143,6 +143,7 @@ export const API_ROUTES = {
   schoolContext: "/api/v1/school",
   schoolWebsite: "/api/v1/school/website",
   schoolWebsitePreviewLink: "/api/v1/school/website/preview-link",
+  schoolWebsiteGoLive: "/api/v1/school/website/go-live",
   classes: "/api/v1/classes",
   parents: "/api/v1/parents",
   parentsSearch: "/api/v1/parents",
