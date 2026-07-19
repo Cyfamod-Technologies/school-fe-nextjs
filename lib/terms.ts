@@ -4,6 +4,7 @@ export interface Term {
   id: number | string;
   name: string;
   term_number?: number | null;
+  use_position_ranges?: boolean;
   session?: number | string;
   session_id?: number | string;
   start_date?: string | null;
@@ -51,6 +52,7 @@ export interface TermPayload {
   term_number: number;
   start_date: string;
   end_date: string;
+  use_position_ranges: boolean;
 }
 
 export async function createTerm(

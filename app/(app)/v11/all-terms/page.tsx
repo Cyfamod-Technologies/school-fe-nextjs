@@ -224,25 +224,26 @@ export default function AllTermsPage() {
                   <th>Session</th>
                   <th>Start Date</th>
                   <th>End Date</th>
+                  <th>Position Method</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {!selectedSessionId ? (
                   <tr>
-                    <td colSpan={7} className="text-center">
+                    <td colSpan={8} className="text-center">
                       Select a session to view its terms.
                     </td>
                   </tr>
                 ) : loading ? (
                   <tr>
-                    <td colSpan={7} className="text-center">
+                    <td colSpan={8} className="text-center">
                       Loading terms…
                     </td>
                   </tr>
                 ) : terms.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center">
+                    <td colSpan={8} className="text-center">
                       No terms found for this session.
                     </td>
                   </tr>
@@ -255,6 +256,11 @@ export default function AllTermsPage() {
                       <td>{selectedSessionName || "—"}</td>
                       <td>{formatDate(term.start_date)}</td>
                       <td>{formatDate(term.end_date)}</td>
+                      <td>
+                        {term.use_position_ranges === false
+                          ? "Score ranking"
+                          : "Position ranges"}
+                      </td>
                       <td>
                         <div className="d-flex gap-2">
                           {canUpdateTerm && (

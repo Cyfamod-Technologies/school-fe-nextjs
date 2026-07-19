@@ -42,6 +42,7 @@ export default function EditTermPage() {
     session: "",
     start_date: "",
     end_date: "",
+    use_position_ranges: true,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +74,7 @@ export default function EditTermPage() {
           session: sessionValue,
           start_date: formatDateInput(term.start_date),
           end_date: formatDateInput(term.end_date),
+          use_position_ranges: term.use_position_ranges !== false,
         });
       })
       .catch((err) => {
@@ -135,6 +137,7 @@ export default function EditTermPage() {
         session: sessionId,
         start_date: toISODate(form.start_date),
         end_date: toISODate(form.end_date),
+        use_position_ranges: form.use_position_ranges,
       });
       router.push("/v11/all-terms");
     } catch (err) {
@@ -283,6 +286,28 @@ export default function EditTermPage() {
                   }
                   required
                 />
+              </div>
+              <div className="col-12 form-group">
+                <div className="form-check">
+                  <input
+                    id="use-position-ranges"
+                    type="checkbox"
+                    className="form-check-input"
+                    checked={form.use_position_ranges}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        use_position_ranges: event.target.checked,
+                      }))
+                    }
+                  />
+                  <label className="form-check-label" htmlFor="use-position-ranges">
+                    Use position ranges for this term
+                  </label>
+                  <small className="form-text text-muted">
+                    When disabled, positions are calculated from students&apos; actual score ranking.
+                  </small>
+                </div>
               </div>
               <div className="col-12 form-group mg-t-8">
                 <button
