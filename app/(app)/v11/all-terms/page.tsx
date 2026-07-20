@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listSessions, type Session } from "@/lib/sessions";
+import { listGradeScales } from "@/lib/gradeScales";
 import {
   deleteTerm,
   listTermsBySession,
@@ -46,6 +47,7 @@ export default function AllTermsPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
   const [terms, setTerms] = useState<Term[]>([]);
+  const [hasPositionRanges, setHasPositionRanges] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,6 +66,19 @@ export default function AllTermsPage() {
             ? err.message
             : "Unable to load sessions. Please try again.",
         );
+      });
+  }, []);
+
+  useEffect(() => {
+    listGradeScales()
+      .then((scales) =>
+        setHasPositionRanges(
+          scales.some((scale) => (scale.position_ranges?.length ?? 0) > 0),
+        ),
+      )
+      .catch((err) => {
+        console.error("Unable to check position ranges", err);
+        setHasPositionRanges(false);
       });
   }, []);
 
@@ -224,26 +239,26 @@ export default function AllTermsPage() {
                   <th>Session</th>
                   <th>Start Date</th>
                   <th>End Date</th>
-                  <th>Position Method</th>
+                  {hasPositionRanges ? <th>Position Method</th> : null}
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {!selectedSessionId ? (
                   <tr>
-                    <td colSpan={8} className="text-center">
+                    <td colSpan={hasPositionRanges ? 8 : 7} className="text-center">
                       Select a session to view its terms.
                     </td>
                   </tr>
                 ) : loading ? (
                   <tr>
-                    <td colSpan={8} className="text-center">
+                    <td colSpan={hasPositionRanges ? 8 : 7} className="text-center">
                       Loading terms…
                     </td>
                   </tr>
                 ) : terms.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center">
+                    <td colSpan={hasPositionRanges ? 8 : 7} className="text-center">
                       No terms found for this session.
                     </td>
                   </tr>
@@ -256,11 +271,11 @@ export default function AllTermsPage() {
                       <td>{selectedSessionName || "—"}</td>
                       <td>{formatDate(term.start_date)}</td>
                       <td>{formatDate(term.end_date)}</td>
-                      <td>
+                      {hasPositionRanges ? <td>
                         {term.use_position_ranges === true
                           ? "Position ranges"
                           : "Score ranking"}
-                      </td>
+                      </td> : null}
                       <td>
                         <div className="d-flex gap-2">
                           {canUpdateTerm && (

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { listSessions, type Session } from "@/lib/sessions";
+import { listGradeScales } from "@/lib/gradeScales";
 import {
   getTerm,
   updateTerm,
@@ -36,6 +37,7 @@ export default function EditTermPage() {
 
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionId, setSessionId] = useState("");
+  const [hasPositionRanges, setHasPositionRanges] = useState(false);
   const [form, setForm] = useState<UpdateTermPayload>({
     name: "",
     term_number: 1,
@@ -54,9 +56,20 @@ export default function EditTermPage() {
       return;
     }
 
-    Promise.all([listSessions(), getTerm(termId)])
-      .then(([sessionsResponse, term]) => {
+    Promise.all([
+      listSessions(),
+      getTerm(termId),
+      listGradeScales().catch((err) => {
+        console.error("Unable to check position ranges", err);
+        return [];
+      }),
+    ])
+      .then(([sessionsResponse, term, scales]) => {
         setSessions(sessionsResponse);
+        const positionRangesAvailable = scales.some(
+          (scale) => (scale.position_ranges?.length ?? 0) > 0,
+        );
+        setHasPositionRanges(positionRangesAvailable);
         if (!term) {
           throw new Error("Unable to load term details.");
         }
@@ -74,7 +87,8 @@ export default function EditTermPage() {
           session: sessionValue,
           start_date: formatDateInput(term.start_date),
           end_date: formatDateInput(term.end_date),
-          use_position_ranges: term.use_position_ranges === true,
+          use_position_ranges:
+            positionRangesAvailable && term.use_position_ranges === true,
         });
       })
       .catch((err) => {
@@ -137,7 +151,8 @@ export default function EditTermPage() {
         session: sessionId,
         start_date: toISODate(form.start_date),
         end_date: toISODate(form.end_date),
-        use_position_ranges: form.use_position_ranges,
+        use_position_ranges:
+          hasPositionRanges && form.use_position_ranges,
       });
       router.push("/v11/all-terms");
     } catch (err) {
@@ -287,6 +302,7 @@ export default function EditTermPage() {
                   required
                 />
               </div>
+              {hasPositionRanges ? (
               <div className="col-12 form-group">
                 <div className="form-check">
                   <input
@@ -309,6 +325,7 @@ export default function EditTermPage() {
                   </small>
                 </div>
               </div>
+              ) : null}
               <div className="col-12 form-group mg-t-8">
                 <button
                   type="submit"
