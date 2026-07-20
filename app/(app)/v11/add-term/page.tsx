@@ -29,7 +29,7 @@ export default function AddTermPage() {
     term_number: 1,
     start_date: "",
     end_date: "",
-    use_position_ranges: true,
+    use_position_ranges: false,
   });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);

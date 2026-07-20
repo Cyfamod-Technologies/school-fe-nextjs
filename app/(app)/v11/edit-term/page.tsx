@@ -42,7 +42,7 @@ export default function EditTermPage() {
     session: "",
     start_date: "",
     end_date: "",
-    use_position_ranges: true,
+    use_position_ranges: false,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +74,7 @@ export default function EditTermPage() {
           session: sessionValue,
           start_date: formatDateInput(term.start_date),
           end_date: formatDateInput(term.end_date),
-          use_position_ranges: term.use_position_ranges !== false,
+          use_position_ranges: term.use_position_ranges === true,
         });
       })
       .catch((err) => {

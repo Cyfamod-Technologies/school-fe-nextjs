@@ -257,9 +257,9 @@ export default function AllTermsPage() {
                       <td>{formatDate(term.start_date)}</td>
                       <td>{formatDate(term.end_date)}</td>
                       <td>
-                        {term.use_position_ranges === false
-                          ? "Score ranking"
-                          : "Position ranges"}
+                        {term.use_position_ranges === true
+                          ? "Position ranges"
+                          : "Score ranking"}
                       </td>
                       <td>
                         <div className="d-flex gap-2">
