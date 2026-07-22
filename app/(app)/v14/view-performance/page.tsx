@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { listClassArms, type ClassArm } from "@/lib/classArms";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import { listResults, type ResultRecord } from "@/lib/results";
 import { isAdminUser } from "@/lib/roleChecks";
@@ -16,6 +17,7 @@ interface PerformanceFilters {
   sessionId: string;
   termId: string;
   classId: string;
+  armId: string;
   subjectId: string;
 }
 
@@ -29,6 +31,7 @@ const emptyFilters: PerformanceFilters = {
   sessionId: "",
   termId: "",
   classId: "",
+  armId: "",
   subjectId: "",
 };
 
@@ -83,6 +86,7 @@ export default function ViewPerformancePage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
+  const [arms, setArms] = useState<ClassArm[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [rows, setRows] = useState<PerformanceRow[]>([]);
   const [loadingFilters, setLoadingFilters] = useState(true);
@@ -141,9 +145,21 @@ export default function ViewPerformancePage() {
       });
   }, [admin, filters.sessionId, schoolContext.current_term_id]);
 
+  useEffect(() => {
+    setArms([]);
+    if (!filters.classId || !admin) return;
+
+    listClassArms(filters.classId)
+      .then(setArms)
+      .catch((cause) => {
+        setError(cause instanceof Error ? cause.message : "Unable to load class arms.");
+      });
+  }, [admin, filters.classId]);
+
   const selectedSession = sessions.find((item) => String(item.id) === filters.sessionId);
   const selectedTerm = terms.find((item) => String(item.id) === filters.termId);
   const selectedClass = classes.find((item) => String(item.id) === filters.classId);
+  const selectedArm = arms.find((item) => String(item.id) === filters.armId);
   const selectedSubject = subjects.find((item) => String(item.id) === filters.subjectId);
 
   const loadPerformance = useCallback(async () => {
@@ -174,6 +190,7 @@ export default function ViewPerformancePage() {
           sortBy: "last_name",
           sortDirection: "asc",
           school_class_id: filters.classId,
+          class_arm_id: filters.armId || undefined,
         });
         studentItems.push(...(response.data ?? []));
         hasMoreStudents = studentPage < (response.last_page || 1);
@@ -190,6 +207,7 @@ export default function ViewPerformancePage() {
           session_id: filters.sessionId,
           term_id: viewingAllTerms ? undefined : filters.termId,
           school_class_id: filters.classId,
+          class_arm_id: filters.armId || undefined,
           subject_id: viewingAllSubjects ? undefined : filters.subjectId,
         });
         resultItems.push(...(response.data ?? []));
@@ -369,10 +387,26 @@ export default function ViewPerformancePage() {
                 className="form-control"
                 value={filters.classId}
                 disabled={loadingFilters}
-                onChange={(event) => setFilters((previous) => ({ ...previous, classId: event.target.value }))}
+                onChange={(event) => setFilters((previous) => ({
+                  ...previous,
+                  classId: event.target.value,
+                  armId: "",
+                }))}
               >
                 <option value="">Select Class</option>
                 {classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.name}</option>)}
+              </select>
+            </div>
+            <div className="col-xl-2 col-lg-3 col-md-6 form-group">
+              <label>Class Arm</label>
+              <select
+                className="form-control"
+                value={filters.armId}
+                disabled={!filters.classId}
+                onChange={(event) => setFilters((previous) => ({ ...previous, armId: event.target.value }))}
+              >
+                <option value="">All Arms</option>
+                {arms.map((arm) => <option key={arm.id} value={arm.id}>{arm.name}</option>)}
               </select>
             </div>
             <div className="col-xl-2 col-lg-3 col-md-6 form-group">
@@ -399,7 +433,12 @@ export default function ViewPerformancePage() {
           {loaded ? (
             <>
               <div className="performance-summary mb-4">
-                <div><span>Class</span><strong>{selectedClass?.name ?? "—"}</strong></div>
+                <div>
+                  <span>Class</span>
+                  <strong>
+                    {selectedClass?.name ?? "—"}{selectedArm ? ` · ${selectedArm.name}` : " · All Arms"}
+                  </strong>
+                </div>
                 <div>
                   <span>Performance</span>
                   <strong>
