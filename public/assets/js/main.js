@@ -4,7 +4,7 @@
   /*-------------------------------------
       Sidebar Toggle Menu
     -------------------------------------*/
-  $('#sidebar-placeholder').on('click', '.sidebar-toggle-view .sidebar-nav-item .nav-link', function (e) {
+  $('#sidebar-placeholder').on('click', '.sidebar-toggle-view .sidebar-nav-item > .nav-link', function (e) {
     if (!$(this).parents('#wrapper').hasClass('sidebar-collapsed')) {
       var animationSpeed = 300,
         subMenuSelector = '.sub-group-menu',

@@ -60,10 +60,11 @@ export const sidebarQuickLinks: SidebarQuickLink[] = [
   },
 ];
 
-export function getMenuSections(enableSessionResultPrint = false): MenuSection[] {
-  const studentLinks: MenuLink[] = [
-    { label: "View Student", href: "/v14/all-students", requiredPermissions: "students.view" },
-    { label: "Add Student", href: "/v14/add-student", requiredPermissions: "students.create" },
+export function getMenuSections(
+  enableSessionResultPrint = false,
+  preserveTeacherStudentMenu = false,
+): MenuSection[] {
+  const studentResultPrintLinks: MenuLink[] = [
     {
       label: "Assessment Sheet",
       href: "/v14/assessment-sheet",
@@ -82,16 +83,9 @@ export function getMenuSections(enableSessionResultPrint = false): MenuSection[]
         ]
       : []),
     { label: "Check Student Result", href: "/v14/check-result", requiredPermissions: "results.check", excludeRoles: "teacher" },
-    ...(showEarlyYearsReport
-      ? [
-          {
-            label: "Early Years Report",
-            href: "/v14/early-years-report",
-            requiredPermissions: "results.early-years.view",
-            excludeRoles: "teacher",
-          } satisfies MenuLink,
-        ]
-      : []),
+  ];
+
+  const studentResultEntryLinks: MenuLink[] = [
     {
       label: "Result Entry",
       href: "/v19/results-entry",
@@ -106,6 +100,45 @@ export function getMenuSections(enableSessionResultPrint = false): MenuSection[]
       href: "/v14/class-skill-ratings",
       requiredPermissions: ["skills.ratings.view", "results.entry.enter"],
     },
+  ];
+
+  const studentResultLinks = [
+    ...studentResultPrintLinks,
+    ...studentResultEntryLinks,
+  ];
+
+  const earlyYearsLinks: MenuLink[] = showEarlyYearsReport
+    ? [
+        {
+          label: "Early Years Report",
+          href: "/v14/early-years-report",
+          requiredPermissions: "results.early-years.view",
+          excludeRoles: "teacher",
+        },
+      ]
+    : [];
+
+  const studentLinks: MenuLink[] = [
+    { label: "View Student", href: "/v14/all-students", requiredPermissions: "students.view" },
+    { label: "Add Student", href: "/v14/add-student", requiredPermissions: "students.create" },
+    {
+      label: "Result",
+      href: "#",
+      children: studentResultLinks,
+    },
+    ...earlyYearsLinks,
+    { label: "Student Bulk Upload", href: "/v22/bulk-student-upload", requiredPermissions: "students.import" },
+    { label: "Student Promotion", href: "/v20/student-promotion", requiredPermissions: "students.promote" },
+    { label: "Promotion Reports", href: "/v20/promotion-reports", requiredPermissions: "promotions.history" },
+    { label: "Exit Students", href: "/v14/exited-students", requiredPermissions: "students.view", excludeRoles: "teacher" },
+  ];
+
+  const teacherStudentLinks: MenuLink[] = [
+    { label: "View Student", href: "/v14/all-students", requiredPermissions: "students.view" },
+    { label: "Add Student", href: "/v14/add-student", requiredPermissions: "students.create" },
+    ...studentResultPrintLinks,
+    ...earlyYearsLinks,
+    ...studentResultEntryLinks,
     { label: "Student Bulk Upload", href: "/v22/bulk-student-upload", requiredPermissions: "students.import" },
     { label: "Student Promotion", href: "/v20/student-promotion", requiredPermissions: "students.promote" },
     { label: "Promotion Reports", href: "/v20/promotion-reports", requiredPermissions: "promotions.history" },
@@ -171,7 +204,7 @@ export function getMenuSections(enableSessionResultPrint = false): MenuSection[]
     {
       label: "Student",
       icon: "flaticon-classmates",
-      links: studentLinks,
+      links: preserveTeacherStudentMenu ? teacherStudentLinks : studentLinks,
     },
     {
       label: "Attendance",
@@ -347,7 +380,10 @@ export function Sidebar() {
   }, [linkVisible]);
 
   const filteredSections = useMemo(() => {
-    return getMenuSections(Boolean(schoolContext.school?.result_enable_session_print))
+    return getMenuSections(
+      Boolean(schoolContext.school?.result_enable_session_print),
+      isTeacher,
+    )
       .filter((section) => {
         if (isAdminRole && section.label === "Student") {
           return false;
@@ -364,13 +400,23 @@ export function Sidebar() {
       .filter((section) => section.links.length > 0);
   }, [filterLinks, isTeacher, isAdminRole, schoolContext.school?.result_enable_session_print]);
 
-  const isSectionActive = useCallback(
-    (section: MenuSection) => section.links.some((link) => isLinkActive(link.href)),
+  const isMenuLinkActive = useCallback(
+    function isMenuLinkActiveRecursively(link: MenuLink): boolean {
+      return (
+        isLinkActive(link.href) ||
+        (link.children ?? []).some(isMenuLinkActiveRecursively)
+      );
+    },
     [isLinkActive],
   );
 
+  const isSectionActive = useCallback(
+    (section: MenuSection) => section.links.some(isMenuLinkActive),
+    [isMenuLinkActive],
+  );
+
   const isGroupActive = (group: MenuLink) =>
-    (group.children ?? []).some((link) => isLinkActive(link.href));
+    (group.children ?? []).some(isMenuLinkActive);
 
   const toggleSection = useCallback((label: string) => {
     setOpenSections((prev) => {
@@ -389,6 +435,60 @@ export function Sidebar() {
       return { [label]: true };
     });
   }, [filteredSections, isSectionActive]);
+
+  const renderMenuLinks = (
+    links: MenuLink[],
+    sectionLabel: string,
+    parentKey = sectionLabel,
+  ) =>
+    links.map((link) => {
+      const linkKey = link.id || `${parentKey}:${link.label}:${link.href}`;
+
+      if (link.children && link.children.length > 0) {
+        const groupOpen = Object.prototype.hasOwnProperty.call(openGroups, linkKey)
+          ? Boolean(openGroups[linkKey])
+          : isGroupActive(link);
+
+        return (
+          <li
+            key={linkKey}
+            className={`nav-item ${groupOpen ? "open active" : ""}`}
+          >
+            <a
+              href="#"
+              className="nav-link d-flex align-items-center justify-content-between"
+              onClick={(event) => {
+                event.preventDefault();
+                setOpenGroups((prev) => ({
+                  ...prev,
+                  [linkKey]: !groupOpen,
+                }));
+              }}
+            >
+              <span>{link.label}</span>
+              <i className={`fas fa-angle-${groupOpen ? "down" : "right"}`} />
+            </a>
+            <ul
+              className="nav sub-group-menu"
+              style={{ display: groupOpen ? "block" : "none", paddingLeft: 18 }}
+            >
+              {renderMenuLinks(link.children, sectionLabel, linkKey)}
+            </ul>
+          </li>
+        );
+      }
+
+      return (
+        <li
+          key={linkKey}
+          className={`nav-item ${isLinkActive(link.href) ? "active" : ""}`}
+        >
+          <Link href={link.href} className="nav-link">
+            {link.label}
+          </Link>
+        </li>
+      );
+    });
 
   return (
     <div
@@ -467,61 +567,7 @@ export function Sidebar() {
                   className="nav sub-group-menu"
                   style={{ display: open ? "block" : "none" }}
                 >
-                  {section.links.map((link) => {
-                    if (link.children && link.children.length > 0) {
-                      const groupKey = `${section.label}:${link.label}`;
-                      const groupOpen = Object.prototype.hasOwnProperty.call(openGroups, groupKey)
-                        ? Boolean(openGroups[groupKey])
-                        : isGroupActive(link);
-                      return (
-                        <li
-                          key={groupKey}
-                          className={`nav-item ${groupOpen ? "open active" : ""}`}
-                        >
-                          <a
-                            href="#"
-                            className="nav-link d-flex align-items-center justify-content-between"
-                            onClick={(event) => {
-                              event.preventDefault();
-                              setOpenGroups((prev) => ({
-                                ...prev,
-                                [groupKey]: !groupOpen,
-                              }));
-                            }}
-                          >
-                            <span>{link.label}</span>
-                            <i className={`fas fa-angle-${groupOpen ? "down" : "right"}`} />
-                          </a>
-                          <ul
-                            className="nav sub-group-menu"
-                            style={{ display: groupOpen ? "block" : "none", paddingLeft: 18 }}
-                          >
-                            {link.children.map((child) => (
-                              <li
-                                key={child.id || child.href}
-                                className={`nav-item ${isLinkActive(child.href) ? "active" : ""}`}
-                              >
-                                <Link href={child.href} className="nav-link">
-                                  {child.label}
-                                </Link>
-                              </li>
-                            ))}
-                          </ul>
-                        </li>
-                      );
-                    }
-
-                    return (
-                      <li
-                        key={link.id || link.href}
-                        className={`nav-item ${isLinkActive(link.href) ? "active" : ""}`}
-                      >
-                        <Link href={link.href} className="nav-link">
-                          {link.label}
-                        </Link>
-                      </li>
-                    );
-                  })}
+                  {renderMenuLinks(section.links, section.label)}
                 </ul>
               </li>
             );
