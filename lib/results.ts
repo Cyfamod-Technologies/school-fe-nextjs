@@ -9,6 +9,7 @@ export interface ResultRecord {
   term_id: number | string;
   assessment_component_id?: number | string | null;
   total_score: number;
+  position_in_subject?: number | null;
   remarks?: string | null;
   updated_at?: string | null;
   [key: string]: unknown;
@@ -30,7 +31,7 @@ export interface ResultFilters {
   per_page?: number;
   student_id?: string | number;
   session_id: string | number;
-  term_id: string | number;
+  term_id?: string | number;
   subject_id?: string | number;
   school_class_id?: string | number;
   class_arm_id?: string | number | null;

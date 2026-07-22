@@ -26,3 +26,8 @@ export const userHasRole = (user: RoleLikeUser, roleName: string): boolean => {
 
 export const isTeacherUser = (user: RoleLikeUser): boolean =>
   userHasRole(user, "teacher");
+
+export const isAdminUser = (user: RoleLikeUser): boolean =>
+  ["admin", "super_admin", "superadmin", "administrator"].some((role) =>
+    userHasRole(user, role),
+  );

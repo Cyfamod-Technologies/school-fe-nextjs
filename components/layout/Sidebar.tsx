@@ -83,6 +83,12 @@ export function getMenuSections(
         ]
       : []),
     { label: "Check Student Result", href: "/v14/check-result", requiredPermissions: "results.check", excludeRoles: "teacher" },
+    {
+      label: "View Performance",
+      href: "/v14/view-performance",
+      requiredRoles: ["admin", "super_admin", "superadmin", "administrator"],
+      excludeRoles: "teacher",
+    },
   ];
 
   const studentResultEntryLinks: MenuLink[] = [
