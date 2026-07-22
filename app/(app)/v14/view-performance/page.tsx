@@ -148,6 +148,7 @@ export default function ViewPerformancePage() {
 
   const loadPerformance = useCallback(async () => {
     const viewingAllTerms = filters.termId === "all";
+    const viewingAllSubjects = filters.subjectId === "all";
     if (
       !filters.sessionId ||
       !filters.classId ||
@@ -189,7 +190,7 @@ export default function ViewPerformancePage() {
           session_id: filters.sessionId,
           term_id: viewingAllTerms ? undefined : filters.termId,
           school_class_id: filters.classId,
-          subject_id: filters.subjectId,
+          subject_id: viewingAllSubjects ? undefined : filters.subjectId,
         });
         resultItems.push(...(response.data ?? []));
         hasMoreResults = resultPage < (response.last_page || 1);
@@ -210,7 +211,7 @@ export default function ViewPerformancePage() {
         let score: number | null;
         let storedPosition: number | null = null;
 
-        if (viewingAllTerms) {
+        if (viewingAllTerms || viewingAllSubjects) {
           const resultsByTermAndSubject = new Map<string, ResultRecord[]>();
           studentResults.forEach((result) => {
             const key = `${String(result.term_id)}:${String(result.subject_id)}`;
@@ -383,6 +384,7 @@ export default function ViewPerformancePage() {
                 onChange={(event) => setFilters((previous) => ({ ...previous, subjectId: event.target.value }))}
               >
                 <option value="">Select Subject</option>
+                <option value="all">All Subjects</option>
                 {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
               </select>
             </div>
@@ -401,9 +403,13 @@ export default function ViewPerformancePage() {
                 <div>
                   <span>Performance</span>
                   <strong>
-                    {filters.termId === "all"
-                      ? `${selectedSubject?.name ?? "Subject"} · All Terms`
-                      : selectedSubject?.name ?? "—"}
+                    {filters.subjectId === "all"
+                      ? filters.termId === "all"
+                        ? "Overall Class · All Terms"
+                        : "Overall Class"
+                      : filters.termId === "all"
+                        ? `${selectedSubject?.name ?? "Subject"} · All Terms`
+                        : selectedSubject?.name ?? "—"}
                   </strong>
                 </div>
                 <div><span>Students Scored</span><strong>{scoredStudents.length} / {rows.length}</strong></div>
