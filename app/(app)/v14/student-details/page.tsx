@@ -71,6 +71,7 @@ const defaultResultPageSettings: ResultPageSettings = {
   hide_student_identity: false,
   allow_shared_pin_access: false,
   enable_session_result_print: false,
+  collapse_session_ca: false,
   comment_mode: "manual",
   signatory_title: "principal",
 };

@@ -18,6 +18,7 @@ const defaultSettings: ResultPageSettings = {
   hide_student_identity: false,
   allow_shared_pin_access: false,
   enable_session_result_print: false,
+  collapse_session_ca: false,
   comment_mode: "manual",
   signatory_title: "principal",
 };
@@ -104,6 +105,11 @@ export default function ResultPageSettingsPage() {
         key: "enable_session_result_print" as const,
         label: "Session Result Printing",
         hint: "Enable the separate session-result print page and sidebar link for schools that print cumulative first-to-third-term sheets.",
+      },
+      {
+        key: "collapse_session_ca" as const,
+        label: "Collapse Session CAs",
+        hint: "Combine all non-exam assessment scores into one CA column for each term on the session result sheet.",
       },
     ],
     [],
