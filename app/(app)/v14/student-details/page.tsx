@@ -469,15 +469,23 @@ export default function StudentDetailsPage() {
     if (!isTeacher) {
       return true;
     }
-    if (!student?.school_class_id || !teacherDashboard) {
+    if (!student || !teacherDashboard) {
       return false;
     }
 
-    const classId = String(student.school_class_id);
-    const studentArmId =
-      student.class_arm_id != null ? String(student.class_arm_id) : "";
-    const studentSectionId =
-      student.class_section_id != null ? String(student.class_section_id) : "";
+    const classId = String(
+      student.school_class_id ?? student.school_class?.id ?? "",
+    );
+    const studentArmId = String(
+      student.class_arm_id ?? student.class_arm?.id ?? "",
+    );
+    const studentSectionId = String(
+      student.class_section_id ?? student.class_section?.id ?? "",
+    );
+
+    if (!classId) {
+      return false;
+    }
 
     return teacherDashboard.assignments.some((assignment) => {
       if (!assignment.is_class_teacher) {
@@ -493,12 +501,6 @@ export default function StudentDetailsPage() {
       const assignmentSectionId = assignment.class_section?.id
         ? String(assignment.class_section.id)
         : "";
-      const assignmentSessionId = assignment.session?.id
-        ? String(assignment.session.id)
-        : "";
-      const assignmentTermId = assignment.term?.id
-        ? String(assignment.term.id)
-        : "";
 
       if (assignmentArmId && assignmentArmId !== studentArmId) {
         return false;
@@ -506,24 +508,10 @@ export default function StudentDetailsPage() {
       if (assignmentSectionId && assignmentSectionId !== studentSectionId) {
         return false;
       }
-      if (assignmentSessionId && selectedSession && assignmentSessionId !== selectedSession) {
-        return false;
-      }
-      if (assignmentTermId && selectedTerm && assignmentTermId !== selectedTerm) {
-        return false;
-      }
 
       return true;
     });
-  }, [
-    isTeacher,
-    selectedSession,
-    selectedTerm,
-    student?.class_arm_id,
-    student?.class_section_id,
-    student?.school_class_id,
-    teacherDashboard,
-  ]);
+  }, [isTeacher, student, teacherDashboard]);
 
   const terms = useMemo(() => {
     if (!selectedSession) {
