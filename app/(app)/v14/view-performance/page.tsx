@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { listClassArms, type ClassArm } from "@/lib/classArms";
@@ -80,9 +80,16 @@ const formatPosition = (position: number | null) => {
 
 export default function ViewPerformancePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading, schoolContext } = useAuth();
   const admin = isAdminUser(user);
-  const [filters, setFilters] = useState<PerformanceFilters>(emptyFilters);
+  const [filters, setFilters] = useState<PerformanceFilters>(() => ({
+    sessionId: searchParams.get("session_id") ?? "",
+    termId: searchParams.get("term_id") ?? "",
+    classId: searchParams.get("class_id") ?? "",
+    armId: searchParams.get("arm_id") ?? "",
+    subjectId: searchParams.get("subject_id") ?? "",
+  }));
   const [sessions, setSessions] = useState<Session[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
