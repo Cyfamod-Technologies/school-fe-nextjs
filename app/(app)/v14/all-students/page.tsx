@@ -92,8 +92,6 @@ export default function AllStudentsPage() {
   const [classSections, setClassSections] = useState<ClassArmSection[]>([]);
   void classSections;
 
-  const [exportingBroadsheet, setExportingBroadsheet] = useState(false);
-
   const [data, setData] = useState<StudentListResponse | null>(null);
   const [students, setStudents] = useState<StudentSummary[]>([]);
   const [teacherDashboard, setTeacherDashboard] =
@@ -148,6 +146,16 @@ export default function AllStudentsPage() {
     if (filters.class_arm_id) params.set("arm_id", filters.class_arm_id);
     const query = params.toString();
     return query ? `/v14/assessment-sheet?${query}` : "/v14/assessment-sheet";
+  }, [filters.current_session_id, filters.term_id, filters.school_class_id, filters.class_arm_id]);
+
+  const broadsheetHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (filters.current_session_id) params.set("session_id", filters.current_session_id);
+    if (filters.term_id) params.set("term_id", filters.term_id);
+    if (filters.school_class_id) params.set("school_class_id", filters.school_class_id);
+    if (filters.class_arm_id) params.set("class_arm_id", filters.class_arm_id);
+    const query = params.toString();
+    return query ? `/v14/broadsheet?${query}` : "/v14/broadsheet";
   }, [filters.current_session_id, filters.term_id, filters.school_class_id, filters.class_arm_id]);
 
   useEffect(() => {
@@ -521,66 +529,6 @@ export default function AllStudentsPage() {
     }
   }, [deletingSelected, fetchStudents, page, selectedStudentIdList, students.length]);
 
-  const handleExportBroadsheet = useCallback(async () => {
-    if (exportingBroadsheet) return;
-
-    if (!filters.current_session_id) {
-      setBulkFeedback({
-        type: "warning",
-        message: "Please select a Session before printing the broadsheet.",
-      });
-      return;
-    }
-
-    if (!filters.term_id) {
-      setBulkFeedback({
-        type: "warning",
-        message: "Please select a Term before printing the broadsheet.",
-      });
-      return;
-    }
-
-    if (!filters.school_class_id) {
-      setBulkFeedback({
-        type: "warning",
-        message: "Please select a Class before printing the broadsheet.",
-      });
-      return;
-    }
-
-    setExportingBroadsheet(true);
-    setBulkFeedback(null);
-    try {
-      const printUrl = new URL("/v14/print-broadsheet", window.location.origin);
-      printUrl.searchParams.set("session_id", filters.current_session_id);
-      printUrl.searchParams.set("term_id", filters.term_id);
-      printUrl.searchParams.set("school_class_id", filters.school_class_id);
-      printUrl.searchParams.set("autoprint", "1");
-
-      if (filters.class_arm_id) {
-        printUrl.searchParams.set("class_arm_id", filters.class_arm_id);
-      }
-
-      const printWindow = window.open(printUrl.toString(), "_blank");
-
-      if (!printWindow) {
-        throw new Error("Unable to open broadsheet window. Please allow pop-ups for this site.");
-      }
-
-      setBulkFeedback({
-        type: "success",
-        message: "Printable broadsheet opened successfully.",
-      });
-    } catch (err) {
-      setBulkFeedback({
-        type: "danger",
-        message: err instanceof Error ? err.message : "Unable to print broadsheet.",
-      });
-    } finally {
-      setExportingBroadsheet(false);
-    }
-  }, [exportingBroadsheet, filters]);
-
   return (
     <>
       <div className="breadcrumbs-area">
@@ -791,17 +739,12 @@ export default function AllStudentsPage() {
                   </Link>
                 ) : null}
                 {!isTeacher ? (
-                  <button
-                    type="button"
+                  <Link
+                    href={broadsheetHref}
                     className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
-                    onClick={handleExportBroadsheet}
-                    disabled={exportingBroadsheet || !filters.school_class_id}
-                    title={!filters.school_class_id ? "Select a Class to print" : "Print broadsheet for selected class"}
                   >
-                    {exportingBroadsheet
-                      ? "Opening…"
-                      : `Print Broadsheet${data?.total ? ` (${data.total})` : ""}`}
-                  </button>
+                    {`Broadsheet${data?.total ? ` (${data.total})` : ""}`}
+                  </Link>
                 ) : null}
                 {!isTeacher ? (
                   <PermissionGate permission={PERMISSIONS.STUDENTS_DELETE}>
