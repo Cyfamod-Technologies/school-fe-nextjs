@@ -22,11 +22,12 @@ import {
   listStudents,
   deleteStudent,
   deleteDependentRecords,
+  regenerateAdmissionNumbers,
   type StudentListResponse,
   type StudentSummary,
 } from "@/lib/students";
 import { resolveBackendUrl } from "@/lib/config";
-import { isTeacherUser } from "@/lib/roleChecks";
+import { isAdminUser, isTeacherUser } from "@/lib/roleChecks";
 import {
   fetchTeacherDashboard,
   type TeacherDashboardResponse,
@@ -57,6 +58,7 @@ export default function AllStudentsPage() {
   const searchParams = useSearchParams();
 
   const isTeacher = isTeacherUser(user);
+  const isAdmin = isAdminUser(user);
 
   const perPageOptions = [10, 25, 50, 100];
   const initialPage = (() => {
@@ -104,6 +106,7 @@ export default function AllStudentsPage() {
   } | null>(null);
   const [selectedStudentIds, setSelectedStudentIds] = useState<Record<string, boolean>>({});
   const [deletingSelected, setDeletingSelected] = useState(false);
+  const [regeneratingAdmissionNumbers, setRegeneratingAdmissionNumbers] = useState(false);
 
   const fetchStudents = useCallback(async () => {
     setLoading(true);
@@ -529,6 +532,50 @@ export default function AllStudentsPage() {
     }
   }, [deletingSelected, fetchStudents, page, selectedStudentIdList, students.length]);
 
+  const handleRegenerateAdmissionNumbers = useCallback(async () => {
+    if (
+      !selectedStudentIdList.length ||
+      regeneratingAdmissionNumbers ||
+      deletingSelected
+    ) {
+      return;
+    }
+
+    const count = selectedStudentIdList.length;
+    const confirmed = window.confirm(
+      `Regenerate the admission number for ${count} selected student${count === 1 ? "" : "s"}? Their previous admission number${count === 1 ? "" : "s"} will no longer work for student login.`,
+    );
+    if (!confirmed) return;
+
+    setBulkFeedback(null);
+    setRegeneratingAdmissionNumbers(true);
+    try {
+      const response = await regenerateAdmissionNumbers(selectedStudentIdList);
+      setSelectedStudentIds({});
+      await fetchStudents();
+      setBulkFeedback({
+        type: "success",
+        message: response.message,
+      });
+    } catch (err) {
+      console.error("Unable to regenerate admission numbers", err);
+      setBulkFeedback({
+        type: "danger",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Unable to regenerate admission numbers.",
+      });
+    } finally {
+      setRegeneratingAdmissionNumbers(false);
+    }
+  }, [
+    deletingSelected,
+    fetchStudents,
+    regeneratingAdmissionNumbers,
+    selectedStudentIdList,
+  ]);
+
   return (
     <>
       <div className="breadcrumbs-area">
@@ -746,13 +793,35 @@ export default function AllStudentsPage() {
                     {`Broadsheet${data?.total ? ` (${data.total})` : ""}`}
                   </Link>
                 ) : null}
+                {isAdmin ? (
+                  <PermissionGate permission={PERMISSIONS.STUDENTS_UPDATE}>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-lg mr-2"
+                      onClick={handleRegenerateAdmissionNumbers}
+                      disabled={
+                        regeneratingAdmissionNumbers ||
+                        deletingSelected ||
+                        !selectedStudentCount
+                      }
+                    >
+                      {regeneratingAdmissionNumbers
+                        ? "Regenerating…"
+                        : `Regenerate Adm No${selectedStudentCount ? ` (${selectedStudentCount})` : ""}`}
+                    </button>
+                  </PermissionGate>
+                ) : null}
                 {!isTeacher ? (
                   <PermissionGate permission={PERMISSIONS.STUDENTS_DELETE}>
                     <button
                       type="button"
                       className="btn btn-danger btn-lg"
                       onClick={handleDeleteSelected}
-                      disabled={deletingSelected || !selectedStudentCount}
+                      disabled={
+                        deletingSelected ||
+                        regeneratingAdmissionNumbers ||
+                        !selectedStudentCount
+                      }
                     >
                       {deletingSelected
                         ? "Deleting…"
