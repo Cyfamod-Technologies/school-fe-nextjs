@@ -20,6 +20,10 @@ import {
   type BulkGeneratePinsPayload,
 } from "@/lib/resultPins";
 import { listStudents, type StudentSummary } from "@/lib/students";
+import {
+  fetchResultPageSettings,
+  updateResultPageSettings,
+} from "@/lib/resultPageSettings";
 
 type FeedbackType = "success" | "warning" | "danger";
 
@@ -152,6 +156,9 @@ export default function PinsPage() {
   const [generatingSingle, setGeneratingSingle] = useState(false);
   const [generatingBulk, setGeneratingBulk] = useState(false);
   const [pinActionKey, setPinActionKey] = useState<string | null>(null);
+  const [requirePinForResults, setRequirePinForResults] = useState(true);
+  const [pinRequirementLoading, setPinRequirementLoading] = useState(true);
+  const [pinRequirementSaving, setPinRequirementSaving] = useState(false);
 
   const isAdmin = useMemo(() => {
     const directRole = String(
@@ -178,6 +185,10 @@ export default function PinsPage() {
     hasPermission(PERMISSIONS.RESULT_PIN_INVALIDATE) ||
     hasPermission("result.pin.delete");
   const canExportPins = isAdmin || hasPermission(PERMISSIONS.RESULT_PIN_EXPORT);
+  const canViewPinRequirement =
+    isAdmin || hasPermission(PERMISSIONS.SETTINGS_RESULT_PAGE_VIEW);
+  const canUpdatePinRequirement =
+    isAdmin || hasPermission(PERMISSIONS.SETTINGS_RESULT_PAGE_UPDATE);
 
   const availableTerms = useMemo(() => {
     if (!selectedSession) {
@@ -200,6 +211,29 @@ export default function PinsPage() {
   const resetFeedback = useCallback(() => {
     setFeedback(null);
   }, []);
+
+  const loadPinRequirement = useCallback(async () => {
+    if (!canViewPinRequirement) {
+      setPinRequirementLoading(false);
+      return;
+    }
+
+    setPinRequirementLoading(true);
+    try {
+      const settings = await fetchResultPageSettings();
+      setRequirePinForResults(settings.require_pin_for_pdf_download);
+    } catch (error) {
+      console.error("Unable to load result PIN requirement", error);
+      showFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to load the result PIN requirement.",
+        "danger",
+      );
+    } finally {
+      setPinRequirementLoading(false);
+    }
+  }, [canViewPinRequirement, showFeedback]);
 
   const loadSessions = useCallback(async () => {
     setSessionsLoading(true);
@@ -435,6 +469,10 @@ export default function PinsPage() {
   }, [loadClasses, loadSessions]);
 
   useEffect(() => {
+    void loadPinRequirement();
+  }, [loadPinRequirement]);
+
+  useEffect(() => {
     void loadTerms(selectedSession);
   }, [loadTerms, selectedSession]);
 
@@ -509,6 +547,36 @@ export default function PinsPage() {
       );
     } finally {
       setGeneratingSingle(false);
+    }
+  };
+
+  const handleSavePinRequirement = async () => {
+    if (!canUpdatePinRequirement) {
+      showFeedback(
+        "You do not have permission to update the result PIN requirement.",
+        "warning",
+      );
+      return;
+    }
+
+    setPinRequirementSaving(true);
+    resetFeedback();
+    try {
+      const saved = await updateResultPageSettings({
+        require_pin_for_pdf_download: requirePinForResults,
+      });
+      setRequirePinForResults(saved.require_pin_for_pdf_download);
+      showFeedback("Result PIN requirement updated successfully.", "success");
+    } catch (error) {
+      console.error("Unable to update result PIN requirement", error);
+      showFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to update the result PIN requirement.",
+        "danger",
+      );
+    } finally {
+      setPinRequirementSaving(false);
     }
   };
 
@@ -826,6 +894,67 @@ export default function PinsPage() {
         </ul>
       </div>
 
+      <div
+        id="pin-feedback"
+        className={`alert${feedback ? ` alert-${feedback.type}` : ""}`}
+        style={{ display: feedback ? "block" : "none" }}
+        role="alert"
+      >
+        {feedback?.message}
+      </div>
+
+      {canViewPinRequirement ? (
+        <div className="card height-auto mb-4">
+          <div className="card-body">
+            <div className="heading-layout1 mb-3">
+              <div className="item-title">
+                <h3>Student Result PIN Requirement</h3>
+              </div>
+            </div>
+            <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between">
+              <div className="form-check mb-3 mb-md-0">
+                <input
+                  id="require-pin-for-results"
+                  type="checkbox"
+                  className="form-check-input"
+                  checked={requirePinForResults}
+                  onChange={(event) => {
+                    setRequirePinForResults(event.target.checked);
+                  }}
+                  disabled={
+                    pinRequirementLoading ||
+                    pinRequirementSaving ||
+                    !canUpdatePinRequirement
+                  }
+                />
+                <label
+                  className="form-check-label"
+                  htmlFor="require-pin-for-results"
+                >
+                  Require PIN for student results
+                </label>
+                <small className="form-text text-muted">
+                  When turned off, the PIN field is hidden on the student result
+                  dashboard and Result PDF downloads do not require a PIN.
+                </small>
+              </div>
+              {canUpdatePinRequirement ? (
+                <button
+                  type="button"
+                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                  onClick={() => {
+                    void handleSavePinRequirement();
+                  }}
+                  disabled={pinRequirementLoading || pinRequirementSaving}
+                >
+                  {pinRequirementSaving ? "Saving…" : "Save PIN Setting"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="card height-auto">
         <div className="card-body">
           <div className="heading-layout1">
@@ -855,17 +984,6 @@ export default function PinsPage() {
                 </button>
               </div>
             </div>
-          </div>
-
-          <div
-            id="pin-feedback"
-            className={`alert${
-              feedback ? ` alert-${feedback.type}` : ""
-            }`}
-            style={{ display: feedback ? "block" : "none" }}
-            role="alert"
-          >
-            {feedback?.message}
           </div>
 
           <form id="pin-filter-form" className="mb-3">
