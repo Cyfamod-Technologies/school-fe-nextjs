@@ -17,6 +17,7 @@ const defaultSettings: ResultPageSettings = {
   show_remarks: true,
   hide_student_identity: false,
   allow_shared_pin_access: false,
+  require_pin_for_pdf_download: true,
   enable_session_result_print: false,
   collapse_session_ca: false,
   comment_mode: "manual",
@@ -100,6 +101,11 @@ export default function ResultPageSettingsPage() {
         key: "allow_shared_pin_access" as const,
         label: "Shared Scratch Cards",
         hint: "Allow any active scratch card for the same session and term to unlock the logged-in student's own result.",
+      },
+      {
+        key: "require_pin_for_pdf_download" as const,
+        label: "Require PIN for Student Results",
+        hint: "Require students to provide a valid result PIN on the result dashboard and for PDF downloads. Turn this off if your school does not use result PINs.",
       },
       {
         key: "enable_session_result_print" as const,

@@ -70,6 +70,7 @@ const defaultResultPageSettings: ResultPageSettings = {
   show_remarks: true,
   hide_student_identity: false,
   allow_shared_pin_access: false,
+  require_pin_for_pdf_download: true,
   enable_session_result_print: false,
   collapse_session_ca: false,
   comment_mode: "manual",
