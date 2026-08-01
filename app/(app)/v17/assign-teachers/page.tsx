@@ -746,6 +746,10 @@ export default function AssignTeachersPage() {
   };
 
   const handleEdit = async (assignment: SubjectTeacherAssignment) => {
+    if (String(assignment.session_id) !== currentSessionId) {
+      setFormError("Previous-session assignments are read-only.");
+      return;
+    }
     setEditingId(assignment.id);
     setFormError(null);
 
@@ -813,6 +817,10 @@ export default function AssignTeachersPage() {
   };
 
   const handleEditGroup = async (seed: SubjectTeacherAssignment) => {
+    if (String(seed.session_id) !== currentSessionId) {
+      setGroupError("Previous-session assignments are read-only.");
+      return;
+    }
     setGroupError(null);
     try {
       const response = await listSubjectTeacherAssignments({
@@ -916,6 +924,10 @@ export default function AssignTeachersPage() {
   };
 
   const handleDelete = async (assignment: SubjectTeacherAssignment) => {
+    if (String(assignment.session_id) !== currentSessionId) {
+      setListError("Previous-session assignments are read-only.");
+      return;
+    }
     if (
       !window.confirm(
         `Remove teacher assignment for "${assignment.subject?.name ?? "Subject"}"?`,
@@ -993,7 +1005,7 @@ export default function AssignTeachersPage() {
                     id="group-session"
                     className="form-control"
                     value={groupEditor.session_id}
-                    disabled={groupEditor.existing}
+                    disabled
                     onChange={(event) => {
                       const sessionId = event.target.value;
                       setGroupEditor((current) => current ? {
@@ -1005,6 +1017,9 @@ export default function AssignTeachersPage() {
                     <option value="">Select session</option>
                     {sessions.map((session) => <option key={session.id} value={session.id}>{session.name}</option>)}
                   </select>
+                  <small className="form-text text-muted">
+                    Session is locked to the school&apos;s current session.
+                  </small>
                 </div>
               </div>
 
@@ -1426,6 +1441,7 @@ export default function AssignTeachersPage() {
                           session_id: value,
                         }));
                       }}
+                      disabled
                       required
                     >
                       <option value="">Select session</option>
@@ -1435,6 +1451,9 @@ export default function AssignTeachersPage() {
                         </option>
                       ))}
                     </select>
+                    <small className="form-text text-muted">
+                      Session is locked to the school&apos;s current session.
+                    </small>
                   </div>
                   <div className="col-12 form-group d-flex justify-content-between">
                     <button
@@ -1626,6 +1645,7 @@ export default function AssignTeachersPage() {
                       }));
                       setPage(1);
                     }}
+                    disabled
                   >
                     <option value="">All sessions</option>
                     {sessions.map((session) => (
@@ -1634,6 +1654,9 @@ export default function AssignTeachersPage() {
                       </option>
                     ))}
                   </select>
+                  <small className="form-text text-muted">
+                    Filter is locked to the current session.
+                  </small>
                 </div>
                 <div className="col-12 d-flex justify-content-end mt-2">
                   <button
@@ -1699,6 +1722,8 @@ export default function AssignTeachersPage() {
                     ) : (
                       groupedAssignments.map((group) => {
                         const first = group.rows[0];
+                        const isCurrentSession =
+                          String(first.session_id) === currentSessionId;
                         return (
                         <Fragment key={group.key}>
                           <tr className="table-active">
@@ -1715,8 +1740,14 @@ export default function AssignTeachersPage() {
                                 type="button"
                                 className="btn btn-sm btn-primary"
                                 onClick={() => handleEditGroup(first)}
+                                disabled={!isCurrentSession}
+                                title={
+                                  isCurrentSession
+                                    ? "Edit assignment group"
+                                    : "Previous-session assignments are read-only"
+                                }
                               >
-                                Edit Group
+                                {isCurrentSession ? "Edit Group" : "Historical · Read only"}
                               </button>
                             </td>
                           </tr>
@@ -1759,6 +1790,7 @@ export default function AssignTeachersPage() {
                                 type="button"
                                 className="btn btn-sm btn-outline-primary mr-2"
                                 onClick={() => handleEdit(assignment)}
+                                disabled={!isCurrentSession}
                               >
                                 Edit
                               </button>
@@ -1766,6 +1798,7 @@ export default function AssignTeachersPage() {
                                 type="button"
                                 className="btn btn-sm btn-outline-danger"
                                 onClick={() => handleDelete(assignment)}
+                                disabled={!isCurrentSession}
                               >
                                 Delete
                               </button>

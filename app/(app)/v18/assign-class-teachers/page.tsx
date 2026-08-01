@@ -290,6 +290,10 @@ export default function AssignClassTeachersPage() {
   };
 
   const handleEdit = async (assignment: ClassTeacherAssignment) => {
+    if (String(assignment.session_id) !== currentSessionId) {
+      setFormError("Previous-session assignments are read-only.");
+      return;
+    }
     setEditingId(assignment.id);
     setFormError(null);
 
@@ -318,6 +322,10 @@ export default function AssignClassTeachersPage() {
   };
 
   const handleDelete = async (assignment: ClassTeacherAssignment) => {
+    if (String(assignment.session_id) !== currentSessionId) {
+      setListError("Previous-session assignments are read-only.");
+      return;
+    }
     if (
       !window.confirm(
         `Remove class teacher assignment for "${assignment.staff?.full_name ?? assignment.staff?.user?.name ?? "Teacher"}"?`,
@@ -483,6 +491,7 @@ export default function AssignClassTeachersPage() {
                           session_id: value,
                         }));
                       }}
+                      disabled
                       required
                     >
                       <option value="">Select session</option>
@@ -492,6 +501,9 @@ export default function AssignClassTeachersPage() {
                         </option>
                       ))}
                     </select>
+                    <small className="form-text text-muted">
+                      Session is locked to the school&apos;s current session.
+                    </small>
                   </div>
                   <div className="col-12 form-group d-flex justify-content-between">
                     <button
@@ -669,6 +681,7 @@ export default function AssignClassTeachersPage() {
                       }));
                       setPage(1);
                     }}
+                    disabled
                   >
                     <option value="">All sessions</option>
                     {sessions.map((session) => (
@@ -677,6 +690,9 @@ export default function AssignClassTeachersPage() {
                       </option>
                     ))}
                   </select>
+                  <small className="form-text text-muted">
+                    Filter is locked to the current session.
+                  </small>
                 </div>
                 <div className="col-12 d-flex justify-content-end mt-2">
                   <button
@@ -738,7 +754,10 @@ export default function AssignClassTeachersPage() {
                         </td>
                       </tr>
                     ) : (
-                      assignments.map((assignment) => (
+                      assignments.map((assignment) => {
+                        const isCurrentSession =
+                          String(assignment.session_id) === currentSessionId;
+                        return (
                         <tr key={assignment.id}>
                           <td>
                             {assignment.staff?.full_name ??
@@ -762,6 +781,7 @@ export default function AssignClassTeachersPage() {
                                 type="button"
                                 className="btn btn-sm btn-outline-primary mr-2"
                                 onClick={() => handleEdit(assignment)}
+                                disabled={!isCurrentSession}
                               >
                                 Edit
                               </button>
@@ -769,13 +789,15 @@ export default function AssignClassTeachersPage() {
                                 type="button"
                                 className="btn btn-sm btn-outline-danger"
                                 onClick={() => handleDelete(assignment)}
+                                disabled={!isCurrentSession}
                               >
                                 Delete
                               </button>
                             </div>
                           </td>
                         </tr>
-                      ))
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
