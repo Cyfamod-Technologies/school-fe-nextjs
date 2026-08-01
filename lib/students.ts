@@ -199,6 +199,15 @@ export async function regenerateAdmissionNumbers(
   );
 }
 
+export async function resetStudentPassword(
+  studentId: number | string,
+): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(
+    `/api/v1/students/${studentId}/reset-password`,
+    { method: "POST" },
+  );
+}
+
 export interface StudentDelectionWithDependenciesError extends Error {
   dependencies?: string[];
   isDependencyError?: boolean;

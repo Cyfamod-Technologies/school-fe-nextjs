@@ -17,6 +17,7 @@ import {
   deleteStudent,
   getStudent,
   listStudents,
+  resetStudentPassword,
   type StudentDetail,
   type StudentSummary,
   type StudentDelectionWithDependenciesError,
@@ -193,6 +194,9 @@ export default function StudentDetailsPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletionDependencies, setDeletionDependencies] = useState<string[]>([]);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [resettingStudentPassword, setResettingStudentPassword] = useState(false);
+  const [passwordResetFeedback, setPasswordResetFeedback] = useState<string | null>(null);
+  const [passwordResetError, setPasswordResetError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [termsCache, setTermsCache] = useState<Record<string, Term[]>>({});
   const [selectedSession, setSelectedSession] = useState<string>("");
@@ -1663,6 +1667,32 @@ export default function StudentDetailsPage() {
       .join(" ");
   }, [student]);
 
+  const handleResetStudentPassword = async () => {
+    if (!studentId || isTeacher || resettingStudentPassword) return;
+
+    const confirmed = window.confirm(
+      `Reset ${fullName || "this student"}'s portal password to 123456? The student will need to sign in again.`,
+    );
+    if (!confirmed) return;
+
+    setResettingStudentPassword(true);
+    setPasswordResetFeedback(null);
+    setPasswordResetError(null);
+
+    try {
+      const response = await resetStudentPassword(studentId);
+      setPasswordResetFeedback(
+        response.message || "Student password reset to 123456 successfully.",
+      );
+    } catch (err) {
+      setPasswordResetError(
+        err instanceof Error ? err.message : "Unable to reset the student password.",
+      );
+    } finally {
+      setResettingStudentPassword(false);
+    }
+  };
+
   const photoUrl = useMemo(() => {
     if (!student?.photo_url) {
       return "/assets/img/figure/student.png";
@@ -2795,6 +2825,41 @@ export default function StudentDetailsPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {!isTeacher ? (
+        <div className="card height-auto mt-4">
+          <div className="card-body">
+            <div className="heading-layout1">
+              <div className="item-title">
+                <h3>Student Portal Password</h3>
+                <p className="mb-0 text-muted small">
+                  Reset this student&apos;s login password to the default password.
+                </p>
+              </div>
+            </div>
+            {passwordResetFeedback ? (
+              <div className="alert alert-success" role="alert">
+                {passwordResetFeedback}
+              </div>
+            ) : null}
+            {passwordResetError ? (
+              <div className="alert alert-danger" role="alert">
+                {passwordResetError}
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+              onClick={() => void handleResetStudentPassword()}
+              disabled={resettingStudentPassword}
+            >
+              {resettingStudentPassword
+                ? "Resetting Password…"
+                : "Reset Password to 123456"}
+            </button>
           </div>
         </div>
       ) : null}
