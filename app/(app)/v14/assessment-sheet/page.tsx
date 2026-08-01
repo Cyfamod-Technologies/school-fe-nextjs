@@ -180,7 +180,8 @@ export default function AssessmentSheetPage() {
           per_page: 1000,
           sortBy: "last_name",
           sortDirection: "asc",
-          current_session_id: filters.sessionId,
+          session_id: filters.sessionId,
+          term_id: filters.termId,
           school_class_id: filters.classId,
           class_arm_id: filters.armId || undefined,
         });
