@@ -29,6 +29,7 @@ import {
   listStudents,
   type StudentSummary,
 } from "@/lib/students";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AssignmentForm {
   subjectIds: string[];
@@ -99,6 +100,10 @@ const emptyBulkRow = (): BulkAssignmentRow => ({
 });
 
 export default function AssignTeachersPage() {
+  const { schoolContext } = useAuth();
+  const currentSessionId = schoolContext.current_session_id
+    ? String(schoolContext.current_session_id)
+    : "";
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [teachers, setTeachers] = useState<Staff[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -116,8 +121,14 @@ export default function AssignTeachersPage() {
   const [studentSearch, setStudentSearch] = useState("");
   const [selectedStudentIds, setSelectedStudentIds] = useState<Record<string, boolean>>({});
 
-  const [form, setForm] = useState<AssignmentForm>(initialForm);
-  const [filters, setFilters] = useState<AssignmentFilters>(initialFilters);
+  const [form, setForm] = useState<AssignmentForm>(() => ({
+    ...initialForm,
+    session_id: currentSessionId,
+  }));
+  const [filters, setFilters] = useState<AssignmentFilters>(() => ({
+    ...initialFilters,
+    session_id: currentSessionId,
+  }));
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [groupEditor, setGroupEditor] = useState<AssignmentGroupEditor | null>(null);
@@ -503,6 +514,21 @@ export default function AssignTeachersPage() {
   }, []);
 
   useEffect(() => {
+    if (!currentSessionId) return;
+
+    setFilters((previous) =>
+      previous.session_id
+        ? previous
+        : { ...previous, session_id: currentSessionId },
+    );
+    setForm((previous) =>
+      previous.session_id
+        ? previous
+        : { ...previous, session_id: currentSessionId },
+    );
+  }, [currentSessionId]);
+
+  useEffect(() => {
     if (editingId) {
       if (form.school_class_id) {
         ensureClassArms(form.school_class_id).catch((err) => console.error(err));
@@ -704,7 +730,7 @@ export default function AssignTeachersPage() {
         await createSubjectTeacherAssignment(payload);
       }
       setEditingId(null);
-      setForm(initialForm);
+      setForm({ ...initialForm, session_id: currentSessionId });
       setSelectedStudentIds({});
       setStudentSearch("");
       setPage(1);
@@ -780,7 +806,7 @@ export default function AssignTeachersPage() {
     setGroupError(null);
     setGroupEditor({
       staff_id: "",
-      session_id: "",
+      session_id: currentSessionId,
       existing: false,
       rows: [emptyBulkRow()],
     });
@@ -1427,7 +1453,7 @@ export default function AssignTeachersPage() {
                       className="btn-fill-lg bg-blue-dark btn-hover-yellow"
                       onClick={() => {
                         setEditingId(null);
-                        setForm(initialForm);
+                        setForm({ ...initialForm, session_id: currentSessionId });
                         setSelectedStudentIds({});
                         setStudentSearch("");
                       }}
@@ -1614,9 +1640,11 @@ export default function AssignTeachersPage() {
                     className="btn btn-outline-secondary mr-2"
                     type="button"
                     onClick={() => {
-                      setFilters(initialFilters);
+                      setFilters({
+                        ...initialFilters,
+                        session_id: currentSessionId,
+                      });
                       setPage(1);
-                      fetchAssignments().catch(() => undefined);
                     }}
                   >
                     Reset Filters

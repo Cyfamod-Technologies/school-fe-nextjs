@@ -18,6 +18,7 @@ import {
   type ClassTeacherAssignment,
   type ClassTeacherAssignmentListResponse,
 } from "@/lib/classTeacherAssignments";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AssignmentForm {
   staff_id: string;
@@ -57,14 +58,24 @@ type ArmsCache = Record<string, ClassArm[]>;
 type SectionsCache = Record<string, ClassArmSection[]>;
 
 export default function AssignClassTeachersPage() {
+  const { schoolContext } = useAuth();
+  const currentSessionId = schoolContext.current_session_id
+    ? String(schoolContext.current_session_id)
+    : "";
   const [teachers, setTeachers] = useState<Staff[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [armsCache, setArmsCache] = useState<ArmsCache>({});
   const [sectionsCache, setSectionsCache] = useState<SectionsCache>({});
 
-  const [form, setForm] = useState<AssignmentForm>(initialForm);
-  const [filters, setFilters] = useState<AssignmentFilters>(initialFilters);
+  const [form, setForm] = useState<AssignmentForm>(() => ({
+    ...initialForm,
+    session_id: currentSessionId,
+  }));
+  const [filters, setFilters] = useState<AssignmentFilters>(() => ({
+    ...initialFilters,
+    session_id: currentSessionId,
+  }));
   const [editingId, setEditingId] = useState<number | null>(null);
 
   const [page, setPage] = useState(1);
@@ -89,6 +100,21 @@ export default function AssignClassTeachersPage() {
       .then(setSessions)
       .catch((err) => console.error("Unable to load sessions", err));
   }, []);
+
+  useEffect(() => {
+    if (!currentSessionId) return;
+
+    setFilters((previous) =>
+      previous.session_id
+        ? previous
+        : { ...previous, session_id: currentSessionId },
+    );
+    setForm((previous) =>
+      previous.session_id
+        ? previous
+        : { ...previous, session_id: currentSessionId },
+    );
+  }, [currentSessionId]);
 
   const ensureArms = useCallback(
     async (classId: string) => {
@@ -250,7 +276,7 @@ export default function AssignClassTeachersPage() {
       }
 
       setEditingId(null);
-      setForm(initialForm);
+      setForm({ ...initialForm, session_id: currentSessionId });
       setPage(1);
       await fetchAssignments();
     } catch (err) {
@@ -484,7 +510,7 @@ export default function AssignClassTeachersPage() {
                       className="btn-fill-lg bg-blue-dark btn-hover-yellow"
                       onClick={() => {
                         setEditingId(null);
-                        setForm(initialForm);
+                        setForm({ ...initialForm, session_id: currentSessionId });
                       }}
                     >
                       Reset
@@ -657,9 +683,11 @@ export default function AssignClassTeachersPage() {
                     className="btn btn-outline-secondary mr-2"
                     type="button"
                     onClick={() => {
-                      setFilters(initialFilters);
+                      setFilters({
+                        ...initialFilters,
+                        session_id: currentSessionId,
+                      });
                       setPage(1);
-                      fetchAssignments().catch(() => undefined);
                     }}
                   >
                     Reset Filters
