@@ -14,7 +14,7 @@ export interface SubjectTeacherAssignment {
   subject_id: string;
   staff_id: string;
   session_id: string;
-  term_id: string;
+  term_id?: string | null;
   student_ids?: Array<string | number> | null;
   school_class_id?: string | null;
   class_arm_id?: string | null;
@@ -120,7 +120,7 @@ type AssignmentMutationPayload = {
   contexts?: SubjectTeacherAssignmentContext[];
   staff_id: string | number;
   session_id: string | number;
-  term_id: string | number;
+  term_id?: string | number | null;
   student_ids?: Array<string | number> | null;
   school_class_id?: string | number | null;
   class_arm_id?: string | number | null;
@@ -138,7 +138,7 @@ export interface SubjectTeacherBulkRow {
 export interface SubjectTeacherBulkSavePayload {
   staff_id: string | number;
   session_id: string | number;
-  term_id: string | number;
+  term_id?: string | number | null;
   assignments: SubjectTeacherBulkRow[];
 }
 

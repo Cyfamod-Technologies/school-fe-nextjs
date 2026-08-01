@@ -10,7 +10,6 @@ import {
   type ClassArmSection,
 } from "@/lib/classArmSections";
 import { listSessions, type Session } from "@/lib/sessions";
-import { listTermsBySession, type Term } from "@/lib/terms";
 import {
   createClassTeacherAssignment,
   deleteClassTeacherAssignment,
@@ -26,7 +25,6 @@ interface AssignmentForm {
   class_arm_id: string;
   class_section_id: string;
   session_id: string;
-  term_id: string;
 }
 
 const initialForm: AssignmentForm = {
@@ -35,7 +33,6 @@ const initialForm: AssignmentForm = {
   class_arm_id: "",
   class_section_id: "",
   session_id: "",
-  term_id: "",
 };
 
 interface AssignmentFilters {
@@ -58,7 +55,6 @@ const initialFilters: AssignmentFilters = {
 
 type ArmsCache = Record<string, ClassArm[]>;
 type SectionsCache = Record<string, ClassArmSection[]>;
-type TermsCache = Record<string, Term[]>;
 
 export default function AssignClassTeachersPage() {
   const [teachers, setTeachers] = useState<Staff[]>([]);
@@ -66,7 +62,6 @@ export default function AssignClassTeachersPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [armsCache, setArmsCache] = useState<ArmsCache>({});
   const [sectionsCache, setSectionsCache] = useState<SectionsCache>({});
-  const [termsCache, setTermsCache] = useState<TermsCache>({});
 
   const [form, setForm] = useState<AssignmentForm>(initialForm);
   const [filters, setFilters] = useState<AssignmentFilters>(initialFilters);
@@ -135,29 +130,6 @@ export default function AssignClassTeachersPage() {
     [sectionsCache],
   );
 
-  const ensureTerms = useCallback(
-    async (sessionId: string): Promise<Term[]> => {
-      if (!sessionId) {
-        return [];
-      }
-      if (termsCache[sessionId]) {
-        return termsCache[sessionId] ?? [];
-      }
-      try {
-        const data = await listTermsBySession(sessionId);
-        setTermsCache((prev) => ({
-          ...prev,
-          [sessionId]: data,
-        }));
-        return data;
-      } catch (error) {
-        console.error("Unable to load terms", error);
-        return [];
-      }
-    },
-    [termsCache],
-  );
-
   useEffect(() => {
     if (form.school_class_id) {
       ensureArms(form.school_class_id).catch((err) => console.error(err));
@@ -185,25 +157,6 @@ export default function AssignClassTeachersPage() {
       );
     }
   }, [filters.school_class_id, filters.class_arm_id, ensureSections]);
-
-  useEffect(() => {
-    if (form.session_id) {
-      ensureTerms(form.session_id).catch((err) => console.error(err));
-    }
-  }, [form.session_id, ensureTerms]);
-
-  useEffect(() => {
-    if (!form.session_id || form.term_id) {
-      return;
-    }
-    const terms = termsCache[form.session_id];
-    if (terms && terms.length > 0) {
-      setForm((prev) => ({
-        ...prev,
-        term_id: `${terms[0].id}`,
-      }));
-    }
-  }, [form.session_id, form.term_id, termsCache]);
 
   const armsForForm = useMemo(() => {
     if (!form.school_class_id) {
@@ -234,13 +187,6 @@ export default function AssignClassTeachersPage() {
     const key = `${filters.school_class_id}:${filters.class_arm_id}`;
     return sectionsCache[key] ?? [];
   }, [sectionsCache, filters.school_class_id, filters.class_arm_id]);
-
-  const termsForForm = useMemo(() => {
-    if (!form.session_id) {
-      return [];
-    }
-    return termsCache[form.session_id] ?? [];
-  }, [termsCache, form.session_id]);
 
   const fetchAssignments = useCallback(async () => {
     setLoadingList(true);
@@ -287,16 +233,6 @@ export default function AssignClassTeachersPage() {
       return;
     }
 
-    const resolvedTerms =
-      termsForForm.length > 0 ? termsForForm : await ensureTerms(form.session_id);
-    const derivedTermId =
-      form.term_id || (resolvedTerms.length > 0 ? `${resolvedTerms[0].id}` : "");
-
-    if (!derivedTermId) {
-      setFormError("No terms found for the selected session. Please add a term.");
-      return;
-    }
-
     setSubmitting(true);
     try {
       const payload = {
@@ -305,7 +241,6 @@ export default function AssignClassTeachersPage() {
         class_arm_id: form.class_arm_id || null,
         class_section_id: form.class_section_id || null,
         session_id: form.session_id,
-        term_id: derivedTermId,
       };
 
       if (editingId) {
@@ -340,14 +275,11 @@ export default function AssignClassTeachersPage() {
       ? `${assignment.class_section_id}`
       : "";
     const sessionId = `${assignment.session_id}`;
-    const termId = `${assignment.term_id}`;
 
     await ensureArms(classId);
     if (classId && armId) {
       await ensureSections(classId, armId);
     }
-    await ensureTerms(sessionId);
-
     startTransition(() => {
       setForm({
         staff_id: `${assignment.staff_id}`,
@@ -355,7 +287,6 @@ export default function AssignClassTeachersPage() {
         class_arm_id: armId,
         class_section_id: sectionId,
         session_id: sessionId,
-        term_id: termId,
       });
     });
   };
@@ -524,7 +455,6 @@ export default function AssignClassTeachersPage() {
                         setForm((prev) => ({
                           ...prev,
                           session_id: value,
-                          term_id: "",
                         }));
                       }}
                       required
@@ -769,13 +699,13 @@ export default function AssignClassTeachersPage() {
                   <tbody>
                     {loadingList ? (
                       <tr>
-                        <td colSpan={7} className="text-center">
+                        <td colSpan={6} className="text-center">
                           Loading assignments…
                         </td>
                       </tr>
                     ) : assignments.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="text-center">
+                        <td colSpan={6} className="text-center">
                           No assignments found.
                         </td>
                       </tr>
@@ -791,7 +721,6 @@ export default function AssignClassTeachersPage() {
                           <td>{assignment.class_arm?.name ?? "N/A"}</td>
                           {/* <td>{assignment.class_section?.name ?? "All"}</td> */}
                           <td>{assignment.session?.name ?? "N/A"}</td>
-                          <td>{assignment.term?.name ?? "N/A"}</td>
                           <td>
                             {assignment.updated_at
                               ? new Date(

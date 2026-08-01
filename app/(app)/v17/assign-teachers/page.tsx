@@ -5,7 +5,6 @@ import { FormEvent, Fragment, startTransition, useCallback, useEffect, useMemo, 
 import { listAllSubjects, type Subject } from "@/lib/subjects";
 import { listStaffForDropdown, type Staff } from "@/lib/staff";
 import { listSessions, type Session } from "@/lib/sessions";
-import { listTermsBySession, type Term } from "@/lib/terms";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import { listClassArms, type ClassArm } from "@/lib/classArms";
 import {
@@ -35,7 +34,6 @@ interface AssignmentForm {
   subjectIds: string[];
   staff_id: string;
   session_id: string;
-  term_id: string;
   selectedClassIds: string[];
   selectedClassArmIdsByClass: Record<string, string[]>;
   school_class_id: string;
@@ -48,7 +46,6 @@ const initialForm: AssignmentForm = {
   subjectIds: [],
   staff_id: "",
   session_id: "",
-  term_id: "",
   selectedClassIds: [],
   selectedClassArmIdsByClass: {},
   school_class_id: "",
@@ -77,8 +74,6 @@ const initialFilters: AssignmentFilters = {
   class_section_id: "",
 };
 
-type TermsCache = Record<string, Term[]>;
-
 interface BulkAssignmentRow {
   client_id: string;
   id?: string;
@@ -91,7 +86,6 @@ interface BulkAssignmentRow {
 interface AssignmentGroupEditor {
   staff_id: string;
   session_id: string;
-  term_id: string;
   existing: boolean;
   rows: BulkAssignmentRow[];
 }
@@ -108,7 +102,6 @@ export default function AssignTeachersPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [teachers, setTeachers] = useState<Staff[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [termsCache, setTermsCache] = useState<TermsCache>({});
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [classArmsByClass, setClassArmsByClass] = useState<Record<string, ClassArm[]>>({});
   const [classSectionsByKey, setClassSectionsByKey] = useState<
@@ -150,24 +143,6 @@ export default function AssignTeachersPage() {
   const selectedClassSet = useMemo(
     () => new Set(form.selectedClassIds),
     [form.selectedClassIds],
-  );
-
-  const ensureTerms = useCallback(
-    async (sessionId: string) => {
-      if (!sessionId || termsCache[sessionId]) {
-        return;
-      }
-      try {
-        const data = await listTermsBySession(sessionId);
-        setTermsCache((prev) => ({
-          ...prev,
-          [sessionId]: data,
-        }));
-      } catch (error) {
-        console.error("Unable to load terms", error);
-      }
-    },
-    [termsCache],
   );
 
   const ensureClassArms = useCallback(
@@ -251,7 +226,7 @@ export default function AssignTeachersPage() {
   );
 
   const fetchStudentsForClass = useCallback(
-    async (classId: string, armId?: string, sectionId?: string, sessionId?: string, termId?: string) => {
+    async (classId: string, armId?: string, sectionId?: string, sessionId?: string) => {
       if (!classId) {
         setStudents([]);
         return;
@@ -264,7 +239,6 @@ export default function AssignTeachersPage() {
           class_arm_id: armId || undefined,
           class_section_id: sectionId || undefined,
           current_session_id: sessionId || undefined,
-          current_term_id: termId || undefined,
           sortBy: "first_name",
           sortDirection: "asc",
         });
@@ -278,13 +252,6 @@ export default function AssignTeachersPage() {
     },
     [],
   );
-
-  const termsForForm = useMemo(() => {
-    if (!form.session_id) {
-      return [];
-    }
-    return termsCache[form.session_id] ?? [];
-  }, [termsCache, form.session_id]);
 
   const classArmsForForm = useMemo(() => {
     if (!form.school_class_id) {
@@ -536,38 +503,6 @@ export default function AssignTeachersPage() {
   }, []);
 
   useEffect(() => {
-    if (form.session_id) {
-      ensureTerms(form.session_id).catch((err) => console.error(err));
-    }
-  }, [form.session_id, ensureTerms]);
-
-  useEffect(() => {
-    if (!form.session_id || form.term_id) {
-      return;
-    }
-    const terms = termsCache[form.session_id];
-    if (terms && terms.length > 0) {
-      setForm((prev) => ({
-        ...prev,
-        term_id: `${terms[0].id}`,
-      }));
-    }
-  }, [form.session_id, form.term_id, termsCache]);
-
-  useEffect(() => {
-    if (!groupEditor?.session_id || groupEditor.term_id) {
-      return;
-    }
-    const terms = termsCache[groupEditor.session_id];
-    if (terms?.length) {
-      setGroupEditor((current) => current && !current.term_id ? {
-        ...current,
-        term_id: String(terms[0].id),
-      } : current);
-    }
-  }, [groupEditor?.session_id, groupEditor?.term_id, termsCache]);
-
-  useEffect(() => {
     if (editingId) {
       if (form.school_class_id) {
         ensureClassArms(form.school_class_id).catch((err) => console.error(err));
@@ -612,13 +547,11 @@ export default function AssignTeachersPage() {
       singleSelectedContext.class_arm_id ? String(singleSelectedContext.class_arm_id) : undefined,
       form.class_section_id || undefined,
       form.session_id || undefined,
-      form.term_id || undefined,
     ).catch((err) => console.error(err));
   }, [
     singleSelectedContext,
     form.class_section_id,
     form.session_id,
-    form.term_id,
     fetchStudentsForClass,
   ]);
 
@@ -690,7 +623,7 @@ export default function AssignTeachersPage() {
   const groupedAssignments = useMemo(() => {
     const groups = new Map<string, SubjectTeacherAssignment[]>();
     assignments.forEach((assignment) => {
-      const key = `${assignment.staff_id}:${assignment.session_id}:${assignment.term_id}`;
+      const key = `${assignment.staff_id}:${assignment.session_id}`;
       const rows = groups.get(key) ?? [];
       rows.push(assignment);
       groups.set(key, rows);
@@ -746,14 +679,6 @@ export default function AssignTeachersPage() {
       return;
     }
 
-    const derivedTermId =
-      form.term_id || (termsForForm.length > 0 ? `${termsForForm[0].id}` : "");
-
-    if (!derivedTermId) {
-      setFormError("Unable to determine a term for the selected session.");
-      return;
-    }
-
     const payload = {
       ...(editingId
         ? {
@@ -767,7 +692,6 @@ export default function AssignTeachersPage() {
           }),
       staff_id: form.staff_id,
       session_id: form.session_id,
-      term_id: derivedTermId,
       student_ids: hasSingleSelectedContext && selectedStudentCount ? selectedStudentIdList : null,
       class_section_id: form.class_section_id || null,
     };
@@ -800,7 +724,6 @@ export default function AssignTeachersPage() {
     setFormError(null);
 
     const sessionId = `${assignment.session_id}`;
-    await ensureTerms(sessionId);
     const classId = assignment.school_class_id ? `${assignment.school_class_id}` : "";
     if (classId) {
       await ensureClassArms(classId);
@@ -830,7 +753,6 @@ export default function AssignTeachersPage() {
         subjectIds: [`${assignment.subject_id}`],
         staff_id: `${assignment.staff_id}`,
         session_id: sessionId,
-        term_id: `${assignment.term_id}`,
         selectedClassIds: [`${assignment.school_class_id}`].filter(Boolean),
         selectedClassArmIdsByClass: classId
           ? {
@@ -859,7 +781,6 @@ export default function AssignTeachersPage() {
     setGroupEditor({
       staff_id: "",
       session_id: "",
-      term_id: "",
       existing: false,
       rows: [emptyBulkRow()],
     });
@@ -871,12 +792,10 @@ export default function AssignTeachersPage() {
       const response = await listSubjectTeacherAssignments({
         staff_id: String(seed.staff_id),
         session_id: String(seed.session_id),
-        term_id: String(seed.term_id),
         per_page: 500,
       });
       const rows = response.data ?? [];
 
-      await ensureTerms(String(seed.session_id));
       await Promise.all(
         rows.map(async (assignment) => {
           const classId = String(assignment.school_class_id ?? "");
@@ -891,7 +810,6 @@ export default function AssignTeachersPage() {
       setGroupEditor({
         staff_id: String(seed.staff_id),
         session_id: String(seed.session_id),
-        term_id: String(seed.term_id),
         existing: true,
         rows: rows.map((assignment) => ({
           client_id: assignment.id,
@@ -941,12 +859,9 @@ export default function AssignTeachersPage() {
     event.preventDefault();
     if (!groupEditor) return;
 
-    const termId = groupEditor.term_id || (termsCache[groupEditor.session_id]?.[0]?.id
-      ? String(termsCache[groupEditor.session_id][0].id)
-      : "");
-    if (!groupEditor.staff_id || !groupEditor.session_id || !termId ||
+    if (!groupEditor.staff_id || !groupEditor.session_id ||
       groupEditor.rows.some((row) => !row.subject_id || !row.school_class_id)) {
-      setGroupError("Select the teacher, session, term, class and subject for every row.");
+      setGroupError("Select the teacher, session, class and subject for every row.");
       return;
     }
 
@@ -956,7 +871,6 @@ export default function AssignTeachersPage() {
       await bulkSaveSubjectTeacherAssignments({
         staff_id: groupEditor.staff_id,
         session_id: groupEditor.session_id,
-        term_id: termId,
         assignments: groupEditor.rows.map((row) => ({
           id: row.id,
           subject_id: row.subject_id,
@@ -1027,7 +941,7 @@ export default function AssignTeachersPage() {
 
             <form onSubmit={handleSaveGroup}>
               <div className="row">
-                <div className="col-md-4 form-group">
+                <div className="col-md-6 form-group">
                   <label htmlFor="group-teacher">Teacher *</label>
                   <select
                     id="group-teacher"
@@ -1047,7 +961,7 @@ export default function AssignTeachersPage() {
                     ))}
                   </select>
                 </div>
-                <div className="col-md-4 form-group">
+                <div className="col-md-6 form-group">
                   <label htmlFor="group-session">Session *</label>
                   <select
                     id="group-session"
@@ -1059,31 +973,11 @@ export default function AssignTeachersPage() {
                       setGroupEditor((current) => current ? {
                         ...current,
                         session_id: sessionId,
-                        term_id: "",
                       } : current);
-                      ensureTerms(sessionId).catch((err) => console.error(err));
                     }}
                   >
                     <option value="">Select session</option>
                     {sessions.map((session) => <option key={session.id} value={session.id}>{session.name}</option>)}
-                  </select>
-                </div>
-                <div className="col-md-4 form-group">
-                  <label htmlFor="group-term">Term *</label>
-                  <select
-                    id="group-term"
-                    className="form-control"
-                    value={groupEditor.term_id}
-                    disabled={groupEditor.existing || !groupEditor.session_id}
-                    onChange={(event) => setGroupEditor((current) => current ? {
-                      ...current,
-                      term_id: event.target.value,
-                    } : current)}
-                  >
-                    <option value="">Select term</option>
-                    {(termsCache[groupEditor.session_id] ?? []).map((term) => (
-                      <option key={term.id} value={term.id}>{term.name}</option>
-                    ))}
                   </select>
                 </div>
               </div>
@@ -1504,7 +1398,6 @@ export default function AssignTeachersPage() {
                         setForm((prev) => ({
                           ...prev,
                           session_id: value,
-                          term_id: "",
                         }));
                       }}
                       required
@@ -1786,7 +1679,7 @@ export default function AssignTeachersPage() {
                                 {first.staff?.full_name ?? first.staff?.user?.name ?? "Teacher"}
                               </strong>
                               <span className="text-muted ml-2">
-                                {first.session?.name ?? "Session"} · {first.term?.name ?? "Term"} · {group.rows.length} assignment{group.rows.length === 1 ? "" : "s"} on this page
+                                {first.session?.name ?? "Session"} · {group.rows.length} assignment{group.rows.length === 1 ? "" : "s"} on this page
                               </span>
                             </td>
                             <td className="text-right">
