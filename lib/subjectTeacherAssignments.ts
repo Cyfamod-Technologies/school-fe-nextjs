@@ -127,6 +127,21 @@ type AssignmentMutationPayload = {
   class_section_id?: string | number | null;
 };
 
+export interface SubjectTeacherBulkRow {
+  id?: string;
+  subject_id: string | number;
+  school_class_id: string | number;
+  class_arm_id?: string | number | null;
+  student_ids?: Array<string | number> | null;
+}
+
+export interface SubjectTeacherBulkSavePayload {
+  staff_id: string | number;
+  session_id: string | number;
+  term_id: string | number;
+  assignments: SubjectTeacherBulkRow[];
+}
+
 export async function createSubjectTeacherAssignment(
   payload: AssignmentMutationPayload,
 ): Promise<SubjectTeacherAssignmentCreateResponse> {
@@ -151,6 +166,15 @@ export async function updateSubjectTeacherAssignment(
       body: JSON.stringify(sanitizedPayload),
     },
   );
+}
+
+export async function bulkSaveSubjectTeacherAssignments(
+  payload: SubjectTeacherBulkSavePayload,
+): Promise<{ message: string; data: SubjectTeacherAssignment[] }> {
+  return apiFetch(`${API_ROUTES.subjectTeacherAssignments}/bulk-save`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function deleteSubjectTeacherAssignment(
