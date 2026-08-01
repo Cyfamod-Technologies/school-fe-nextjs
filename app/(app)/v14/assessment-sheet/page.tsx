@@ -8,7 +8,8 @@ import { listSessions, type Session } from "@/lib/sessions";
 import { listTermsBySession, type Term } from "@/lib/terms";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import { listClassArms, type ClassArm } from "@/lib/classArms";
-import { listAllSubjects, type Subject } from "@/lib/subjects";
+import type { Subject } from "@/lib/subjects";
+import { listSubjectAssignments } from "@/lib/subjectAssignments";
 import {
   listAssessmentComponents,
   type AssessmentComponent,
@@ -61,6 +62,7 @@ export default function AssessmentSheetPage() {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [arms, setArms] = useState<ClassArm[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
   const [components, setComponents] = useState<AssessmentComponent[]>([]);
   const [students, setStudents] = useState<StudentSummary[]>([]);
   const [results, setResults] = useState<ResultRecord[]>([]);
@@ -69,11 +71,10 @@ export default function AssessmentSheetPage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    Promise.all([listSessions(), listClasses(), listAllSubjects()])
-      .then(([sessionItems, classItems, subjectItems]) => {
+    Promise.all([listSessions(), listClasses()])
+      .then(([sessionItems, classItems]) => {
         setSessions(sessionItems);
         setClasses(classItems);
-        setSubjects(subjectItems);
 
         const currentSessionId = schoolContext.current_session_id
           ? String(schoolContext.current_session_id)
@@ -119,6 +120,69 @@ export default function AssessmentSheetPage() {
         setError(cause instanceof Error ? cause.message : "Unable to load class arms.");
       });
   }, [filters.classId]);
+
+  useEffect(() => {
+    let active = true;
+    setSubjects([]);
+
+    if (!filters.classId) {
+      setFilters((previous) => ({ ...previous, subjectId: "" }));
+      return () => {
+        active = false;
+      };
+    }
+
+    setSubjectsLoading(true);
+    listSubjectAssignments({
+      school_class_id: filters.classId,
+      per_page: 500,
+    })
+      .then((response) => {
+        if (!active) return;
+
+        const subjectMap = new Map<string, Subject>();
+        (response.data ?? [])
+          .filter((assignment) =>
+            !filters.armId ||
+            !assignment.class_arm_id ||
+            String(assignment.class_arm_id) === filters.armId,
+          )
+          .forEach((assignment) => {
+            if (assignment.subject?.id) {
+              subjectMap.set(String(assignment.subject.id), assignment.subject);
+            }
+          });
+
+        const assignedSubjects = Array.from(subjectMap.values()).sort((a, b) =>
+          String(a.name ?? "").localeCompare(String(b.name ?? "")),
+        );
+        setSubjects(assignedSubjects);
+        setFilters((previous) => ({
+          ...previous,
+          subjectId: assignedSubjects.some(
+            (subject) => String(subject.id) === previous.subjectId,
+          )
+            ? previous.subjectId
+            : "",
+        }));
+      })
+      .catch((cause) => {
+        if (active) {
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Unable to load subjects assigned to the selected class.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setSubjectsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [filters.armId, filters.classId]);
 
   const selectedSession = sessions.find((item) => String(item.id) === filters.sessionId);
   const selectedTerm = terms.find((item) => String(item.id) === filters.termId);
@@ -168,6 +232,8 @@ export default function AssessmentSheetPage() {
     try {
       const componentResponse = await listAssessmentComponents({
         subject_id: filters.subjectId,
+        session_id: filters.sessionId,
+        term_id: filters.termId,
         per_page: 100,
       });
 
@@ -286,22 +352,30 @@ export default function AssessmentSheetPage() {
             </div>
             <div className="col-lg-2 col-md-4 form-group">
               <label>Class</label>
-              <select className="form-control" value={filters.classId} onChange={(event) => setFilters((old) => ({ ...old, classId: event.target.value, armId: "" }))}>
+              <select className="form-control" value={filters.classId} onChange={(event) => setFilters((old) => ({ ...old, classId: event.target.value, armId: "", subjectId: "" }))}>
                 <option value="">Select Class</option>
                 {classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             </div>
             <div className="col-lg-2 col-md-4 form-group">
               <label>Class Arm</label>
-              <select className="form-control" value={filters.armId} disabled={!filters.classId} onChange={(event) => setFilters((old) => ({ ...old, armId: event.target.value }))}>
+              <select className="form-control" value={filters.armId} disabled={!filters.classId} onChange={(event) => setFilters((old) => ({ ...old, armId: event.target.value, subjectId: "" }))}>
                 <option value="">All Arms</option>
                 {arms.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             </div>
             <div className="col-lg-2 col-md-4 form-group">
               <label>Subject</label>
-              <select className="form-control" value={filters.subjectId} onChange={(event) => setFilters((old) => ({ ...old, subjectId: event.target.value }))}>
-                <option value="">Select Subject</option>
+              <select className="form-control" value={filters.subjectId} disabled={!filters.classId || subjectsLoading} onChange={(event) => setFilters((old) => ({ ...old, subjectId: event.target.value }))}>
+                <option value="">
+                  {!filters.classId
+                    ? "Select Class First"
+                    : subjectsLoading
+                      ? "Loading Subjects..."
+                      : subjects.length
+                        ? "Select Subject"
+                        : "No Subjects Assigned"}
+                </option>
                 {subjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             </div>
