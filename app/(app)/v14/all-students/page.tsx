@@ -118,6 +118,7 @@ export default function AllStudentsPage() {
         sortDirection,
         search: filters.search || undefined,
         current_session_id: filters.current_session_id || undefined,
+        current_term_id: filters.term_id || undefined,
         school_class_id: filters.school_class_id || undefined,
         class_arm_id: filters.class_arm_id || undefined,
       });
@@ -206,32 +207,29 @@ export default function AllStudentsPage() {
   }, [isTeacher]);
 
   useEffect(() => {
-    if (!isTeacher) {
-      return;
-    }
+    const currentSessionId = schoolContext.current_session_id
+      ? String(schoolContext.current_session_id)
+      : "";
+    const currentTermId = schoolContext.current_term_id
+      ? String(schoolContext.current_term_id)
+      : "";
 
-    if (!filters.current_session_id) {
-      const contextSessionId = schoolContext.current_session_id
-        ? String(schoolContext.current_session_id)
-        : "";
-      const fallbackSessionId =
-        !contextSessionId && sessions.length > 0
-          ? String(sessions[0].id)
-          : "";
-
-      if (contextSessionId || fallbackSessionId) {
-        setFilters((prev) => ({
-          ...prev,
-          current_session_id: contextSessionId || fallbackSessionId,
-        }));
+    setFilters((prev) => {
+      if (
+        prev.current_session_id === currentSessionId &&
+        prev.term_id === currentTermId
+      ) {
+        return prev;
       }
-    }
-  }, [
-    isTeacher,
-    filters.current_session_id,
-    schoolContext.current_session_id,
-    sessions,
-  ]);
+
+      return {
+        ...prev,
+        current_session_id: currentSessionId,
+        term_id: currentTermId,
+      };
+    });
+    setPage(1);
+  }, [schoolContext.current_session_id, schoolContext.current_term_id]);
 
   useEffect(() => {
     if (!filters.school_class_id) {
@@ -669,9 +667,9 @@ export default function AllStudentsPage() {
                     term_id: "",
                   }));
                 }}
-                disabled={isTeacher}
+                disabled
               >
-                <option value="">All Sessions</option>
+                <option value="">Current session not configured</option>
                 {sessions.map((session) => (
                   <option key={session.id} value={session.id}>
                     {session.name}
@@ -689,9 +687,9 @@ export default function AllStudentsPage() {
                   setPage(1);
                   setFilters((prev) => ({ ...prev, term_id: event.target.value }));
                 }}
-                disabled={!filters.current_session_id || terms.length === 0}
+                disabled
               >
-                <option value="">Select Term</option>
+                <option value="">Current term not configured</option>
                 {terms.map((term) => (
                   <option key={term.id} value={term.id}>
                     {term.name}
@@ -754,7 +752,15 @@ export default function AllStudentsPage() {
                 className="btn btn-outline-secondary w-100"
                 onClick={() => {
                   setPage(1);
-                  setFilters(initialFilters);
+                  setFilters({
+                    ...initialFilters,
+                    current_session_id: schoolContext.current_session_id
+                      ? String(schoolContext.current_session_id)
+                      : "",
+                    term_id: schoolContext.current_term_id
+                      ? String(schoolContext.current_term_id)
+                      : "",
+                  });
                   setClassArms([]);
                   setClassSections([]);
                 }}
