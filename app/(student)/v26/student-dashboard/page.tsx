@@ -624,6 +624,12 @@ export default function StudentDashboardHome() {
                 >
                   View Results
                 </Link>
+                <Link
+                  href="/v26/student-dashboard/result-pins"
+                  className="btn-action btn-action-secondary"
+                >
+                  Result PINs
+                </Link>
               </div>
             </div>
           </div>

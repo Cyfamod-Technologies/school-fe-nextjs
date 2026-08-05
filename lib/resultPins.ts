@@ -27,6 +27,10 @@ export interface ResultPin {
   updated_at?: string | null;
   use_count?: number;
   max_usage?: number | null;
+  sent_at?: string | null;
+  sent_by?: string | null;
+  distribution_status?: "not_sent" | "sent" | "used" | "expired" | "disabled" | string;
+  effective_status?: "active" | "used" | "expired" | "disabled" | string;
   student?: ResultPinStudent;
   session?: ResultPinSessionOrTerm;
   term?: ResultPinSessionOrTerm;
@@ -169,4 +173,41 @@ export async function invalidateResultPin(
   await apiFetch(`${API_ROUTES.resultPins}/${pinId}/invalidate`, {
     method: "PUT",
   });
+}
+
+export interface DistributeResultPinsPayload {
+  session_id: string | number;
+  term_id: string | number;
+  pin_ids?: Array<string | number>;
+  student_ids?: Array<string | number>;
+  school_class_id?: string | number;
+  class_arm_id?: string | number | null;
+}
+
+export interface DistributeResultPinsResponse {
+  message: string;
+  sent_count: number;
+  already_sent_count: number;
+  data?: ResultPin[];
+}
+
+export async function distributeResultPins(
+  payload: DistributeResultPinsPayload,
+): Promise<DistributeResultPinsResponse> {
+  return apiFetch<DistributeResultPinsResponse>(
+    `${API_ROUTES.resultPins}/distribute`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function listMyDistributedResultPins(): Promise<ResultPin[]> {
+  const payload = await apiFetch<ResultPinResponse>(
+    "/api/v1/student/result-pins",
+    { authScope: "student" },
+  );
+
+  return normalizePins(payload);
 }

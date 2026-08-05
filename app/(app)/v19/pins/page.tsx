@@ -12,6 +12,7 @@ import { getCookie } from "@/lib/cookies";
 import { PERMISSIONS } from "@/lib/permissionKeys";
 import {
   bulkGenerateResultPins,
+  distributeResultPins,
   generateResultPinForStudent,
   invalidateResultPin,
   listResultPins,
@@ -63,13 +64,13 @@ const formatDateTime = (value: string | null | undefined): string => {
 
 const statusBadgeClass = (status: string | null | undefined): string => {
   const normalized = (status ?? "").toLowerCase();
-  if (normalized === "active") {
+  if (normalized === "active" || normalized === "sent") {
     return "badge badge-success";
   }
-  if (normalized === "revoked") {
+  if (normalized === "revoked" || normalized === "disabled") {
     return "badge badge-danger";
   }
-  if (normalized === "expired") {
+  if (normalized === "expired" || normalized === "used") {
     return "badge badge-warning";
   }
   return "badge badge-secondary";
@@ -87,6 +88,12 @@ const formatUsage = (pin: ResultPin): string => {
   }
 
   return `${used} / Unlimited`;
+};
+
+const isPinSendable = (pin: ResultPin): boolean => {
+  const distributionStatus = pin.distribution_status ?? "not_sent";
+  const effectiveStatus = pin.effective_status ?? pin.status ?? "active";
+  return distributionStatus === "not_sent" && effectiveStatus === "active";
 };
 
 const buildStudentLabel = (student: StudentSummary): string => {
@@ -141,6 +148,7 @@ export default function PinsPage() {
   const [selectedStudent, setSelectedStudent] = useState<string>("");
 
   const [pins, setPins] = useState<ResultPin[]>([]);
+  const [selectedPinIds, setSelectedPinIds] = useState<Record<string, boolean>>({});
   const [pinsLoading, setPinsLoading] = useState(false);
   const [pinsError, setPinsError] = useState<string | null>(null);
 
@@ -156,6 +164,7 @@ export default function PinsPage() {
   const [generatingSingle, setGeneratingSingle] = useState(false);
   const [generatingBulk, setGeneratingBulk] = useState(false);
   const [pinActionKey, setPinActionKey] = useState<string | null>(null);
+  const [sendingSelectedPins, setSendingSelectedPins] = useState(false);
   const [requirePinForResults, setRequirePinForResults] = useState(true);
   const [pinRequirementLoading, setPinRequirementLoading] = useState(true);
   const [pinRequirementSaving, setPinRequirementSaving] = useState(false);
@@ -437,6 +446,16 @@ export default function PinsPage() {
         student_id: selectedStudent || undefined,
       });
       setPins(data);
+      setSelectedPinIds((previous) => {
+        const sendableIds = new Set(
+          data.filter(isPinSendable).map((pin) => String(pin.id)),
+        );
+        return Object.fromEntries(
+          Object.entries(previous).filter(
+            ([pinId, selected]) => selected && sendableIds.has(pinId),
+          ),
+        );
+      });
     } catch (error) {
       console.error("Unable to load result PINs", error);
       setPinsError(
@@ -791,17 +810,6 @@ export default function PinsPage() {
       return;
     }
 
-    const trimmedMaxUsage = maxUsage.trim();
-    let maxUsageValue: number | undefined;
-    if (trimmedMaxUsage) {
-      const parsed = Number.parseInt(trimmedMaxUsage, 10);
-      if (Number.isNaN(parsed) || parsed < 1) {
-        showFeedback("Enter a valid max usage (minimum 1).", "warning");
-        return;
-      }
-      maxUsageValue = parsed;
-    }
-
     const actionKey = `regen-${studentId}`;
     setPinActionKey(actionKey);
     resetFeedback();
@@ -810,12 +818,9 @@ export default function PinsPage() {
         session_id: selectedSession,
         term_id: selectedTerm,
         regenerate: true,
-        expires_at: expiryDate || null,
+        expires_at: null,
+        max_usage: null,
       };
-
-      if (maxUsageValue !== undefined) {
-        payload.max_usage = maxUsageValue;
-      }
 
       await generateResultPinForStudent(studentId, payload);
       showFeedback("Result PIN regenerated successfully.", "success");
@@ -860,6 +865,72 @@ export default function PinsPage() {
       );
     } finally {
       setPinActionKey(null);
+    }
+  };
+
+  const handleSendPin = async (pin: ResultPin) => {
+    const actionKey = `send-${pin.id}`;
+    setPinActionKey(actionKey);
+    resetFeedback();
+    try {
+      const response = await distributeResultPins({
+        session_id: selectedSession,
+        term_id: selectedTerm,
+        pin_ids: [pin.id],
+      });
+      showFeedback(response.message, "success");
+      await loadPins();
+    } catch (error) {
+      showFeedback(
+        error instanceof Error ? error.message : "Unable to send result PIN.",
+        "danger",
+      );
+    } finally {
+      setPinActionKey(null);
+    }
+  };
+
+  const handleCopyPin = async (pinCode: string | undefined) => {
+    if (!pinCode) return;
+    try {
+      await navigator.clipboard.writeText(pinCode);
+      showFeedback("PIN copied successfully.", "success");
+    } catch {
+      showFeedback("Unable to copy the PIN. Please copy it manually.", "warning");
+    }
+  };
+
+  const selectedPinIdList = Object.keys(selectedPinIds).filter(
+    (pinId) => selectedPinIds[pinId],
+  );
+  const sendablePins = pins.filter(isPinSendable);
+  const allSendablePinsSelected =
+    sendablePins.length > 0 &&
+    sendablePins.every((pin) => selectedPinIds[String(pin.id)]);
+
+  const handleSendSelectedPins = async () => {
+    if (!selectedPinIdList.length) return;
+
+    setSendingSelectedPins(true);
+    resetFeedback();
+    try {
+      const response = await distributeResultPins({
+        session_id: selectedSession,
+        term_id: selectedTerm,
+        pin_ids: selectedPinIdList,
+      });
+      showFeedback(response.message, "success");
+      setSelectedPinIds({});
+      await loadPins();
+    } catch (error) {
+      showFeedback(
+        error instanceof Error
+          ? error.message
+          : "Unable to send the selected result PINs.",
+        "danger",
+      );
+    } finally {
+      setSendingSelectedPins(false);
     }
   };
 
@@ -1238,16 +1309,61 @@ export default function PinsPage() {
             </div>
           </form>
 
+          {selectedPinIdList.length > 0 ? (
+            <div className="d-flex justify-content-end mb-3">
+              <button
+                type="button"
+                className="btn-fill-lg"
+                style={{
+                  backgroundColor: "#6f42c1",
+                  borderColor: "#6f42c1",
+                  color: "#ffffff",
+                  minWidth: 220,
+                  padding: "14px 28px",
+                  fontSize: "16px",
+                  fontWeight: 700,
+                }}
+                onClick={() => void handleSendSelectedPins()}
+                disabled={sendingSelectedPins}
+              >
+                {sendingSelectedPins
+                  ? "Sending…"
+                  : `Send (${selectedPinIdList.length})`}
+              </button>
+            </div>
+          ) : null}
+
           <div className="table-responsive">
             <table className="table display text-nowrap">
               <thead>
                 <tr>
+                  <th>
+                    <input
+                      type="checkbox"
+                      checked={allSendablePinsSelected}
+                      onChange={(event) => {
+                        if (!event.target.checked) {
+                          setSelectedPinIds({});
+                          return;
+                        }
+                        setSelectedPinIds(
+                          Object.fromEntries(
+                            sendablePins.map((pin) => [String(pin.id), true]),
+                          ),
+                        );
+                      }}
+                      disabled={!sendablePins.length || sendingSelectedPins}
+                      aria-label="Select all students with sendable PINs"
+                    />
+                  </th>
+                  <th>#</th>
                   <th>Student</th>
                   <th>Session</th>
                   <th>Term</th>
                   <th>PIN</th>
                   <th>Usage</th>
                   <th>Status</th>
+                  <th>Distribution</th>
                   <th>Expires</th>
                   <th>Updated</th>
                   <th>Actions</th>
@@ -1256,13 +1372,31 @@ export default function PinsPage() {
               <tbody id="pin-table-body">
                 {tableMessage ? (
                   <tr>
-                    <td colSpan={9}>{tableMessage}</td>
+                    <td colSpan={12}>{tableMessage}</td>
                   </tr>
                 ) : (
-                  pins.map((pin) => {
+                  pins.map((pin, index) => {
                     const studentName = buildResultPinStudentLabel(pin);
+                    const distributionStatus = pin.distribution_status ?? "not_sent";
+                    const effectiveStatus = pin.effective_status ?? pin.status ?? "active";
+                    const canSendPin = isPinSendable(pin);
                     return (
                       <tr key={String(pin.id)}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(selectedPinIds[String(pin.id)])}
+                            onChange={(event) =>
+                              setSelectedPinIds((previous) => ({
+                                ...previous,
+                                [String(pin.id)]: event.target.checked,
+                              }))
+                            }
+                            disabled={!canSendPin || sendingSelectedPins}
+                            aria-label={`Select ${studentName}`}
+                          />
+                        </td>
+                        <td>{index + 1}</td>
                         <td>{studentName}</td>
                         <td>{pin.session?.name ?? "—"}</td>
                         <td>{pin.term?.name ?? "—"}</td>
@@ -1271,13 +1405,28 @@ export default function PinsPage() {
                         </td>
                         <td>{formatUsage(pin)}</td>
                         <td>
-                          <span className={statusBadgeClass(pin.status)}>
-                            {(pin.status ?? "unknown").toLowerCase()}
+                          <span className={statusBadgeClass(effectiveStatus)}>
+                            {effectiveStatus}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={statusBadgeClass(distributionStatus)}>
+                            {distributionStatus.replace("_", " ")}
                           </span>
                         </td>
                         <td>{formatDate(pin.expires_at)}</td>
                         <td>{formatDateTime(pin.updated_at)}</td>
                         <td>
+                          {canSendPin ? (
+                            <button
+                              type="button"
+                              className="btn btn-link p-0 mr-3 text-success"
+                              onClick={() => void handleSendPin(pin)}
+                              disabled={pinActionKey === `send-${pin.id}`}
+                            >
+                              {pinActionKey === `send-${pin.id}` ? "Sending…" : "Send"}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="btn btn-link p-0 mr-3 text-primary"
@@ -1288,6 +1437,13 @@ export default function PinsPage() {
                             }}
                           >
                             Show
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-link p-0 mr-3 text-primary"
+                            onClick={() => void handleCopyPin(pin.pin_code)}
+                          >
+                            Copy
                           </button>
                           <button
                             type="button"
