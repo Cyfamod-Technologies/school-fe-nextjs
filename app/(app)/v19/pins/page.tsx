@@ -1026,6 +1026,7 @@ export default function PinsPage() {
         </div>
       ) : null}
 
+      {requirePinForResults ? (
       <div className="card height-auto">
         <div className="card-body">
           <div className="heading-layout1">
@@ -1479,6 +1480,7 @@ export default function PinsPage() {
           </div>
         </div>
       </div>
+      ) : null}
     </>
   );
 }
