@@ -305,6 +305,21 @@ function AssignmentCard({
   assignment: TeacherAssignmentSummary;
   iconClass: string;
 }) {
+  const studentsHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (assignment.session?.id) {
+      params.set("current_session_id", String(assignment.session.id));
+    }
+    if (assignment.class?.id) {
+      params.set("school_class_id", String(assignment.class.id));
+    }
+    if (assignment.class_arm?.id) {
+      params.set("class_arm_id", String(assignment.class_arm.id));
+    }
+    const query = params.toString();
+    return query ? `/v14/all-students?${query}` : "/v14/all-students";
+  }, [assignment]);
+
   return (
     <div className="col-md-6 mb-3">
       <div className="card dashboard-card-one">
@@ -344,6 +359,16 @@ function AssignmentCard({
               </ul>
             )}
           </div>
+          {assignment.is_class_teacher ? (
+            <div className="mt-3 pt-3 border-top">
+              <Link
+                href={studentsHref}
+                className="btn btn-sm btn-outline-primary"
+              >
+                View Students
+              </Link>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

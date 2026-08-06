@@ -61,16 +61,14 @@ function buildQuery(params: Record<string, string | number | undefined>): string
 export async function bulkPromoteStudents(
   payload: PromotionRequest,
 ): Promise<PromotionResponse> {
-  const basePayload = { ...payload };
-  delete basePayload.target_class_section_id;
-  delete basePayload.target_class_arm_id;
   return apiFetch<PromotionResponse>(API_ROUTES.promotionsBulk, {
     method: "POST",
     body: JSON.stringify({
-      target_session_id: basePayload.target_session_id,
-      target_class_id: basePayload.target_school_class_id,
-      retain_subjects: Boolean(basePayload.retain_subjects),
-      student_ids: basePayload.student_ids,
+      target_session_id: payload.target_session_id,
+      target_class_id: payload.target_school_class_id,
+      target_class_arm_id: payload.target_class_arm_id || null,
+      retain_subjects: Boolean(payload.retain_subjects),
+      student_ids: payload.student_ids,
     }),
   });
 }

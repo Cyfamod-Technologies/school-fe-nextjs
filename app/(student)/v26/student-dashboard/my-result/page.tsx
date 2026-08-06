@@ -19,6 +19,8 @@ export default function StudentMyResultPage() {
   const [selectedSession, setSelectedSession] = useState("");
   const [selectedTerm, setSelectedTerm] = useState("");
   const [pin, setPin] = useState("");
+  const [requirePinForResultAccess, setRequirePinForResultAccess] =
+    useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [printProcessing, setPrintProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,8 +40,12 @@ export default function StudentMyResultPage() {
     setSelectedSession("");
     setSelectedTerm("");
     void listStudentSessions()
-      .then((data) => {
+      .then(({ sessions: data, requirePinForResultAccess: requiresPin }) => {
         setSessions(data);
+        setRequirePinForResultAccess(requiresPin);
+        if (!requiresPin) {
+          setPin("");
+        }
         if (data.length > 0) {
           setSelectedSession(String(data[0].id));
           const firstTerm = data[0].terms?.[0];
@@ -68,8 +74,12 @@ export default function StudentMyResultPage() {
     setError(null);
     setResults(null);
 
-    if (!selectedSession || !selectedTerm || !pin) {
-      setError("Select a session, term, and enter a valid PIN.");
+    if (!selectedSession || !selectedTerm || (requirePinForResultAccess && !pin)) {
+      setError(
+        requirePinForResultAccess
+          ? "Select a session, term, and enter a valid PIN."
+          : "Select a session and term.",
+      );
       return;
     }
 
@@ -78,7 +88,7 @@ export default function StudentMyResultPage() {
       const response = await previewStudentResult({
         session_id: selectedSession,
         term_id: selectedTerm,
-        pin_code: pin,
+        ...(requirePinForResultAccess ? { pin_code: pin } : {}),
       });
       setResults(response.results);
     } catch (previewError) {
@@ -189,7 +199,9 @@ export default function StudentMyResultPage() {
           <div className="item-title">
             <h3>My Result</h3>
             <p className="mb-0 text-muted">
-              Select a session and term, then enter your PIN to view your results.
+              {requirePinForResultAccess
+                ? "Select a session and term, then enter your PIN to view your results."
+                : "Select a session and term to view your results."}
             </p>
           </div>
         </div>
@@ -200,7 +212,9 @@ export default function StudentMyResultPage() {
         ) : null}
         <form onSubmit={handleSubmit}>
           <div className="form-row">
-            <div className="form-group col-md-4 col-12">
+            <div
+              className={`form-group ${requirePinForResultAccess ? "col-md-4" : "col-md-6"} col-12`}
+            >
               <label htmlFor="student-session" className="text-dark-medium">
                 Session
               </label>
@@ -226,7 +240,9 @@ export default function StudentMyResultPage() {
                 ))}
               </select>
             </div>
-            <div className="form-group col-md-4 col-12">
+            <div
+              className={`form-group ${requirePinForResultAccess ? "col-md-4" : "col-md-6"} col-12`}
+            >
               <label htmlFor="student-term" className="text-dark-medium">
                 Term
               </label>
@@ -246,23 +262,25 @@ export default function StudentMyResultPage() {
                 ))}
               </select>
             </div>
-            <div className="form-group col-md-4 col-12">
-              <label htmlFor="student-pin" className="text-dark-medium">
-                Result PIN
-              </label>
-              <input
-                id="student-pin"
-                type="text"
-                className="form-control"
-                value={pin}
-                onChange={(event) => setPin(event.target.value)}
-                placeholder="Enter PIN"
-                required
-              />
-              <small className="form-text text-muted">
-                Get your PIN from the school or portal admin before checking your result.
-              </small>
-            </div>
+            {requirePinForResultAccess ? (
+              <div className="form-group col-md-4 col-12">
+                <label htmlFor="student-pin" className="text-dark-medium">
+                  Result PIN
+                </label>
+                <input
+                  id="student-pin"
+                  type="text"
+                  className="form-control"
+                  value={pin}
+                  onChange={(event) => setPin(event.target.value)}
+                  placeholder="Enter PIN"
+                  required
+                />
+                <small className="form-text text-muted">
+                  Get your PIN from the school or portal admin before checking your result.
+                </small>
+              </div>
+            ) : null}
           </div>
           <button
             className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"

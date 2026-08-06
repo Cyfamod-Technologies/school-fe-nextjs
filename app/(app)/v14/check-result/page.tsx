@@ -89,7 +89,7 @@ export default function CheckResultPage() {
   }, [selectedClass, armsCache]);
 
   const loadStudents = useCallback(async () => {
-    if (!selectedClass) {
+    if (!selectedSession || !selectedTerm || !selectedClass) {
       setStudents([]);
       setSelectedStudent("");
       return;
@@ -100,6 +100,8 @@ export default function CheckResultPage() {
     try {
       const response = await listStudents({
         per_page: 200,
+        session_id: selectedSession,
+        term_id: selectedTerm,
         school_class_id: selectedClass,
         class_arm_id: selectedArm || undefined,
       });
@@ -112,7 +114,7 @@ export default function CheckResultPage() {
         setSelectedStudent("");
       }
       if (!list.length) {
-        setFeedback("No students found for the selected class/arm.");
+        setFeedback("No students with results were found for the selected session, term, and class/arm.");
         setFeedbackType("info");
       }
     } catch (error) {
@@ -128,7 +130,7 @@ export default function CheckResultPage() {
     } finally {
       setLoadingStudents(false);
     }
-  }, [selectedArm, selectedClass, selectedStudent]);
+  }, [selectedArm, selectedClass, selectedSession, selectedStudent, selectedTerm]);
 
   useEffect(() => {
     void loadStudents();

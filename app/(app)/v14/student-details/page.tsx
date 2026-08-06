@@ -17,6 +17,7 @@ import {
   deleteStudent,
   getStudent,
   listStudents,
+  resetStudentPassword,
   type StudentDetail,
   type StudentSummary,
   type StudentDelectionWithDependenciesError,
@@ -70,7 +71,9 @@ const defaultResultPageSettings: ResultPageSettings = {
   show_remarks: true,
   hide_student_identity: false,
   allow_shared_pin_access: false,
+  require_pin_for_pdf_download: true,
   enable_session_result_print: false,
+  collapse_session_ca: false,
   comment_mode: "manual",
   signatory_title: "principal",
 };
@@ -191,6 +194,9 @@ export default function StudentDetailsPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletionDependencies, setDeletionDependencies] = useState<string[]>([]);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [resettingStudentPassword, setResettingStudentPassword] = useState(false);
+  const [passwordResetFeedback, setPasswordResetFeedback] = useState<string | null>(null);
+  const [passwordResetError, setPasswordResetError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [termsCache, setTermsCache] = useState<Record<string, Term[]>>({});
   const [selectedSession, setSelectedSession] = useState<string>("");
@@ -468,15 +474,23 @@ export default function StudentDetailsPage() {
     if (!isTeacher) {
       return true;
     }
-    if (!student?.school_class_id || !teacherDashboard) {
+    if (!student || !teacherDashboard) {
       return false;
     }
 
-    const classId = String(student.school_class_id);
-    const studentArmId =
-      student.class_arm_id != null ? String(student.class_arm_id) : "";
-    const studentSectionId =
-      student.class_section_id != null ? String(student.class_section_id) : "";
+    const classId = String(
+      student.school_class_id ?? student.school_class?.id ?? "",
+    );
+    const studentArmId = String(
+      student.class_arm_id ?? student.class_arm?.id ?? "",
+    );
+    const studentSectionId = String(
+      student.class_section_id ?? student.class_section?.id ?? "",
+    );
+
+    if (!classId) {
+      return false;
+    }
 
     return teacherDashboard.assignments.some((assignment) => {
       if (!assignment.is_class_teacher) {
@@ -492,12 +506,6 @@ export default function StudentDetailsPage() {
       const assignmentSectionId = assignment.class_section?.id
         ? String(assignment.class_section.id)
         : "";
-      const assignmentSessionId = assignment.session?.id
-        ? String(assignment.session.id)
-        : "";
-      const assignmentTermId = assignment.term?.id
-        ? String(assignment.term.id)
-        : "";
 
       if (assignmentArmId && assignmentArmId !== studentArmId) {
         return false;
@@ -505,24 +513,10 @@ export default function StudentDetailsPage() {
       if (assignmentSectionId && assignmentSectionId !== studentSectionId) {
         return false;
       }
-      if (assignmentSessionId && selectedSession && assignmentSessionId !== selectedSession) {
-        return false;
-      }
-      if (assignmentTermId && selectedTerm && assignmentTermId !== selectedTerm) {
-        return false;
-      }
 
       return true;
     });
-  }, [
-    isTeacher,
-    selectedSession,
-    selectedTerm,
-    student?.class_arm_id,
-    student?.class_section_id,
-    student?.school_class_id,
-    teacherDashboard,
-  ]);
+  }, [isTeacher, student, teacherDashboard]);
 
   const terms = useMemo(() => {
     if (!selectedSession) {
@@ -1673,6 +1667,32 @@ export default function StudentDetailsPage() {
       .join(" ");
   }, [student]);
 
+  const handleResetStudentPassword = async () => {
+    if (!studentId || isTeacher || resettingStudentPassword) return;
+
+    const confirmed = window.confirm(
+      `Reset ${fullName || "this student"}'s portal password to the default password? The student will need to sign in again.`,
+    );
+    if (!confirmed) return;
+
+    setResettingStudentPassword(true);
+    setPasswordResetFeedback(null);
+    setPasswordResetError(null);
+
+    try {
+      const response = await resetStudentPassword(studentId);
+      setPasswordResetFeedback(
+        response.message || "Student password reset successfully.",
+      );
+    } catch (err) {
+      setPasswordResetError(
+        err instanceof Error ? err.message : "Unable to reset the student password.",
+      );
+    } finally {
+      setResettingStudentPassword(false);
+    }
+  };
+
   const photoUrl = useMemo(() => {
     if (!student?.photo_url) {
       return "/assets/img/figure/student.png";
@@ -2805,6 +2825,41 @@ export default function StudentDetailsPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {!isTeacher ? (
+        <div className="card height-auto mt-4">
+          <div className="card-body">
+            <div className="heading-layout1">
+              <div className="item-title">
+                <h3>Student Portal Password</h3>
+                <p className="mb-0 text-muted small">
+                  Reset this student&apos;s login password to the default password.
+                </p>
+              </div>
+            </div>
+            {passwordResetFeedback ? (
+              <div className="alert alert-success" role="alert">
+                {passwordResetFeedback}
+              </div>
+            ) : null}
+            {passwordResetError ? (
+              <div className="alert alert-danger" role="alert">
+                {passwordResetError}
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+              onClick={() => void handleResetStudentPassword()}
+              disabled={resettingStudentPassword}
+            >
+              {resettingStudentPassword
+                ? "Resetting Password…"
+                : "Reset Password to 123456"}
+            </button>
           </div>
         </div>
       ) : null}

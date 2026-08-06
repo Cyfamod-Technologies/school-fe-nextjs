@@ -10,7 +10,6 @@ import {
   type ClassArmSection,
 } from "@/lib/classArmSections";
 import { listSessions, type Session } from "@/lib/sessions";
-import { listTermsBySession, type Term } from "@/lib/terms";
 import {
   createClassTeacherAssignment,
   deleteClassTeacherAssignment,
@@ -19,6 +18,7 @@ import {
   type ClassTeacherAssignment,
   type ClassTeacherAssignmentListResponse,
 } from "@/lib/classTeacherAssignments";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AssignmentForm {
   staff_id: string;
@@ -26,7 +26,6 @@ interface AssignmentForm {
   class_arm_id: string;
   class_section_id: string;
   session_id: string;
-  term_id: string;
 }
 
 const initialForm: AssignmentForm = {
@@ -35,7 +34,6 @@ const initialForm: AssignmentForm = {
   class_arm_id: "",
   class_section_id: "",
   session_id: "",
-  term_id: "",
 };
 
 interface AssignmentFilters {
@@ -58,18 +56,26 @@ const initialFilters: AssignmentFilters = {
 
 type ArmsCache = Record<string, ClassArm[]>;
 type SectionsCache = Record<string, ClassArmSection[]>;
-type TermsCache = Record<string, Term[]>;
 
 export default function AssignClassTeachersPage() {
+  const { schoolContext } = useAuth();
+  const currentSessionId = schoolContext.current_session_id
+    ? String(schoolContext.current_session_id)
+    : "";
   const [teachers, setTeachers] = useState<Staff[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [armsCache, setArmsCache] = useState<ArmsCache>({});
   const [sectionsCache, setSectionsCache] = useState<SectionsCache>({});
-  const [termsCache, setTermsCache] = useState<TermsCache>({});
 
-  const [form, setForm] = useState<AssignmentForm>(initialForm);
-  const [filters, setFilters] = useState<AssignmentFilters>(initialFilters);
+  const [form, setForm] = useState<AssignmentForm>(() => ({
+    ...initialForm,
+    session_id: currentSessionId,
+  }));
+  const [filters, setFilters] = useState<AssignmentFilters>(() => ({
+    ...initialFilters,
+    session_id: currentSessionId,
+  }));
   const [editingId, setEditingId] = useState<number | null>(null);
 
   const [page, setPage] = useState(1);
@@ -94,6 +100,21 @@ export default function AssignClassTeachersPage() {
       .then(setSessions)
       .catch((err) => console.error("Unable to load sessions", err));
   }, []);
+
+  useEffect(() => {
+    if (!currentSessionId) return;
+
+    setFilters((previous) =>
+      previous.session_id
+        ? previous
+        : { ...previous, session_id: currentSessionId },
+    );
+    setForm((previous) =>
+      previous.session_id
+        ? previous
+        : { ...previous, session_id: currentSessionId },
+    );
+  }, [currentSessionId]);
 
   const ensureArms = useCallback(
     async (classId: string) => {
@@ -135,29 +156,6 @@ export default function AssignClassTeachersPage() {
     [sectionsCache],
   );
 
-  const ensureTerms = useCallback(
-    async (sessionId: string): Promise<Term[]> => {
-      if (!sessionId) {
-        return [];
-      }
-      if (termsCache[sessionId]) {
-        return termsCache[sessionId] ?? [];
-      }
-      try {
-        const data = await listTermsBySession(sessionId);
-        setTermsCache((prev) => ({
-          ...prev,
-          [sessionId]: data,
-        }));
-        return data;
-      } catch (error) {
-        console.error("Unable to load terms", error);
-        return [];
-      }
-    },
-    [termsCache],
-  );
-
   useEffect(() => {
     if (form.school_class_id) {
       ensureArms(form.school_class_id).catch((err) => console.error(err));
@@ -185,25 +183,6 @@ export default function AssignClassTeachersPage() {
       );
     }
   }, [filters.school_class_id, filters.class_arm_id, ensureSections]);
-
-  useEffect(() => {
-    if (form.session_id) {
-      ensureTerms(form.session_id).catch((err) => console.error(err));
-    }
-  }, [form.session_id, ensureTerms]);
-
-  useEffect(() => {
-    if (!form.session_id || form.term_id) {
-      return;
-    }
-    const terms = termsCache[form.session_id];
-    if (terms && terms.length > 0) {
-      setForm((prev) => ({
-        ...prev,
-        term_id: `${terms[0].id}`,
-      }));
-    }
-  }, [form.session_id, form.term_id, termsCache]);
 
   const armsForForm = useMemo(() => {
     if (!form.school_class_id) {
@@ -234,13 +213,6 @@ export default function AssignClassTeachersPage() {
     const key = `${filters.school_class_id}:${filters.class_arm_id}`;
     return sectionsCache[key] ?? [];
   }, [sectionsCache, filters.school_class_id, filters.class_arm_id]);
-
-  const termsForForm = useMemo(() => {
-    if (!form.session_id) {
-      return [];
-    }
-    return termsCache[form.session_id] ?? [];
-  }, [termsCache, form.session_id]);
 
   const fetchAssignments = useCallback(async () => {
     setLoadingList(true);
@@ -287,16 +259,6 @@ export default function AssignClassTeachersPage() {
       return;
     }
 
-    const resolvedTerms =
-      termsForForm.length > 0 ? termsForForm : await ensureTerms(form.session_id);
-    const derivedTermId =
-      form.term_id || (resolvedTerms.length > 0 ? `${resolvedTerms[0].id}` : "");
-
-    if (!derivedTermId) {
-      setFormError("No terms found for the selected session. Please add a term.");
-      return;
-    }
-
     setSubmitting(true);
     try {
       const payload = {
@@ -305,7 +267,6 @@ export default function AssignClassTeachersPage() {
         class_arm_id: form.class_arm_id || null,
         class_section_id: form.class_section_id || null,
         session_id: form.session_id,
-        term_id: derivedTermId,
       };
 
       if (editingId) {
@@ -315,7 +276,7 @@ export default function AssignClassTeachersPage() {
       }
 
       setEditingId(null);
-      setForm(initialForm);
+      setForm({ ...initialForm, session_id: currentSessionId });
       setPage(1);
       await fetchAssignments();
     } catch (err) {
@@ -329,6 +290,10 @@ export default function AssignClassTeachersPage() {
   };
 
   const handleEdit = async (assignment: ClassTeacherAssignment) => {
+    if (String(assignment.session_id) !== currentSessionId) {
+      setFormError("Previous-session assignments are read-only.");
+      return;
+    }
     setEditingId(assignment.id);
     setFormError(null);
 
@@ -340,14 +305,11 @@ export default function AssignClassTeachersPage() {
       ? `${assignment.class_section_id}`
       : "";
     const sessionId = `${assignment.session_id}`;
-    const termId = `${assignment.term_id}`;
 
     await ensureArms(classId);
     if (classId && armId) {
       await ensureSections(classId, armId);
     }
-    await ensureTerms(sessionId);
-
     startTransition(() => {
       setForm({
         staff_id: `${assignment.staff_id}`,
@@ -355,12 +317,15 @@ export default function AssignClassTeachersPage() {
         class_arm_id: armId,
         class_section_id: sectionId,
         session_id: sessionId,
-        term_id: termId,
       });
     });
   };
 
   const handleDelete = async (assignment: ClassTeacherAssignment) => {
+    if (String(assignment.session_id) !== currentSessionId) {
+      setListError("Previous-session assignments are read-only.");
+      return;
+    }
     if (
       !window.confirm(
         `Remove class teacher assignment for "${assignment.staff?.full_name ?? assignment.staff?.user?.name ?? "Teacher"}"?`,
@@ -524,9 +489,9 @@ export default function AssignClassTeachersPage() {
                         setForm((prev) => ({
                           ...prev,
                           session_id: value,
-                          term_id: "",
                         }));
                       }}
+                      disabled
                       required
                     >
                       <option value="">Select session</option>
@@ -536,6 +501,9 @@ export default function AssignClassTeachersPage() {
                         </option>
                       ))}
                     </select>
+                    <small className="form-text text-muted">
+                      Session is locked to the school&apos;s current session.
+                    </small>
                   </div>
                   <div className="col-12 form-group d-flex justify-content-between">
                     <button
@@ -554,7 +522,7 @@ export default function AssignClassTeachersPage() {
                       className="btn-fill-lg bg-blue-dark btn-hover-yellow"
                       onClick={() => {
                         setEditingId(null);
-                        setForm(initialForm);
+                        setForm({ ...initialForm, session_id: currentSessionId });
                       }}
                     >
                       Reset
@@ -713,6 +681,7 @@ export default function AssignClassTeachersPage() {
                       }));
                       setPage(1);
                     }}
+                    disabled
                   >
                     <option value="">All sessions</option>
                     {sessions.map((session) => (
@@ -721,15 +690,20 @@ export default function AssignClassTeachersPage() {
                       </option>
                     ))}
                   </select>
+                  <small className="form-text text-muted">
+                    Filter is locked to the current session.
+                  </small>
                 </div>
                 <div className="col-12 d-flex justify-content-end mt-2">
                   <button
                     className="btn btn-outline-secondary mr-2"
                     type="button"
                     onClick={() => {
-                      setFilters(initialFilters);
+                      setFilters({
+                        ...initialFilters,
+                        session_id: currentSessionId,
+                      });
                       setPage(1);
-                      fetchAssignments().catch(() => undefined);
                     }}
                   >
                     Reset Filters
@@ -769,18 +743,21 @@ export default function AssignClassTeachersPage() {
                   <tbody>
                     {loadingList ? (
                       <tr>
-                        <td colSpan={7} className="text-center">
+                        <td colSpan={6} className="text-center">
                           Loading assignments…
                         </td>
                       </tr>
                     ) : assignments.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="text-center">
+                        <td colSpan={6} className="text-center">
                           No assignments found.
                         </td>
                       </tr>
                     ) : (
-                      assignments.map((assignment) => (
+                      assignments.map((assignment) => {
+                        const isCurrentSession =
+                          String(assignment.session_id) === currentSessionId;
+                        return (
                         <tr key={assignment.id}>
                           <td>
                             {assignment.staff?.full_name ??
@@ -791,7 +768,6 @@ export default function AssignClassTeachersPage() {
                           <td>{assignment.class_arm?.name ?? "N/A"}</td>
                           {/* <td>{assignment.class_section?.name ?? "All"}</td> */}
                           <td>{assignment.session?.name ?? "N/A"}</td>
-                          <td>{assignment.term?.name ?? "N/A"}</td>
                           <td>
                             {assignment.updated_at
                               ? new Date(
@@ -805,6 +781,7 @@ export default function AssignClassTeachersPage() {
                                 type="button"
                                 className="btn btn-sm btn-outline-primary mr-2"
                                 onClick={() => handleEdit(assignment)}
+                                disabled={!isCurrentSession}
                               >
                                 Edit
                               </button>
@@ -812,13 +789,15 @@ export default function AssignClassTeachersPage() {
                                 type="button"
                                 className="btn btn-sm btn-outline-danger"
                                 onClick={() => handleDelete(assignment)}
+                                disabled={!isCurrentSession}
                               >
                                 Delete
                               </button>
                             </div>
                           </td>
                         </tr>
-                      ))
+                        );
+                      })
                     )}
                   </tbody>
                 </table>

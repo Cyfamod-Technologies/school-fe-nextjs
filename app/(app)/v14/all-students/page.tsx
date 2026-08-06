@@ -22,20 +22,16 @@ import {
   listStudents,
   deleteStudent,
   deleteDependentRecords,
+  regenerateAdmissionNumbers,
   type StudentListResponse,
   type StudentSummary,
 } from "@/lib/students";
 import { resolveBackendUrl } from "@/lib/config";
-import { isTeacherUser } from "@/lib/roleChecks";
+import { isAdminUser, isTeacherUser } from "@/lib/roleChecks";
 import {
   fetchTeacherDashboard,
   type TeacherDashboardResponse,
 } from "@/lib/staff";
-import {
-  listAssessmentComponents,
-  type AssessmentComponent,
-} from "@/lib/assessmentComponents";
-import { exportAssessmentSheet } from "@/lib/assessmentSheetExport";
 
 const passthroughLoader: ImageLoader = ({ src }) => src;
 
@@ -62,6 +58,7 @@ export default function AllStudentsPage() {
   const searchParams = useSearchParams();
 
   const isTeacher = isTeacherUser(user);
+  const isAdmin = isAdminUser(user);
 
   const perPageOptions = [10, 25, 50, 100];
   const initialPage = (() => {
@@ -97,12 +94,6 @@ export default function AllStudentsPage() {
   const [classSections, setClassSections] = useState<ClassArmSection[]>([]);
   void classSections;
 
-  const [assessmentComponents, setAssessmentComponents] = useState<
-    AssessmentComponent[]
-  >([]);
-  const [exporting, setExporting] = useState(false);
-  const [exportingBroadsheet, setExportingBroadsheet] = useState(false);
-
   const [data, setData] = useState<StudentListResponse | null>(null);
   const [students, setStudents] = useState<StudentSummary[]>([]);
   const [teacherDashboard, setTeacherDashboard] =
@@ -115,6 +106,7 @@ export default function AllStudentsPage() {
   } | null>(null);
   const [selectedStudentIds, setSelectedStudentIds] = useState<Record<string, boolean>>({});
   const [deletingSelected, setDeletingSelected] = useState(false);
+  const [regeneratingAdmissionNumbers, setRegeneratingAdmissionNumbers] = useState(false);
 
   const fetchStudents = useCallback(async () => {
     setLoading(true);
@@ -126,6 +118,7 @@ export default function AllStudentsPage() {
         sortDirection,
         search: filters.search || undefined,
         current_session_id: filters.current_session_id || undefined,
+        current_term_id: filters.term_id || undefined,
         school_class_id: filters.school_class_id || undefined,
         class_arm_id: filters.class_arm_id || undefined,
       });
@@ -144,45 +137,30 @@ export default function AllStudentsPage() {
     }
   }, [filters, page, perPage, sortBy, sortDirection]);
 
-  const fetchAllStudentsForExport = useCallback(async () => {
-    try {
-      let allStudents: StudentSummary[] = [];
-      let currentPage = 1;
-      let hasMore = true;
-
-      while (hasMore) {
-        const response = await listStudents({
-          page: currentPage,
-          per_page: 1000, // Large per_page to minimize API calls
-          sortBy,
-          sortDirection,
-          search: filters.search || undefined,
-          current_session_id: filters.current_session_id || undefined,
-          school_class_id: filters.school_class_id || undefined,
-          class_arm_id: filters.class_arm_id || undefined,
-        });
-
-        const students = Array.isArray(response.data) ? response.data : [];
-        allStudents = [...allStudents, ...students];
-
-        // Check if there are more pages
-        hasMore = currentPage < (response.last_page || 1);
-        currentPage++;
-      }
-
-      return allStudents;
-    } catch (err) {
-      console.error("Unable to load all students for export", err);
-      throw new Error(
-        err instanceof Error ? err.message : "Unable to load students for export.",
-      );
-    }
-  }, [filters, sortBy, sortDirection]);
-
   const terms = useMemo(() => {
     if (!filters.current_session_id) return [];
     return termsCache[filters.current_session_id] ?? [];
   }, [filters.current_session_id, termsCache]);
+
+  const assessmentSheetHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (filters.current_session_id) params.set("session_id", filters.current_session_id);
+    if (filters.term_id) params.set("term_id", filters.term_id);
+    if (filters.school_class_id) params.set("class_id", filters.school_class_id);
+    if (filters.class_arm_id) params.set("arm_id", filters.class_arm_id);
+    const query = params.toString();
+    return query ? `/v14/assessment-sheet?${query}` : "/v14/assessment-sheet";
+  }, [filters.current_session_id, filters.term_id, filters.school_class_id, filters.class_arm_id]);
+
+  const broadsheetHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (filters.current_session_id) params.set("session_id", filters.current_session_id);
+    if (filters.term_id) params.set("term_id", filters.term_id);
+    if (filters.school_class_id) params.set("school_class_id", filters.school_class_id);
+    if (filters.class_arm_id) params.set("class_arm_id", filters.class_arm_id);
+    const query = params.toString();
+    return query ? `/v14/broadsheet?${query}` : "/v14/broadsheet";
+  }, [filters.current_session_id, filters.term_id, filters.school_class_id, filters.class_arm_id]);
 
   useEffect(() => {
     if (!filters.current_session_id || termsCache[filters.current_session_id]) return;
@@ -200,15 +178,6 @@ export default function AllStudentsPage() {
     listClasses()
       .then(setClasses)
       .catch((err) => console.error("Unable to load classes", err));
-    listAssessmentComponents()
-      .then((response) => {
-        const components =
-          (response && response.data && Array.isArray(response.data)
-            ? response.data
-            : []) || [];
-        setAssessmentComponents(components);
-      })
-      .catch((err) => console.error("Unable to load assessment components", err));
   }, []);
 
   useEffect(() => {
@@ -238,32 +207,29 @@ export default function AllStudentsPage() {
   }, [isTeacher]);
 
   useEffect(() => {
-    if (!isTeacher) {
-      return;
-    }
+    const currentSessionId = schoolContext.current_session_id
+      ? String(schoolContext.current_session_id)
+      : "";
+    const currentTermId = schoolContext.current_term_id
+      ? String(schoolContext.current_term_id)
+      : "";
 
-    if (!filters.current_session_id) {
-      const contextSessionId = schoolContext.current_session_id
-        ? String(schoolContext.current_session_id)
-        : "";
-      const fallbackSessionId =
-        !contextSessionId && sessions.length > 0
-          ? String(sessions[0].id)
-          : "";
-
-      if (contextSessionId || fallbackSessionId) {
-        setFilters((prev) => ({
-          ...prev,
-          current_session_id: contextSessionId || fallbackSessionId,
-        }));
+    setFilters((prev) => {
+      if (
+        prev.current_session_id === currentSessionId &&
+        prev.term_id === currentTermId
+      ) {
+        return prev;
       }
-    }
-  }, [
-    isTeacher,
-    filters.current_session_id,
-    schoolContext.current_session_id,
-    sessions,
-  ]);
+
+      return {
+        ...prev,
+        current_session_id: currentSessionId,
+        term_id: currentTermId,
+      };
+    });
+    setPage(1);
+  }, [schoolContext.current_session_id, schoolContext.current_term_id]);
 
   useEffect(() => {
     if (!filters.school_class_id) {
@@ -564,134 +530,49 @@ export default function AllStudentsPage() {
     }
   }, [deletingSelected, fetchStudents, page, selectedStudentIdList, students.length]);
 
-  const handleExportAssessmentSheet = useCallback(async () => {
-    if (exporting) {
+  const handleRegenerateAdmissionNumbers = useCallback(async () => {
+    if (
+      !selectedStudentIdList.length ||
+      regeneratingAdmissionNumbers ||
+      deletingSelected
+    ) {
       return;
     }
 
-    if (!assessmentComponents || assessmentComponents.length === 0) {
-      setBulkFeedback({
-        type: "danger",
-        message: "No assessment components found. Please ensure assessment components are configured in the system.",
-      });
-      return;
-    }
+    const count = selectedStudentIdList.length;
+    const confirmed = window.confirm(
+      `Regenerate the admission number for ${count} selected student${count === 1 ? "" : "s"}? Their previous admission number${count === 1 ? "" : "s"} will no longer work for student login.`,
+    );
+    if (!confirmed) return;
 
-    setExporting(true);
-    try {
-      // Fetch all students matching current filters
-      const allStudents = await fetchAllStudentsForExport();
-
-      if (!allStudents || allStudents.length === 0) {
-        setBulkFeedback({
-          type: "warning",
-          message: "No students found matching the current filters.",
-        });
-        setExporting(false);
-        return;
-      }
-
-      // Build filename with class and arm if selected
-      let filename = "assessment_sheet";
-      
-      if (filters.school_class_id) {
-        const selectedClass = classes.find((c) => String(c.id) === String(filters.school_class_id));
-        if (selectedClass) {
-          filename += `_${selectedClass.name}`;
-        }
-      }
-      
-      if (filters.class_arm_id) {
-        const selectedArm = classArms.find((a) => String(a.id) === String(filters.class_arm_id));
-        if (selectedArm) {
-          filename += `_${selectedArm.name}`;
-        }
-      }
-
-      const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-      filename += `_${timestamp}.csv`;
-
-      // Export the sheet
-      exportAssessmentSheet(allStudents, assessmentComponents, filename);
-
-      setBulkFeedback({
-        type: "success",
-        message: `Assessment sheet exported successfully with ${allStudents.length} student${allStudents.length === 1 ? "" : "s"}.`,
-      });
-    } catch (err) {
-      console.error("Unable to export assessment sheet", err);
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "Unable to export assessment sheet. Please try again.";
-      setBulkFeedback({
-        type: "danger",
-        message: errorMessage,
-      });
-    } finally {
-      setExporting(false);
-    }
-  }, [exporting, assessmentComponents, fetchAllStudentsForExport, filters.school_class_id, filters.class_arm_id, classes, classArms]);
-
-  const handleExportBroadsheet = useCallback(async () => {
-    if (exportingBroadsheet) return;
-
-    if (!filters.current_session_id) {
-      setBulkFeedback({
-        type: "warning",
-        message: "Please select a Session before printing the broadsheet.",
-      });
-      return;
-    }
-
-    if (!filters.term_id) {
-      setBulkFeedback({
-        type: "warning",
-        message: "Please select a Term before printing the broadsheet.",
-      });
-      return;
-    }
-
-    if (!filters.school_class_id) {
-      setBulkFeedback({
-        type: "warning",
-        message: "Please select a Class before printing the broadsheet.",
-      });
-      return;
-    }
-
-    setExportingBroadsheet(true);
     setBulkFeedback(null);
+    setRegeneratingAdmissionNumbers(true);
     try {
-      const printUrl = new URL("/v14/print-broadsheet", window.location.origin);
-      printUrl.searchParams.set("session_id", filters.current_session_id);
-      printUrl.searchParams.set("term_id", filters.term_id);
-      printUrl.searchParams.set("school_class_id", filters.school_class_id);
-      printUrl.searchParams.set("autoprint", "1");
-
-      if (filters.class_arm_id) {
-        printUrl.searchParams.set("class_arm_id", filters.class_arm_id);
-      }
-
-      const printWindow = window.open(printUrl.toString(), "_blank");
-
-      if (!printWindow) {
-        throw new Error("Unable to open broadsheet window. Please allow pop-ups for this site.");
-      }
-
+      const response = await regenerateAdmissionNumbers(selectedStudentIdList);
+      setSelectedStudentIds({});
+      await fetchStudents();
       setBulkFeedback({
         type: "success",
-        message: "Printable broadsheet opened successfully.",
+        message: response.message,
       });
     } catch (err) {
+      console.error("Unable to regenerate admission numbers", err);
       setBulkFeedback({
         type: "danger",
-        message: err instanceof Error ? err.message : "Unable to print broadsheet.",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Unable to regenerate admission numbers.",
       });
     } finally {
-      setExportingBroadsheet(false);
+      setRegeneratingAdmissionNumbers(false);
     }
-  }, [exportingBroadsheet, filters]);
+  }, [
+    deletingSelected,
+    fetchStudents,
+    regeneratingAdmissionNumbers,
+    selectedStudentIdList,
+  ]);
 
   return (
     <>
@@ -786,9 +667,9 @@ export default function AllStudentsPage() {
                     term_id: "",
                   }));
                 }}
-                disabled={isTeacher}
+                disabled
               >
-                <option value="">All Sessions</option>
+                <option value="">Current session not configured</option>
                 {sessions.map((session) => (
                   <option key={session.id} value={session.id}>
                     {session.name}
@@ -806,9 +687,9 @@ export default function AllStudentsPage() {
                   setPage(1);
                   setFilters((prev) => ({ ...prev, term_id: event.target.value }));
                 }}
-                disabled={!filters.current_session_id || terms.length === 0}
+                disabled
               >
-                <option value="">Select Term</option>
+                <option value="">Current term not configured</option>
                 {terms.map((term) => (
                   <option key={term.id} value={term.id}>
                     {term.name}
@@ -871,7 +752,15 @@ export default function AllStudentsPage() {
                 className="btn btn-outline-secondary w-100"
                 onClick={() => {
                   setPage(1);
-                  setFilters(initialFilters);
+                  setFilters({
+                    ...initialFilters,
+                    current_session_id: schoolContext.current_session_id
+                      ? String(schoolContext.current_session_id)
+                      : "",
+                    term_id: schoolContext.current_term_id
+                      ? String(schoolContext.current_term_id)
+                      : "",
+                  });
                   setClassArms([]);
                   setClassSections([]);
                 }}
@@ -895,27 +784,38 @@ export default function AllStudentsPage() {
                   </PermissionGate>
                 ) : null}
                 {!isTeacher ? (
-                  <button
-                    type="button"
+                  <Link
+                    href={assessmentSheetHref}
                     className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
-                    onClick={handleExportAssessmentSheet}
-                    disabled={exporting || students.length === 0}
                   >
-                    {exporting ? "Exporting…" : "Export Assessment Sheet"}
-                  </button>
+                    Assessment Sheet
+                  </Link>
                 ) : null}
                 {!isTeacher ? (
-                  <button
-                    type="button"
+                  <Link
+                    href={broadsheetHref}
                     className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
-                    onClick={handleExportBroadsheet}
-                    disabled={exportingBroadsheet || !filters.school_class_id}
-                    title={!filters.school_class_id ? "Select a Class to print" : "Print broadsheet for selected class"}
                   >
-                    {exportingBroadsheet
-                      ? "Opening…"
-                      : `Print Broadsheet${data?.total ? ` (${data.total})` : ""}`}
-                  </button>
+                    {`Broadsheet${data?.total ? ` (${data.total})` : ""}`}
+                  </Link>
+                ) : null}
+                {isAdmin ? (
+                  <PermissionGate permission={PERMISSIONS.STUDENTS_UPDATE}>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-lg mr-2"
+                      onClick={handleRegenerateAdmissionNumbers}
+                      disabled={
+                        regeneratingAdmissionNumbers ||
+                        deletingSelected ||
+                        !selectedStudentCount
+                      }
+                    >
+                      {regeneratingAdmissionNumbers
+                        ? "Regenerating…"
+                        : `Regenerate Adm No${selectedStudentCount ? ` (${selectedStudentCount})` : ""}`}
+                    </button>
+                  </PermissionGate>
                 ) : null}
                 {!isTeacher ? (
                   <PermissionGate permission={PERMISSIONS.STUDENTS_DELETE}>
@@ -923,7 +823,11 @@ export default function AllStudentsPage() {
                       type="button"
                       className="btn btn-danger btn-lg"
                       onClick={handleDeleteSelected}
-                      disabled={deletingSelected || !selectedStudentCount}
+                      disabled={
+                        deletingSelected ||
+                        regeneratingAdmissionNumbers ||
+                        !selectedStudentCount
+                      }
                     >
                       {deletingSelected
                         ? "Deleting…"

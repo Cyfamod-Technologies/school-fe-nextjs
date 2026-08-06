@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, startTransition, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, Fragment, startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { listAllSubjects, type Subject } from "@/lib/subjects";
 import { listStaffForDropdown, type Staff } from "@/lib/staff";
 import { listSessions, type Session } from "@/lib/sessions";
-import { listTermsBySession, type Term } from "@/lib/terms";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import { listClassArms, type ClassArm } from "@/lib/classArms";
 import {
@@ -14,6 +13,7 @@ import {
 } from "@/lib/classArmSections";
 import {
   createSubjectTeacherAssignment,
+  bulkSaveSubjectTeacherAssignments,
   deleteSubjectTeacherAssignment,
   listSubjectTeacherAssignments,
   type SubjectTeacherAssignmentContext,
@@ -29,12 +29,12 @@ import {
   listStudents,
   type StudentSummary,
 } from "@/lib/students";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AssignmentForm {
   subjectIds: string[];
   staff_id: string;
   session_id: string;
-  term_id: string;
   selectedClassIds: string[];
   selectedClassArmIdsByClass: Record<string, string[]>;
   school_class_id: string;
@@ -47,7 +47,6 @@ const initialForm: AssignmentForm = {
   subjectIds: [],
   staff_id: "",
   session_id: "",
-  term_id: "",
   selectedClassIds: [],
   selectedClassArmIdsByClass: {},
   school_class_id: "",
@@ -76,13 +75,38 @@ const initialFilters: AssignmentFilters = {
   class_section_id: "",
 };
 
-type TermsCache = Record<string, Term[]>;
+interface BulkAssignmentRow {
+  client_id: string;
+  id?: string;
+  subject_id: string;
+  school_class_id: string;
+  class_arm_id: string;
+  student_ids: Array<string | number> | null;
+}
+
+interface AssignmentGroupEditor {
+  staff_id: string;
+  session_id: string;
+  existing: boolean;
+  rows: BulkAssignmentRow[];
+}
+
+const emptyBulkRow = (): BulkAssignmentRow => ({
+  client_id: `${Date.now()}-${Math.random()}`,
+  subject_id: "",
+  school_class_id: "",
+  class_arm_id: "",
+  student_ids: null,
+});
 
 export default function AssignTeachersPage() {
+  const { schoolContext } = useAuth();
+  const currentSessionId = schoolContext.current_session_id
+    ? String(schoolContext.current_session_id)
+    : "";
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [teachers, setTeachers] = useState<Staff[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [termsCache, setTermsCache] = useState<TermsCache>({});
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [classArmsByClass, setClassArmsByClass] = useState<Record<string, ClassArm[]>>({});
   const [classSectionsByKey, setClassSectionsByKey] = useState<
@@ -97,10 +121,19 @@ export default function AssignTeachersPage() {
   const [studentSearch, setStudentSearch] = useState("");
   const [selectedStudentIds, setSelectedStudentIds] = useState<Record<string, boolean>>({});
 
-  const [form, setForm] = useState<AssignmentForm>(initialForm);
-  const [filters, setFilters] = useState<AssignmentFilters>(initialFilters);
+  const [form, setForm] = useState<AssignmentForm>(() => ({
+    ...initialForm,
+    session_id: currentSessionId,
+  }));
+  const [filters, setFilters] = useState<AssignmentFilters>(() => ({
+    ...initialFilters,
+    session_id: currentSessionId,
+  }));
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [groupEditor, setGroupEditor] = useState<AssignmentGroupEditor | null>(null);
+  const [groupSaving, setGroupSaving] = useState(false);
+  const [groupError, setGroupError] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
   const perPage = 10;
@@ -121,24 +154,6 @@ export default function AssignTeachersPage() {
   const selectedClassSet = useMemo(
     () => new Set(form.selectedClassIds),
     [form.selectedClassIds],
-  );
-
-  const ensureTerms = useCallback(
-    async (sessionId: string) => {
-      if (!sessionId || termsCache[sessionId]) {
-        return;
-      }
-      try {
-        const data = await listTermsBySession(sessionId);
-        setTermsCache((prev) => ({
-          ...prev,
-          [sessionId]: data,
-        }));
-      } catch (error) {
-        console.error("Unable to load terms", error);
-      }
-    },
-    [termsCache],
   );
 
   const ensureClassArms = useCallback(
@@ -222,7 +237,7 @@ export default function AssignTeachersPage() {
   );
 
   const fetchStudentsForClass = useCallback(
-    async (classId: string, armId?: string, sectionId?: string, sessionId?: string, termId?: string) => {
+    async (classId: string, armId?: string, sectionId?: string, sessionId?: string) => {
       if (!classId) {
         setStudents([]);
         return;
@@ -235,7 +250,6 @@ export default function AssignTeachersPage() {
           class_arm_id: armId || undefined,
           class_section_id: sectionId || undefined,
           current_session_id: sessionId || undefined,
-          current_term_id: termId || undefined,
           sortBy: "first_name",
           sortDirection: "asc",
         });
@@ -249,13 +263,6 @@ export default function AssignTeachersPage() {
     },
     [],
   );
-
-  const termsForForm = useMemo(() => {
-    if (!form.session_id) {
-      return [];
-    }
-    return termsCache[form.session_id] ?? [];
-  }, [termsCache, form.session_id]);
 
   const classArmsForForm = useMemo(() => {
     if (!form.school_class_id) {
@@ -507,23 +514,19 @@ export default function AssignTeachersPage() {
   }, []);
 
   useEffect(() => {
-    if (form.session_id) {
-      ensureTerms(form.session_id).catch((err) => console.error(err));
-    }
-  }, [form.session_id, ensureTerms]);
+    if (!currentSessionId) return;
 
-  useEffect(() => {
-    if (!form.session_id || form.term_id) {
-      return;
-    }
-    const terms = termsCache[form.session_id];
-    if (terms && terms.length > 0) {
-      setForm((prev) => ({
-        ...prev,
-        term_id: `${terms[0].id}`,
-      }));
-    }
-  }, [form.session_id, form.term_id, termsCache]);
+    setFilters((previous) =>
+      previous.session_id
+        ? previous
+        : { ...previous, session_id: currentSessionId },
+    );
+    setForm((previous) =>
+      previous.session_id
+        ? previous
+        : { ...previous, session_id: currentSessionId },
+    );
+  }, [currentSessionId]);
 
   useEffect(() => {
     if (editingId) {
@@ -570,13 +573,11 @@ export default function AssignTeachersPage() {
       singleSelectedContext.class_arm_id ? String(singleSelectedContext.class_arm_id) : undefined,
       form.class_section_id || undefined,
       form.session_id || undefined,
-      form.term_id || undefined,
     ).catch((err) => console.error(err));
   }, [
     singleSelectedContext,
     form.class_section_id,
     form.session_id,
-    form.term_id,
     fetchStudentsForClass,
   ]);
 
@@ -645,6 +646,17 @@ export default function AssignTeachersPage() {
     fetchAssignments().catch((err) => console.error(err));
   }, [fetchAssignments]);
 
+  const groupedAssignments = useMemo(() => {
+    const groups = new Map<string, SubjectTeacherAssignment[]>();
+    assignments.forEach((assignment) => {
+      const key = `${assignment.staff_id}:${assignment.session_id}`;
+      const rows = groups.get(key) ?? [];
+      rows.push(assignment);
+      groups.set(key, rows);
+    });
+    return Array.from(groups.entries()).map(([key, rows]) => ({ key, rows }));
+  }, [assignments]);
+
   const handleToggleStudent = useCallback(
     (studentId: string | number) => () => {
       const key = String(studentId);
@@ -693,14 +705,6 @@ export default function AssignTeachersPage() {
       return;
     }
 
-    const derivedTermId =
-      form.term_id || (termsForForm.length > 0 ? `${termsForForm[0].id}` : "");
-
-    if (!derivedTermId) {
-      setFormError("Unable to determine a term for the selected session.");
-      return;
-    }
-
     const payload = {
       ...(editingId
         ? {
@@ -714,7 +718,6 @@ export default function AssignTeachersPage() {
           }),
       staff_id: form.staff_id,
       session_id: form.session_id,
-      term_id: derivedTermId,
       student_ids: hasSingleSelectedContext && selectedStudentCount ? selectedStudentIdList : null,
       class_section_id: form.class_section_id || null,
     };
@@ -727,7 +730,7 @@ export default function AssignTeachersPage() {
         await createSubjectTeacherAssignment(payload);
       }
       setEditingId(null);
-      setForm(initialForm);
+      setForm({ ...initialForm, session_id: currentSessionId });
       setSelectedStudentIds({});
       setStudentSearch("");
       setPage(1);
@@ -743,11 +746,14 @@ export default function AssignTeachersPage() {
   };
 
   const handleEdit = async (assignment: SubjectTeacherAssignment) => {
+    if (String(assignment.session_id) !== currentSessionId) {
+      setFormError("Previous-session assignments are read-only.");
+      return;
+    }
     setEditingId(assignment.id);
     setFormError(null);
 
     const sessionId = `${assignment.session_id}`;
-    await ensureTerms(sessionId);
     const classId = assignment.school_class_id ? `${assignment.school_class_id}` : "";
     if (classId) {
       await ensureClassArms(classId);
@@ -777,7 +783,6 @@ export default function AssignTeachersPage() {
         subjectIds: [`${assignment.subject_id}`],
         staff_id: `${assignment.staff_id}`,
         session_id: sessionId,
-        term_id: `${assignment.term_id}`,
         selectedClassIds: [`${assignment.school_class_id}`].filter(Boolean),
         selectedClassArmIdsByClass: classId
           ? {
@@ -800,7 +805,129 @@ export default function AssignTeachersPage() {
     });
   };
 
+  const openNewGroup = () => {
+    setEditingId(null);
+    setGroupError(null);
+    setGroupEditor({
+      staff_id: "",
+      session_id: currentSessionId,
+      existing: false,
+      rows: [emptyBulkRow()],
+    });
+  };
+
+  const handleEditGroup = async (seed: SubjectTeacherAssignment) => {
+    if (String(seed.session_id) !== currentSessionId) {
+      setGroupError("Previous-session assignments are read-only.");
+      return;
+    }
+    setGroupError(null);
+    try {
+      const response = await listSubjectTeacherAssignments({
+        staff_id: String(seed.staff_id),
+        session_id: String(seed.session_id),
+        per_page: 500,
+      });
+      const rows = response.data ?? [];
+
+      await Promise.all(
+        rows.map(async (assignment) => {
+          const classId = String(assignment.school_class_id ?? "");
+          const armId = String(assignment.class_arm_id ?? "");
+          if (!classId) return;
+          await ensureClassArms(classId);
+          await ensureClassSubjects(classId, armId || undefined);
+        }),
+      );
+
+      setEditingId(null);
+      setGroupEditor({
+        staff_id: String(seed.staff_id),
+        session_id: String(seed.session_id),
+        existing: true,
+        rows: rows.map((assignment) => ({
+          client_id: assignment.id,
+          id: assignment.id,
+          subject_id: String(assignment.subject_id),
+          school_class_id: String(assignment.school_class_id ?? ""),
+          class_arm_id: String(assignment.class_arm_id ?? ""),
+          student_ids: assignment.student_ids ?? null,
+        })),
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      setGroupError(err instanceof Error ? err.message : "Unable to load assignment group.");
+    }
+  };
+
+  const updateGroupRow = (
+    clientId: string,
+    changes: Partial<BulkAssignmentRow>,
+  ) => {
+    setGroupEditor((current) => current ? {
+      ...current,
+      rows: current.rows.map((row) => row.client_id === clientId ? { ...row, ...changes } : row),
+    } : current);
+  };
+
+  const handleBulkClassChange = async (row: BulkAssignmentRow, classId: string) => {
+    updateGroupRow(row.client_id, {
+      school_class_id: classId,
+      class_arm_id: "",
+      subject_id: "",
+    });
+    if (classId) {
+      await ensureClassArms(classId);
+      await ensureClassSubjects(classId);
+    }
+  };
+
+  const handleBulkArmChange = async (row: BulkAssignmentRow, armId: string) => {
+    updateGroupRow(row.client_id, { class_arm_id: armId, subject_id: "" });
+    if (row.school_class_id) {
+      await ensureClassSubjects(row.school_class_id, armId || undefined);
+    }
+  };
+
+  const handleSaveGroup = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!groupEditor) return;
+
+    if (!groupEditor.staff_id || !groupEditor.session_id ||
+      groupEditor.rows.some((row) => !row.subject_id || !row.school_class_id)) {
+      setGroupError("Select the teacher, session, class and subject for every row.");
+      return;
+    }
+
+    setGroupSaving(true);
+    setGroupError(null);
+    try {
+      await bulkSaveSubjectTeacherAssignments({
+        staff_id: groupEditor.staff_id,
+        session_id: groupEditor.session_id,
+        assignments: groupEditor.rows.map((row) => ({
+          id: row.id,
+          subject_id: row.subject_id,
+          school_class_id: row.school_class_id,
+          class_arm_id: row.class_arm_id || null,
+          student_ids: row.student_ids,
+        })),
+      });
+      setGroupEditor(null);
+      setPage(1);
+      await fetchAssignments();
+    } catch (err) {
+      setGroupError(err instanceof Error ? err.message : "Unable to save assignment group.");
+    } finally {
+      setGroupSaving(false);
+    }
+  };
+
   const handleDelete = async (assignment: SubjectTeacherAssignment) => {
+    if (String(assignment.session_id) !== currentSessionId) {
+      setListError("Previous-session assignments are read-only.");
+      return;
+    }
     if (
       !window.confirm(
         `Remove teacher assignment for "${assignment.subject?.name ?? "Subject"}"?`,
@@ -836,6 +963,181 @@ export default function AssignTeachersPage() {
         </ul>
       </div>
 
+      {groupEditor ? (
+        <div className="card height-auto mb-4">
+          <div className="card-body">
+            <div className="heading-layout1">
+              <div className="item-title">
+                <h3>{groupEditor.existing ? "Edit Teacher Assignment Group" : "Add Assignment Group"}</h3>
+                <p className="text-muted mb-0">
+                  Add or edit different subject, class and arm combinations, then save them together.
+                </p>
+              </div>
+            </div>
+
+            {groupError ? <div className="alert alert-danger">{groupError}</div> : null}
+
+            <form onSubmit={handleSaveGroup}>
+              <div className="row">
+                <div className="col-md-6 form-group">
+                  <label htmlFor="group-teacher">Teacher *</label>
+                  <select
+                    id="group-teacher"
+                    className="form-control"
+                    value={groupEditor.staff_id}
+                    disabled={groupEditor.existing}
+                    onChange={(event) => setGroupEditor((current) => current ? {
+                      ...current,
+                      staff_id: event.target.value,
+                    } : current)}
+                  >
+                    <option value="">Select teacher</option>
+                    {teachers.map((teacher) => (
+                      <option key={teacher.id} value={teacher.id}>
+                        {teacher.full_name ?? teacher.user?.name ?? teacher.email ?? `Staff #${teacher.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-md-6 form-group">
+                  <label htmlFor="group-session">Session *</label>
+                  <select
+                    id="group-session"
+                    className="form-control"
+                    value={groupEditor.session_id}
+                    disabled
+                    onChange={(event) => {
+                      const sessionId = event.target.value;
+                      setGroupEditor((current) => current ? {
+                        ...current,
+                        session_id: sessionId,
+                      } : current);
+                    }}
+                  >
+                    <option value="">Select session</option>
+                    {sessions.map((session) => <option key={session.id} value={session.id}>{session.name}</option>)}
+                  </select>
+                  <small className="form-text text-muted">
+                    Session is locked to the school&apos;s current session.
+                  </small>
+                </div>
+              </div>
+
+              <div className="table-responsive">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th style={{ minWidth: 180 }}>Class</th>
+                      <th style={{ minWidth: 160 }}>Class Arm</th>
+                      <th style={{ minWidth: 220 }}>Subject</th>
+                      <th>Students</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupEditor.rows.map((row) => {
+                      const assignedRowSubjects = classSubjectsByKey[
+                        `${row.school_class_id}:${row.class_arm_id || "all"}`
+                      ] ?? [];
+                      const currentSubject = subjects.find((subject) => String(subject.id) === row.subject_id);
+                      const rowSubjects = currentSubject && !assignedRowSubjects.some(
+                        (subject) => String(subject.id) === row.subject_id,
+                      ) ? [currentSubject, ...assignedRowSubjects] : assignedRowSubjects;
+                      return (
+                        <tr key={row.client_id}>
+                          <td>
+                            <select
+                              className="form-control"
+                              value={row.school_class_id}
+                              onChange={(event) => handleBulkClassChange(row, event.target.value)}
+                            >
+                              <option value="">Select class</option>
+                              {classes.map((schoolClass) => (
+                                <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.name}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <select
+                              className="form-control"
+                              value={row.class_arm_id}
+                              disabled={!row.school_class_id}
+                              onChange={(event) => handleBulkArmChange(row, event.target.value)}
+                            >
+                              <option value="">Whole class / no arm</option>
+                              {(classArmsByClass[row.school_class_id] ?? []).map((arm) => (
+                                <option key={arm.id} value={arm.id}>{arm.name}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <select
+                              className="form-control"
+                              value={row.subject_id}
+                              disabled={!row.school_class_id}
+                              onChange={(event) => updateGroupRow(row.client_id, { subject_id: event.target.value })}
+                            >
+                              <option value="">Select subject</option>
+                              {rowSubjects.map((subject) => (
+                                <option key={subject.id} value={subject.id}>
+                                  {subject.code ? `${subject.name} (${subject.code})` : subject.name}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>{row.student_ids?.length ? `${row.student_ids.length} selected` : "All"}</td>
+                          <td>
+                            {!row.id ? (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-danger"
+                                disabled={groupEditor.rows.length === 1}
+                                onClick={() => setGroupEditor((current) => current ? {
+                                  ...current,
+                                  rows: current.rows.filter((item) => item.client_id !== row.client_id),
+                                } : current)}
+                              >
+                                Remove
+                              </button>
+                            ) : <small className="text-muted">Existing</small>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="d-flex justify-content-between flex-wrap">
+                <button
+                  type="button"
+                  className="btn btn-outline-primary mb-2"
+                  onClick={() => setGroupEditor((current) => current ? {
+                    ...current,
+                    rows: [...current.rows, emptyBulkRow()],
+                  } : current)}
+                >
+                  + Add another subject/class
+                </button>
+                <div>
+                  <button type="button" className="btn btn-outline-secondary mr-2" onClick={() => setGroupEditor(null)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-gradient-yellow" disabled={groupSaving}>
+                    {groupSaving ? "Saving…" : "Save Group"}
+                  </button>
+                </div>
+              </div>
+              {groupEditor.existing ? (
+                <small className="text-muted d-block mt-2">
+                  Existing rows are never removed by bulk save. Use the row's Delete button in the list when removal is intended.
+                </small>
+              ) : null}
+            </form>
+          </div>
+        </div>
+      ) : null}
+
   <div className="row">
         <div className="col-lg-5">
           <div className="card height-auto">
@@ -844,6 +1146,16 @@ export default function AssignTeachersPage() {
                 <div className="item-title">
                   <h3>{editingId ? "Edit Assignment" : "Assign Teacher"}</h3>
                 </div>
+                {!editingId ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ padding: "10px 18px", fontSize: "14px", fontWeight: 600 }}
+                    onClick={openNewGroup}
+                  >
+                    Row-by-row bulk add
+                  </button>
+                ) : null}
               </div>
 
               {formError ? (
@@ -1127,9 +1439,9 @@ export default function AssignTeachersPage() {
                         setForm((prev) => ({
                           ...prev,
                           session_id: value,
-                          term_id: "",
                         }));
                       }}
+                      disabled
                       required
                     >
                       <option value="">Select session</option>
@@ -1139,6 +1451,9 @@ export default function AssignTeachersPage() {
                         </option>
                       ))}
                     </select>
+                    <small className="form-text text-muted">
+                      Session is locked to the school&apos;s current session.
+                    </small>
                   </div>
                   <div className="col-12 form-group d-flex justify-content-between">
                     <button
@@ -1157,7 +1472,7 @@ export default function AssignTeachersPage() {
                       className="btn-fill-lg bg-blue-dark btn-hover-yellow"
                       onClick={() => {
                         setEditingId(null);
-                        setForm(initialForm);
+                        setForm({ ...initialForm, session_id: currentSessionId });
                         setSelectedStudentIds({});
                         setStudentSearch("");
                       }}
@@ -1330,6 +1645,7 @@ export default function AssignTeachersPage() {
                       }));
                       setPage(1);
                     }}
+                    disabled
                   >
                     <option value="">All sessions</option>
                     {sessions.map((session) => (
@@ -1338,15 +1654,20 @@ export default function AssignTeachersPage() {
                       </option>
                     ))}
                   </select>
+                  <small className="form-text text-muted">
+                    Filter is locked to the current session.
+                  </small>
                 </div>
                 <div className="col-12 d-flex justify-content-end mt-2">
                   <button
                     className="btn btn-outline-secondary mr-2"
                     type="button"
                     onClick={() => {
-                      setFilters(initialFilters);
+                      setFilters({
+                        ...initialFilters,
+                        session_id: currentSessionId,
+                      });
                       setPage(1);
-                      fetchAssignments().catch(() => undefined);
                     }}
                   >
                     Reset Filters
@@ -1399,7 +1720,38 @@ export default function AssignTeachersPage() {
                         </td>
                       </tr>
                     ) : (
-                      assignments.map((assignment) => (
+                      groupedAssignments.map((group) => {
+                        const first = group.rows[0];
+                        const isCurrentSession =
+                          String(first.session_id) === currentSessionId;
+                        return (
+                        <Fragment key={group.key}>
+                          <tr className="table-active">
+                            <td colSpan={7}>
+                              <strong>
+                                {first.staff?.full_name ?? first.staff?.user?.name ?? "Teacher"}
+                              </strong>
+                              <span className="text-muted ml-2">
+                                {first.session?.name ?? "Session"} · {group.rows.length} assignment{group.rows.length === 1 ? "" : "s"} on this page
+                              </span>
+                            </td>
+                            <td className="text-right">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-primary"
+                                onClick={() => handleEditGroup(first)}
+                                disabled={!isCurrentSession}
+                                title={
+                                  isCurrentSession
+                                    ? "Edit assignment group"
+                                    : "Previous-session assignments are read-only"
+                                }
+                              >
+                                {isCurrentSession ? "Edit Group" : "Historical · Read only"}
+                              </button>
+                            </td>
+                          </tr>
+                          {group.rows.map((assignment) => (
                         <tr key={assignment.id}>
                           <td>
                             {assignment.subject?.name ?? "N/A"}
@@ -1438,6 +1790,7 @@ export default function AssignTeachersPage() {
                                 type="button"
                                 className="btn btn-sm btn-outline-primary mr-2"
                                 onClick={() => handleEdit(assignment)}
+                                disabled={!isCurrentSession}
                               >
                                 Edit
                               </button>
@@ -1445,13 +1798,17 @@ export default function AssignTeachersPage() {
                                 type="button"
                                 className="btn btn-sm btn-outline-danger"
                                 onClick={() => handleDelete(assignment)}
+                                disabled={!isCurrentSession}
                               >
                                 Delete
                               </button>
                             </div>
                           </td>
                         </tr>
-                      ))
+                          ))}
+                        </Fragment>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>

@@ -14,7 +14,7 @@ export interface SubjectTeacherAssignment {
   subject_id: string;
   staff_id: string;
   session_id: string;
-  term_id: string;
+  term_id?: string | null;
   student_ids?: Array<string | number> | null;
   school_class_id?: string | null;
   class_arm_id?: string | null;
@@ -120,12 +120,27 @@ type AssignmentMutationPayload = {
   contexts?: SubjectTeacherAssignmentContext[];
   staff_id: string | number;
   session_id: string | number;
-  term_id: string | number;
+  term_id?: string | number | null;
   student_ids?: Array<string | number> | null;
   school_class_id?: string | number | null;
   class_arm_id?: string | number | null;
   class_section_id?: string | number | null;
 };
+
+export interface SubjectTeacherBulkRow {
+  id?: string;
+  subject_id: string | number;
+  school_class_id: string | number;
+  class_arm_id?: string | number | null;
+  student_ids?: Array<string | number> | null;
+}
+
+export interface SubjectTeacherBulkSavePayload {
+  staff_id: string | number;
+  session_id: string | number;
+  term_id?: string | number | null;
+  assignments: SubjectTeacherBulkRow[];
+}
 
 export async function createSubjectTeacherAssignment(
   payload: AssignmentMutationPayload,
@@ -151,6 +166,15 @@ export async function updateSubjectTeacherAssignment(
       body: JSON.stringify(sanitizedPayload),
     },
   );
+}
+
+export async function bulkSaveSubjectTeacherAssignments(
+  payload: SubjectTeacherBulkSavePayload,
+): Promise<{ message: string; data: SubjectTeacherAssignment[] }> {
+  return apiFetch(`${API_ROUTES.subjectTeacherAssignments}/bulk-save`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function deleteSubjectTeacherAssignment(

@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
 
     const backendUrl = new URL(`${BACKEND_URL}/api/v1/broadsheet/print`);
 
-    [...REQUIRED_PARAMS, "class_arm_id", "autoprint"].forEach((param) => {
+    [...REQUIRED_PARAMS, "class_arm_id", "autoprint", "embedded"].forEach((param) => {
       const value = searchParams.get(param);
       if (value) {
         backendUrl.searchParams.set(param, value);

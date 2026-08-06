@@ -176,6 +176,38 @@ export async function updateStudent(
   });
 }
 
+export interface RegeneratedAdmissionNumber {
+  id: number | string;
+  previous_admission_no?: string | null;
+  admission_no: string;
+}
+
+export interface RegenerateAdmissionNumbersResponse {
+  message: string;
+  data: RegeneratedAdmissionNumber[];
+}
+
+export async function regenerateAdmissionNumbers(
+  studentIds: Array<number | string>,
+): Promise<RegenerateAdmissionNumbersResponse> {
+  return apiFetch<RegenerateAdmissionNumbersResponse>(
+    "/api/v1/students/regenerate-admission-numbers",
+    {
+      method: "POST",
+      body: JSON.stringify({ student_ids: studentIds.map(String) }),
+    },
+  );
+}
+
+export async function resetStudentPassword(
+  studentId: number | string,
+): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(
+    `/api/v1/students/${studentId}/reset-password`,
+    { method: "POST" },
+  );
+}
+
 export interface StudentDelectionWithDependenciesError extends Error {
   dependencies?: string[];
   isDependencyError?: boolean;

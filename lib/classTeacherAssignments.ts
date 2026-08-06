@@ -13,7 +13,7 @@ export interface ClassTeacherAssignment {
   class_arm_id?: number | null;
   class_section_id?: number | null;
   session_id: number;
-  term_id: number;
+  term_id?: number | null;
   created_at?: string;
   updated_at?: string;
   staff?: Staff | null;
@@ -94,7 +94,7 @@ export async function createClassTeacherAssignment(
     class_arm_id?: string | number | null;
     class_section_id?: string | number | null;
     session_id: string | number;
-    term_id: string | number;
+    term_id?: string | number | null;
   },
 ): Promise<ClassTeacherAssignment> {
   const sanitizedPayload = { ...payload };
@@ -113,7 +113,7 @@ export async function updateClassTeacherAssignment(
     class_arm_id?: string | number | null;
     class_section_id?: string | number | null;
     session_id: string | number;
-    term_id: string | number;
+    term_id?: string | number | null;
   },
 ): Promise<ClassTeacherAssignment> {
   const sanitizedPayload = { ...payload };

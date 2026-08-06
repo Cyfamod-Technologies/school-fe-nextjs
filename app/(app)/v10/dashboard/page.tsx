@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
+import { isAdminUser } from "@/lib/roleChecks";
 import { listStudents } from "@/lib/students";
 
 function normalizeRoleNames(user: ReturnType<typeof useAuth>["user"]): string[] {
@@ -37,11 +38,14 @@ function normalizeRoleNames(user: ReturnType<typeof useAuth>["user"]): string[] 
 
 export default function DashboardPage() {
   const { user, loading, schoolContext } = useAuth();
-  const [sessionStudentCount, setSessionStudentCount] = useState<number | null>(null);
-  const [sessionCountLoading, setSessionCountLoading] = useState(false);
+  const [sessionStudentSummary, setSessionStudentSummary] = useState<{
+    sessionId: string;
+    total: number;
+  } | null>(null);
 
   const roleNames = useMemo(() => normalizeRoleNames(user), [user]);
   const isParent = roleNames.includes("parent");
+  const isAdmin = isAdminUser(user);
 
   const formatNumber = useCallback((value: number | undefined) => {
     if (typeof value !== "number" || Number.isNaN(value)) {
@@ -75,16 +79,9 @@ export default function DashboardPage() {
     const sessionId = schoolContext.current_session_id;
 
     if (!sessionId) {
-      // Reset derived state when the reactive dependency (session id)
-      // becomes unavailable -- standard effect-driven sync, not a stray
-      // setState.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSessionStudentCount(null);
-      setSessionCountLoading(false);
       return;
     }
 
-    setSessionCountLoading(true);
     listStudents({
       page: 1,
       per_page: 1,
@@ -100,17 +97,18 @@ export default function DashboardPage() {
             : Array.isArray(response.data)
               ? response.data.length
               : 0;
-        setSessionStudentCount(total);
+        setSessionStudentSummary({
+          sessionId: String(sessionId),
+          total,
+        });
       })
       .catch((error) => {
         console.error("Unable to load current session student count", error);
         if (!cancelled) {
-          setSessionStudentCount(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setSessionCountLoading(false);
+          setSessionStudentSummary({
+            sessionId: String(sessionId),
+            total: 0,
+          });
         }
       });
 
@@ -120,11 +118,39 @@ export default function DashboardPage() {
   }, [schoolContext.current_session_id]);
 
   const currentSessionName = schoolContext.current_session?.name?.trim();
+  const currentTermName = schoolContext.current_term?.name?.trim();
+  const currentSessionId = schoolContext.current_session_id
+    ? String(schoolContext.current_session_id)
+    : "";
+  const sessionCountLoading =
+    Boolean(currentSessionId) &&
+    sessionStudentSummary?.sessionId !== currentSessionId;
   const sessionCardValue = !schoolContext.current_session_id
     ? "—"
     : sessionCountLoading
       ? "..."
-      : formatNumber(sessionStudentCount ?? 0);
+      : formatNumber(sessionStudentSummary?.total ?? 0);
+
+  const currentSessionStudentsHref = schoolContext.current_session_id
+    ? `/v14/all-students?current_session_id=${encodeURIComponent(String(schoolContext.current_session_id))}`
+    : "/v14/all-students";
+  const sessionPerformanceParams = new URLSearchParams();
+  if (schoolContext.current_session_id) {
+    sessionPerformanceParams.set("session_id", String(schoolContext.current_session_id));
+  }
+  sessionPerformanceParams.set("term_id", "all");
+  sessionPerformanceParams.set("subject_id", "all");
+  const sessionPerformanceHref = `/v14/view-performance?${sessionPerformanceParams.toString()}`;
+
+  const termPerformanceParams = new URLSearchParams();
+  if (schoolContext.current_session_id) {
+    termPerformanceParams.set("session_id", String(schoolContext.current_session_id));
+  }
+  if (schoolContext.current_term_id) {
+    termPerformanceParams.set("term_id", String(schoolContext.current_term_id));
+  }
+  termPerformanceParams.set("subject_id", "all");
+  const termPerformanceHref = `/v14/view-performance?${termPerformanceParams.toString()}`;
 
   const adminSummaryCards = [
     {
@@ -135,25 +161,55 @@ export default function DashboardPage() {
       description: currentSessionName
         ? undefined
         : "Set a current session in School Settings to track this total.",
+      href: currentSessionStudentsHref,
+      actionLabel: "View students",
     },
     {
       key: "total-students",
       icon: "flaticon-classmates",
       title: "Total-Students",
       value: formatNumber(studentCount),
+      href: "/v14/all-students",
+      actionLabel: "View students",
     },
     {
       key: "total-teachers",
       icon: "flaticon-multiple-users-silhouette",
       title: "Teachers",
       value: formatNumber(teacherCount),
+      href: "/v15/all-staff",
+      actionLabel: "View staff",
     },
     {
       key: "total-parents",
       icon: "flaticon-couple",
       title: "Parents",
       value: formatNumber(parentCount),
+      href: "/v13/all-parents",
+      actionLabel: "View parents",
     },
+    ...(isAdmin
+      ? [
+          {
+            key: "best-student-term",
+            icon: "flaticon-classmates",
+            title: "Best Student · Term",
+            value: currentTermName || "Current Term",
+            description: "View the top-performing students for this term.",
+            href: termPerformanceHref,
+            actionLabel: "View ranking",
+          },
+          {
+            key: "best-student-session",
+            icon: "flaticon-calendar",
+            title: "Best Student · Session",
+            value: currentSessionName || "Current Session",
+            description: "View the top-performing students across the session.",
+            href: sessionPerformanceHref,
+            actionLabel: "View ranking",
+          },
+        ]
+      : []),
   ];
 
   const parentDashboard = (
@@ -220,6 +276,10 @@ export default function DashboardPage() {
                         {item.description}
                       </small>
                     ) : null}
+                    <Link href={item.href} className="dashboard-card-link">
+                      {item.actionLabel}
+                      <span aria-hidden="true">→</span>
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -294,6 +354,30 @@ export default function DashboardPage() {
           reserved.
         </div>
       </footer>
+
+      <style jsx global>{`
+        .dashboard-card-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          margin-top: 8px;
+          padding: 4px 9px;
+          border: 1px solid #d7e2ee;
+          border-radius: 4px;
+          background: #ffffff;
+          color: #0d5ca6;
+          font-size: 11px;
+          font-weight: 700;
+          line-height: 1.2;
+          transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+        }
+
+        .dashboard-card-link:hover {
+          border-color: #0d5ca6;
+          background: #0d5ca6;
+          color: #ffffff;
+        }
+      `}</style>
     </>
   );
 }

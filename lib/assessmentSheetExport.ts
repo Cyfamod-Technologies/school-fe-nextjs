@@ -1,4 +1,5 @@
 import { AssessmentComponent } from "@/lib/assessmentComponents";
+import { ResultRecord } from "@/lib/results";
 import { StudentSummary } from "@/lib/students";
 
 /**
@@ -8,14 +9,30 @@ import { StudentSummary } from "@/lib/students";
 export function generateAssessmentSheetCSV(
   students: StudentSummary[],
   assessmentComponents: AssessmentComponent[],
+  results: ResultRecord[] = [],
 ): string {
   // Sort components by order
   const sortedComponents = [...assessmentComponents].sort(
     (a, b) => (a.order || 0) - (b.order || 0),
   );
 
-  // Create header row: Admission No, Name, then assessment components
-  const headers = ["Admission No", "Name", ...sortedComponents.map((c) => c.name)];
+  const headers = [
+    "Admission No",
+    "Name",
+    ...sortedComponents.map((component) => component.name),
+  ];
+
+  const scoreLookup = new Map<string, number>();
+  results.forEach((result) => {
+    if (result.assessment_component_id === null || result.assessment_component_id === undefined) {
+      return;
+    }
+
+    const key = [result.student_id, result.assessment_component_id]
+      .map(String)
+      .join(":");
+    scoreLookup.set(key, (scoreLookup.get(key) ?? 0) + Number(result.total_score));
+  });
 
   // Create data rows
   const rows = students.map((student) => {
@@ -25,8 +42,9 @@ export function generateAssessmentSheetCSV(
       .trim();
     const admissionNo = student.admission_no || "";
 
-    // Assessment component columns (empty for now, to be filled manually)
-    const componentColumns = sortedComponents.map(() => "");
+    const componentColumns = sortedComponents.map((component) =>
+      scoreLookup.get([student.id, component.id].map(String).join(":")) ?? "",
+    );
 
     return [admissionNo, name, ...componentColumns];
   });
@@ -40,7 +58,7 @@ export function generateAssessmentSheetCSV(
       row
         .map((cell) => {
           // Escape cells containing commas or quotes
-          const cellStr = String(cell || "");
+          const cellStr = String(cell ?? "");
           if (cellStr.includes(",") || cellStr.includes('"')) {
             return `"${cellStr.replace(/"/g, '""')}"`;
           }
@@ -82,6 +100,7 @@ export function downloadCSVFile(
 export function exportAssessmentSheet(
   students: StudentSummary[],
   assessmentComponents: AssessmentComponent[],
+  results: ResultRecord[] = [],
   filename?: string,
 ): void {
   if (!students || students.length === 0) {
@@ -94,7 +113,7 @@ export function exportAssessmentSheet(
 
   try {
     // Always use CSV to ensure reliable download
-    const csv = generateAssessmentSheetCSV(students, assessmentComponents);
+    const csv = generateAssessmentSheetCSV(students, assessmentComponents, results);
     const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     downloadCSVFile(
       csv,

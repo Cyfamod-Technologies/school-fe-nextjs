@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { listSessions, type Session } from "@/lib/sessions";
 import { createTerm, type TermPayload } from "@/lib/terms";
+import { listGradeScales } from "@/lib/gradeScales";
 
 const TERM_NUMBER_OPTIONS = [
   { value: 1, label: "Term 1" },
@@ -24,11 +25,13 @@ export default function AddTermPage() {
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionId, setSessionId] = useState("");
+  const [hasPositionRanges, setHasPositionRanges] = useState(false);
   const [form, setForm] = useState<TermPayload>({
     name: "",
     term_number: 1,
     start_date: "",
     end_date: "",
+    use_position_ranges: false,
   });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -48,6 +51,19 @@ export default function AddTermPage() {
             ? err.message
             : "Unable to load sessions. Please try again.",
         );
+      });
+  }, []);
+
+  useEffect(() => {
+    listGradeScales()
+      .then((scales) =>
+        setHasPositionRanges(
+          scales.some((scale) => (scale.position_ranges?.length ?? 0) > 0),
+        ),
+      )
+      .catch((err) => {
+        console.error("Unable to check position ranges", err);
+        setHasPositionRanges(false);
       });
   }, []);
 
@@ -83,6 +99,8 @@ export default function AddTermPage() {
       setSubmitting(true);
       await createTerm(sessionId, {
         ...form,
+        use_position_ranges:
+          hasPositionRanges && form.use_position_ranges,
         name: form.name.trim(),
         start_date: toISODate(form.start_date),
         end_date: toISODate(form.end_date),
@@ -216,6 +234,30 @@ export default function AddTermPage() {
                   required
                 />
               </div>
+              {hasPositionRanges ? (
+              <div className="col-12 form-group">
+                <div className="form-check">
+                  <input
+                    id="use-position-ranges"
+                    type="checkbox"
+                    className="form-check-input"
+                    checked={form.use_position_ranges}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        use_position_ranges: event.target.checked,
+                      }))
+                    }
+                  />
+                  <label className="form-check-label" htmlFor="use-position-ranges">
+                    Use position ranges for this term
+                  </label>
+                  <small className="form-text text-muted">
+                    When disabled, positions are calculated from students&apos; actual score ranking.
+                  </small>
+                </div>
+              </div>
+              ) : null}
               <div className="col-12 form-group mg-t-8">
                 <button
                   type="submit"
