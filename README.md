@@ -8,30 +8,28 @@
 
 A modern, responsive frontend for the School Management System built with Next.js 15.
 
-## 🚀 Features
+---
 
-- **Modern UI/UX**: Clean, intuitive interface for students, teachers, and administrators
-- **Responsive Design**: Works seamlessly on desktop, tablet, and mobile devices
-- **Real-time Updates**: Live notifications and data synchronization
-- **Dashboard Analytics**: Visual reports and statistics
-- **Multi-role Support**: Different views for Admin, Teacher, and Student roles
+## Features
+- **Modern UI/UX:** Clean, intuitive interface for students, teachers, and administrators
+- **Responsive Design:** Works seamlessly on desktop, tablet, and mobile devices
+- **Real-time Updates:** Live notifications and data synchronization
+- **Dashboard Analytics:** Visual reports and statistics
+- **Multi-role Support:** Different views for Admin, Teacher, and Student roles
 
-## 🛠️ Tech Stack
+## Tech Stack
+- **Framework:** [Next.js 15](https://nextjs.org/) with App Router
+- **Language:** [TypeScript](https://www.typescriptlang.org/)
+- **Styling:** CSS Modules / Tailwind CSS
+- **State Management:** React Context / Zustand
+- **API Integration:** REST API with Laravel Backend
 
-- **Framework**: [Next.js 15](https://nextjs.org/) with App Router
-- **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **Styling**: CSS Modules / Tailwind CSS
-- **State Management**: React Context / Zustand
-- **API Integration**: REST API with Laravel Backend
-
-## 📋 Prerequisites
-
+## Prerequisites
 - Node.js 18.x or higher
 - npm, yarn, pnpm, or bun
 - Git
 
-## 🔧 Installation
-
+## Installation
 1. **Clone the repository**
    ```bash
    git clone https://github.com/Cyfamod-Technologies/school-fe-nextjs.git
@@ -41,8 +39,6 @@ A modern, responsive frontend for the School Management System built with Next.j
 2. **Install dependencies**
    ```bash
    npm install
-   # or
-   yarn install
    ```
 
 3. **Set up environment variables**
@@ -52,7 +48,7 @@ A modern, responsive frontend for the School Management System built with Next.j
    
    Configure the environment variables in `.env.local`:
    ```env
-   NEXT_PUBLIC_API_URL=http://localhost:8000/api
+   NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
    ```
 
 4. **Run the development server**
@@ -62,20 +58,40 @@ A modern, responsive frontend for the School Management System built with Next.j
 
 5. **Open [http://localhost:3000](http://localhost:3000)** in your browser
 
-## 📁 Project Structure
+## Seeded Login Credentials for Local Testing
+When testing the frontend against a seeded local backend, you can log in to the different portals/dashboards using the credentials below:
 
+### 1. School Administrator Portal
+- **Dashboard URL:** /v10/dashboard
+- **Email:** demo@gmail.com
+- **Password:** 12345678
+
+### 2. Teacher and Staff Portal
+- **Dashboard URL:** /v25/staff-dashboard
+- **Email:** folake-balarabe@demointernational.edu.ng
+- **Password:** password
+
+### 3. Student Portal
+- **Dashboard URL:** /v26/student-dashboard (via /student-login page)
+- **Admission Number:** DIS001/2026/1
+- **Password:** 123456
+
+### 4. Parent View
+- **Dashboard URL:** /v10/dashboard (shows parent dashboard layout with linked students)
+- **Email:** chukwuemeka-obi-parent@demointernational.edu.ng
+- **Password:** password
+
+## Project Structure
 ```
 ├── app/                # Next.js App Router pages
 ├── components/         # Reusable UI components
 ├── contexts/           # React Context providers
 ├── lib/                # Utility functions and helpers
 ├── public/             # Static assets
-├── styles/             # Global styles
-└── legacy/             # Legacy code (to be migrated)
+└── styles/             # Global styles
 ```
 
-## 🧪 Available Scripts
-
+## Available Scripts
 ```bash
 npm run dev       # Start development server
 npm run build     # Build for production
@@ -83,19 +99,19 @@ npm run start     # Start production server
 npm run lint      # Run ESLint
 ```
 
-## 🤝 Contributing
+## Common Troubleshooting
+**Issue:** Token mismatch or authorization errors when navigating dashboards.
+**Fix:** Ensure `NEXT_PUBLIC_BACKEND_URL` in `.env.local` matches your running backend instance (usually `http://localhost:8000`). If cookies are blocked, verify your browser allows third-party cookies or run the apps on matching local domains.
 
+## Contributing
 We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before submitting a PR.
 
-## 📄 License
-
+## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🔗 Related Projects
+## Related Projects
+- **Backend API:** [school-be-laravel](https://github.com/Cyfamod-Technologies/school-be-laravel)
 
-- **Backend API**: [school-be-laravel](https://github.com/Cyfamod-Technologies/school-be-laravel)
-
-## 💬 Support
-
+## Support
 - 📫 [Open an Issue](https://github.com/Cyfamod-Technologies/school-fe-nextjs/issues)
 - 💡 [Discussions](https://github.com/Cyfamod-Technologies/school-fe-nextjs/discussions)

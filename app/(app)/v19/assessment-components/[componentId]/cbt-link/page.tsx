@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { apiFetch } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
+import { getErrorMessage } from "@/lib/errors";
 
 type FeedbackKind = "success" | "danger" | "warning" | "info";
 
@@ -158,7 +159,12 @@ export default function CbtAssessmentLinkPage() {
           apiFetch(`/api/v1/cbt/quizzes`),
           apiFetch(`/api/v1/classes`),
           apiFetch(`/api/v1/settings/subjects?per_page=200`),
-        ])) as any[];
+        ])) as [
+          { component?: AssessmentComponent; links?: CbtLink[] },
+          { data?: QuizSummary[] },
+          SchoolClass[] | { data?: SchoolClass[] },
+          Subject[] | { data?: Subject[] },
+        ];
 
         if (!active) {
           return;
@@ -168,8 +174,9 @@ export default function CbtAssessmentLinkPage() {
         setLinks(Array.isArray(linkPayload?.links) ? linkPayload.links : []);
         setQuizzes(Array.isArray(quizPayload?.data) ? quizPayload.data : []);
 
-        const normalize = (payload: any) =>
-          Array.isArray(payload) ? payload : payload?.data ?? [];
+        function normalize<T>(payload: T[] | { data?: T[] } | undefined): T[] {
+          return Array.isArray(payload) ? payload : (payload?.data ?? []);
+        }
 
         setClasses(normalize(classPayload));
         setSubjects(normalize(subjectPayload));
@@ -264,13 +271,12 @@ export default function CbtAssessmentLinkPage() {
       });
       resetForm();
       await refreshLinks();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to create CBT link", error);
       setFeedback({
         type: "danger",
         message:
-          error?.message ??
-          "Unable to create CBT link. Please check the fields.",
+          getErrorMessage(error, "Unable to create CBT link. Please check the fields."),
       });
     } finally {
       setSubmitting(false);
@@ -292,11 +298,11 @@ export default function CbtAssessmentLinkPage() {
       if (selectedLinkId === linkId) {
         await loadPending(linkId);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to import scores", error);
       setFeedback({
         type: "danger",
-        message: error?.message ?? "Failed to import scores.",
+        message: getErrorMessage(error, "Failed to import scores."),
       });
     }
   };
@@ -345,11 +351,11 @@ export default function CbtAssessmentLinkPage() {
       });
       await loadPending(selectedLinkId);
       await refreshLinks();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to approve scores", error);
       setFeedback({
         type: "danger",
-        message: error?.message ?? "Unable to approve scores.",
+        message: getErrorMessage(error, "Unable to approve scores."),
       });
     }
   };
@@ -374,11 +380,11 @@ export default function CbtAssessmentLinkPage() {
       });
       await loadPending(selectedLinkId);
       await refreshLinks();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to reject scores", error);
       setFeedback({
         type: "danger",
-        message: error?.message ?? "Unable to reject scores.",
+        message: getErrorMessage(error, "Unable to reject scores."),
       });
     }
   };
@@ -401,11 +407,11 @@ export default function CbtAssessmentLinkPage() {
         setSelectedLinkId(null);
         setPendingImports([]);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to delete CBT link", error);
       setFeedback({
         type: "danger",
-        message: error?.message ?? "Unable to delete CBT link.",
+        message: getErrorMessage(error, "Unable to delete CBT link."),
       });
     }
   };

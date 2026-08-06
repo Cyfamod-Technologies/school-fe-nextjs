@@ -33,6 +33,9 @@ export default function StaffDashboardPage() {
 
   useEffect(() => {
     if (!canViewDashboard) {
+      // Reset loading state when the reactive dependency (canViewDashboard)
+      // becomes false -- standard effect-driven sync, not a stray setState.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }
@@ -116,7 +119,7 @@ export default function StaffDashboardPage() {
         isText: true,
       },
     ];
-  }, [data]);
+  }, [data, teacherRoleLabel]);
 
   return (
     <>

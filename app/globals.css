@@ -3,7 +3,7 @@ body {
   min-height: 100%;
 }
 /* Permission toggle styling for permission toggles on role/permission pages */
-.custom-control-input.permission-checkbox {
+.permission-checkbox {
   position: relative;
   width: 54px;
   height: 28px;
@@ -15,10 +15,10 @@ body {
   border: 0;
   transition: background .2s ease;
 }
-.custom-control-input.permission-checkbox:checked {
+.permission-checkbox:checked {
   background-color: #0d6efd;
 }
-.custom-control-input.permission-checkbox:before {
+.permission-checkbox:before {
   content: "";
   position: absolute;
   width: 22px;
@@ -29,7 +29,7 @@ body {
   background: white;
   transition: transform .2s ease;
 }
-.custom-control-input.permission-checkbox:checked:before {
+.permission-checkbox:checked:before {
   transform: translateX(26px);
 }
 
@@ -59,24 +59,24 @@ body {
   color: #6c757d;
 }
 /* Improve focus ring for keyboard users */
-.custom-control-input.permission-checkbox:focus-visible {
+.permission-checkbox:focus-visible {
   box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.18);
   outline: none;
 }
 /* Disabled/locked appearance */
-.custom-control-input.permission-checkbox[disabled] {
+.permission-checkbox[disabled] {
   opacity: 0.6;
   cursor: not-allowed;
 }
-.custom-control-input.permission-checkbox[disabled]:before {
+.permission-checkbox[disabled]:before {
   background: #f8f9fa;
 }
 /* Make sure label stacks nicely next to the toggle */
-.custom-control-input.permission-checkbox + .custom-control-label {
+.permission-checkbox + .custom-control-label {
   display: flex;
   flex-direction: column;
 }
-.custom-control-input.permission-checkbox + .custom-control-label .text-muted {
+.permission-checkbox + .custom-control-label .text-muted {
   margin-left: 0;
 }
 
@@ -87,17 +87,17 @@ body {
 
 /* Slightly larger hit target on small screens */
 @media (max-width: 576px) {
-  .custom-control-input.permission-checkbox {
+  .permission-checkbox {
     width: 46px;
     height: 26px;
   }
-  .custom-control-input.permission-checkbox:before {
+  .permission-checkbox:before {
     width: 20px;
     height: 20px;
     left: 3px;
     top: 3px;
   }
-  .custom-control-input.permission-checkbox:checked:before {
+  .permission-checkbox:checked:before {
     transform: translateX(20px);
   }
 }

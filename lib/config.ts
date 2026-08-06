@@ -39,6 +39,45 @@ function requireStorageUrl(): string {
 
 export const STORAGE_URL = requireStorageUrl();
 
+// Optional: base URL of the public school-website app (school-public-web),
+// used only to build "view public website" links. Not required for the
+// rest of the app to function, so it falls back rather than throwing.
+//
+// Defaults to port 3001, NOT 3000 -- school-public-web pins its dev/start
+// scripts to 3001 specifically to avoid colliding with this app (both
+// default to Next.js's port 3000 otherwise). If this default is ever
+// changed back to 3000, the "View Public Website" link will silently
+// point at this app instead of school-public-web.
+export const PUBLIC_SITE_URL = (
+  process.env.NEXT_PUBLIC_PUBLIC_SITE_URL || "http://localhost:3001"
+).replace(/\/$/, "");
+
+export function publicWebsiteUrl(schoolSlug: string | null | undefined): string | null {
+  if (!schoolSlug) {
+    return null;
+  }
+  return `${PUBLIC_SITE_URL}/schools/${encodeURIComponent(schoolSlug)}`;
+}
+
+/**
+ * Converts a signed backend preview URL (from
+ * POST /api/v1/school/website/preview-link, e.g.
+ * http://backend/api/v1/public/schools/{slug}/website/preview?expires=..&signature=..)
+ * into the equivalent school-public-web page URL, forwarding the same
+ * expires/signature query params so public-web's server-side fetch can
+ * pass them straight through to Laravel, which validates them.
+ */
+export function publicWebsitePreviewUrl(
+  schoolSlug: string | null | undefined,
+  backendSignedUrl: string,
+): string | null {
+  if (!schoolSlug) {
+    return null;
+  }
+  const query = backendSignedUrl.split("?")[1] ?? "";
+  return `${PUBLIC_SITE_URL}/schools/${encodeURIComponent(schoolSlug)}/preview${query ? `?${query}` : ""}`;
+}
+
 const SCHOOL_REGISTRATION_FLAG = (
   process.env.NEXT_PUBLIC_SCHOOL_REGISTRATION ?? "off"
 )
@@ -102,6 +141,9 @@ export const API_ROUTES = {
   logoutOtherDevices: "/api/v1/logout/other-devices",
   currentUser: "/api/v1/user",
   schoolContext: "/api/v1/school",
+  schoolWebsite: "/api/v1/school/website",
+  schoolWebsitePreviewLink: "/api/v1/school/website/preview-link",
+  schoolWebsiteGoLive: "/api/v1/school/website/go-live",
   classes: "/api/v1/classes",
   parents: "/api/v1/parents",
   parentsSearch: "/api/v1/parents",

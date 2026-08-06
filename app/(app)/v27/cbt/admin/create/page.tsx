@@ -1,9 +1,11 @@
 'use client';
+import Link from "next/link";
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/apiClient';
+import { getErrorMessage } from "@/lib/errors";
 
 interface QuizFormData {
   title: string;
@@ -76,7 +78,7 @@ export default function CreateQuizPage() {
         const classesRes = await apiFetch<{ data: Class[] }>('/api/v1/classes');
         setClasses(Array.isArray(classesRes) ? classesRes : classesRes.data || []);
         setError(null);
-      } catch (err: any) {
+      } catch (err) {
         setError('Failed to load classes');
         console.error('Error loading data:', err);
       } finally {
@@ -128,10 +130,10 @@ export default function CreateQuizPage() {
             return prev;
           });
         }
-      } catch (err: any) {
+      } catch (err) {
         if (!cancelled) {
           setSubjects([]);
-          setSubjectsError(err.message || 'Failed to load subjects for the selected class.');
+          setSubjectsError(getErrorMessage(err, 'Failed to load subjects for the selected class.'));
         }
       } finally {
         if (!cancelled) {
@@ -274,8 +276,8 @@ export default function CreateQuizPage() {
       setTimeout(() => {
         router.push('/v27/cbt/admin');
       }, 2000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to create quiz');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to create quiz'));
       console.error('Error creating quiz:', err);
     } finally {
       setLoading(false);
@@ -312,7 +314,7 @@ export default function CreateQuizPage() {
         <h3>Create New Quiz</h3>
         <ul>
           <li>
-            <a href="/v27/cbt/admin">Quiz Management</a>
+            <Link href="/v27/cbt/admin">Quiz Management</Link>
           </li>
           <li>Create New Quiz</li>
         </ul>

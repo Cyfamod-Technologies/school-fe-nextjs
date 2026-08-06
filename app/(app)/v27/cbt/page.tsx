@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { StudentAuthProvider, useStudentAuth } from '@/contexts/StudentAuthContext';
 import { apiFetch } from '@/lib/apiClient';
+import { getErrorMessage } from "@/lib/errors";
 
 interface Quiz {
   id: string;
@@ -114,8 +115,8 @@ function StudentQuizPortal() {
         });
         setQuizzes(response.data || []);
         setError(null);
-      } catch (err: any) {
-        setError(err.message || 'Failed to load quizzes');
+      } catch (err) {
+        setError(getErrorMessage(err, 'Failed to load quizzes'));
       } finally {
         setLoading(false);
       }

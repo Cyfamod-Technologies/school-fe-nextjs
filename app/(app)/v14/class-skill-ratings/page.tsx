@@ -132,9 +132,12 @@ export default function ClassSkillRatingsPage() {
         const mapped: StudentSkillType[] = types.map((type) => ({
           id: String(type.id),
           name: String(type.name ?? ""),
-          description: (type as any).description ?? null,
-          skill_category_id: (type as any).skill_category_id ?? "",
-          category: (type as any).category ?? null,
+          description: type.description ?? null,
+          skill_category_id:
+            type.skill_category_id !== undefined && type.skill_category_id !== null
+              ? String(type.skill_category_id)
+              : "",
+          category: type.category ?? null,
         }));
         setSkillTypes(mapped);
       } catch (err) {
@@ -394,7 +397,7 @@ export default function ClassSkillRatingsPage() {
           } else if (field === "skillTypeId") {
             next.skillTypeId = value;
           } else {
-            (next as any)[field] = value;
+            next[field] = value;
           }
           return next;
         });
