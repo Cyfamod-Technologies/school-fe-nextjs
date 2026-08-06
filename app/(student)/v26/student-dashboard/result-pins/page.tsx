@@ -141,8 +141,8 @@ export default function StudentResultPinsPage() {
                     <td><code>{pin.pin_code ?? "—"}</code></td>
                     <td>{formatUsage(pin)}</td>
                     <td>
-                      <span className={badgeClass(pin.status)}>
-                        {pin.status ?? "Active"}
+                      <span className={badgeClass(pin.effective_status ?? pin.status)}>
+                        {(pin.effective_status ?? pin.status ?? "active").replace("_", " ")}
                       </span>
                     </td>
                     <td>{formatDate(pin.expires_at)}</td>
