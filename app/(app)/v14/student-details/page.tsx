@@ -1671,7 +1671,7 @@ export default function StudentDetailsPage() {
     if (!studentId || isTeacher || resettingStudentPassword) return;
 
     const confirmed = window.confirm(
-      `Reset ${fullName || "this student"}'s portal password to 123456? The student will need to sign in again.`,
+      `Reset ${fullName || "this student"}'s portal password to the default password? The student will need to sign in again.`,
     );
     if (!confirmed) return;
 
@@ -1682,7 +1682,7 @@ export default function StudentDetailsPage() {
     try {
       const response = await resetStudentPassword(studentId);
       setPasswordResetFeedback(
-        response.message || "Student password reset to 123456 successfully.",
+        response.message || "Student password reset successfully.",
       );
     } catch (err) {
       setPasswordResetError(
