@@ -75,12 +75,16 @@ export interface School {
 export interface Session {
   id: number;
   name: string;
+  start_date?: string | null;
+  end_date?: string | null;
   [key: string]: unknown;
 }
 
 export interface Term {
   id: number;
   name: string;
+  start_date?: string | null;
+  end_date?: string | null;
   [key: string]: unknown;
 }
 

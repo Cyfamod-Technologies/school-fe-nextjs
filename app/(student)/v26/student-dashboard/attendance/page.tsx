@@ -34,6 +34,23 @@ function shiftMonth(value: string, amount: number): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function dateMonth(value?: string | null): string | null {
+  const match = value?.match(/^(\d{4}-\d{2})/);
+  return match?.[1] ?? null;
+}
+
+function clampMonthToTerm(
+  value: string,
+  term?: { start_date?: string | null; end_date?: string | null },
+): string {
+  const firstMonth = dateMonth(term?.start_date);
+  const lastMonth = dateMonth(term?.end_date);
+
+  if (firstMonth && value < firstMonth) return firstMonth;
+  if (lastMonth && value > lastMonth) return lastMonth;
+  return value;
+}
+
 export default function StudentAttendancePage() {
   const { student } = useStudentAuth();
   const [sessions, setSessions] = useState<StudentSessionOption[]>([]);
@@ -65,6 +82,9 @@ export default function StudentAttendancePage() {
 
         setSessionId(preferredSession ? String(preferredSession.id) : "");
         setTermId(preferredTerm ? String(preferredTerm.id) : "");
+        if (preferredTerm) {
+          setMonth((value) => clampMonthToTerm(value, preferredTerm));
+        }
       })
       .catch((optionsError) => {
         if (cancelled) return;
@@ -119,7 +139,38 @@ export default function StudentAttendancePage() {
     () => sessions.find((session) => String(session.id) === sessionId),
     [sessions, sessionId],
   );
-  const terms = selectedSession?.terms ?? [];
+  const terms = useMemo(() => selectedSession?.terms ?? [], [selectedSession]);
+  const selectedTerm = useMemo(
+    () => terms.find((term) => String(term.id) === termId),
+    [terms, termId],
+  );
+  const firstTermMonth = dateMonth(selectedTerm?.start_date);
+  const lastTermMonth = dateMonth(selectedTerm?.end_date);
+
+  const showMonthRangeError = (direction: "before" | "after") => {
+    const boundary = direction === "before" ? selectedTerm?.start_date : selectedTerm?.end_date;
+    const message = direction === "before"
+      ? `You cannot move before ${selectedTerm?.name ?? "this term"} starts${boundary ? ` (${boundary})` : ""}.`
+      : `You cannot move past ${selectedTerm?.name ?? "this term"} ends${boundary ? ` (${boundary})` : ""}.`;
+
+    setError(message);
+    window.alert(message);
+  };
+
+  const changeCalendarMonth = (candidate: string) => {
+    if (firstTermMonth && candidate < firstTermMonth) {
+      showMonthRangeError("before");
+      return;
+    }
+    if (lastTermMonth && candidate > lastTermMonth) {
+      showMonthRangeError("after");
+      return;
+    }
+
+    setError(null);
+    setLoadingAttendance(true);
+    setMonth(candidate);
+  };
 
   const daysByDate = useMemo(() => {
     const map = new Map<string, StudentAttendanceDay>();
@@ -188,11 +239,11 @@ export default function StudentAttendancePage() {
                   );
                   setSessionId(nextSessionId);
                   setLoadingAttendance(true);
-                  setTermId(
-                    nextSession?.terms?.[0]
-                      ? String(nextSession.terms[0].id)
-                      : "",
-                  );
+                  const nextTerm = nextSession?.terms?.[0];
+                  setTermId(nextTerm ? String(nextTerm.id) : "");
+                  if (nextTerm) {
+                    setMonth((value) => clampMonthToTerm(value, nextTerm));
+                  }
                 }}
               >
                 <option value="">Select session</option>
@@ -211,8 +262,14 @@ export default function StudentAttendancePage() {
                 value={termId}
                 disabled={!sessionId || loadingOptions}
                 onChange={(event) => {
+                  const nextTerm = terms.find(
+                    (term) => String(term.id) === event.target.value,
+                  );
                   setLoadingAttendance(true);
                   setTermId(event.target.value);
+                  if (nextTerm) {
+                    setMonth((value) => clampMonthToTerm(value, nextTerm));
+                  }
                 }}
               >
                 <option value="">Select term</option>
@@ -230,10 +287,9 @@ export default function StudentAttendancePage() {
                 type="month"
                 className="form-control"
                 value={month}
-                onChange={(event) => {
-                  setLoadingAttendance(true);
-                  setMonth(event.target.value);
-                }}
+                min={firstTermMonth ?? undefined}
+                max={lastTermMonth ?? undefined}
+                onChange={(event) => changeCalendarMonth(event.target.value)}
               />
             </div>
           </div>
@@ -266,10 +322,7 @@ export default function StudentAttendancePage() {
             <button
               type="button"
               className="btn btn-outline-secondary btn-sm"
-              onClick={() => {
-                setLoadingAttendance(true);
-                setMonth((value) => shiftMonth(value, -1));
-              }}
+              onClick={() => changeCalendarMonth(shiftMonth(month, -1))}
             >
               Previous
             </button>
@@ -277,10 +330,7 @@ export default function StudentAttendancePage() {
             <button
               type="button"
               className="btn btn-outline-secondary btn-sm"
-              onClick={() => {
-                setLoadingAttendance(true);
-                setMonth((value) => shiftMonth(value, 1));
-              }}
+              onClick={() => changeCalendarMonth(shiftMonth(month, 1))}
             >
               Next
             </button>

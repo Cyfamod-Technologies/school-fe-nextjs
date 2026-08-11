@@ -4,7 +4,12 @@ export interface StudentSessionOption {
   id: string;
   name: string;
   start_date?: string | null;
-  terms?: Array<{ id: string; name: string }>;
+  terms?: Array<{
+    id: string;
+    name: string;
+    start_date?: string | null;
+    end_date?: string | null;
+  }>;
 }
 
 export interface StudentResultComponent {

@@ -31,6 +31,9 @@ const todayLocal = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
 
+const earlierDate = (first: string, second: string) =>
+  first < second ? first : second;
+
 const studentName = (student: StudentSummary) =>
   [student.first_name, student.middle_name, student.last_name]
     .filter(Boolean)
@@ -103,6 +106,56 @@ export default function ClassTeacherAttendancePage() {
     [classTeacherAssignments, selectedContextKey],
   );
 
+  const termStartDate = schoolContext?.current_term?.start_date ?? "";
+  const termEndDate = schoolContext?.current_term?.end_date ?? "";
+  const latestAttendanceDate = termEndDate
+    ? earlierDate(termEndDate, todayLocal())
+    : todayLocal();
+
+  const termDateError = useCallback(
+    (candidateDate: string) => {
+      if (termStartDate && candidateDate < termStartDate) {
+        return `Attendance date cannot be before the current term starts on ${termStartDate}.`;
+      }
+      if (termEndDate && candidateDate > termEndDate) {
+        return `Attendance date cannot be after the current term ends on ${termEndDate}.`;
+      }
+      if (candidateDate > todayLocal()) {
+        return "Attendance cannot be recorded for a future date.";
+      }
+      return null;
+    },
+    [termEndDate, termStartDate],
+  );
+
+  const changeAttendanceDate = useCallback(
+    (candidateDate: string) => {
+      const validationError = termDateError(candidateDate);
+      if (validationError) {
+        window.alert(validationError);
+        setError(validationError);
+        return;
+      }
+
+      setError(null);
+      setDate(candidateDate);
+    },
+    [termDateError],
+  );
+
+  useEffect(() => {
+    if (!termStartDate && !termEndDate) return;
+
+    const validationError = termDateError(date);
+    if (!validationError) return;
+
+    if (termEndDate && date > termEndDate) {
+      setDate(latestAttendanceDate);
+    } else if (termStartDate && date < termStartDate && termStartDate <= todayLocal()) {
+      setDate(termStartDate);
+    }
+  }, [date, latestAttendanceDate, termDateError, termEndDate, termStartDate]);
+
   const counts = useMemo(
     () => ({
       total: rows.length,
@@ -129,8 +182,14 @@ export default function ClassTeacherAttendancePage() {
       setError("The school must set a current session and term before attendance can be taken.");
       return;
     }
-    if (!date || date > todayLocal()) {
-      setError("Choose today or an earlier date.");
+    if (!date) {
+      setError("Choose an attendance date.");
+      return;
+    }
+    const validationError = termDateError(date);
+    if (validationError) {
+      window.alert(validationError);
+      setError(validationError);
       return;
     }
 
@@ -199,7 +258,7 @@ export default function ClassTeacherAttendancePage() {
     } finally {
       setLoadingRoster(false);
     }
-  }, [date, schoolContext, selectedAssignment]);
+  }, [date, schoolContext, selectedAssignment, termDateError]);
 
   const saveStatus = async (studentId: number | string, status: "present" | "absent") => {
     const key = String(studentId);
@@ -308,9 +367,15 @@ export default function ClassTeacherAttendancePage() {
                   type="date"
                   className="form-control"
                   value={date}
-                  max={todayLocal()}
-                  onChange={(event) => setDate(event.target.value)}
+                  min={termStartDate || undefined}
+                  max={latestAttendanceDate}
+                  onChange={(event) => changeAttendanceDate(event.target.value)}
                 />
+                {termStartDate && termEndDate ? (
+                  <small className="form-text text-muted">
+                    Allowed dates: {termStartDate} to {termEndDate}
+                  </small>
+                ) : null}
               </div>
             </div>
 
