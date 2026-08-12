@@ -36,6 +36,8 @@ export interface StudentAttendanceHistory {
     end_date?: string | null;
   };
   month: string;
+  attendance_entry_mode: "daily" | "manual";
+  summary_scope: "month" | "term";
   summary: StudentAttendanceSummary;
   days: StudentAttendanceDay[];
 }

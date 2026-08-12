@@ -105,6 +105,8 @@ export default function ClassTeacherAttendancePage() {
       ) ?? null,
     [classTeacherAssignments, selectedContextKey],
   );
+  const dailyAttendanceLocked =
+    schoolContext?.current_term?.attendance_entry_mode === "manual";
 
   const termStartDate = schoolContext?.current_term?.start_date ?? "";
   const termEndDate = schoolContext?.current_term?.end_date ?? "";
@@ -174,6 +176,10 @@ export default function ClassTeacherAttendancePage() {
   );
 
   const loadRoster = useCallback(async () => {
+    if (dailyAttendanceLocked) {
+      setError("Daily attendance is locked because Manual Summary is selected for the current term.");
+      return;
+    }
     if (!selectedAssignment?.class?.id) {
       setError("Select an assigned class before continuing.");
       return;
@@ -258,9 +264,10 @@ export default function ClassTeacherAttendancePage() {
     } finally {
       setLoadingRoster(false);
     }
-  }, [date, schoolContext, selectedAssignment, termDateError]);
+  }, [dailyAttendanceLocked, date, schoolContext, selectedAssignment, termDateError]);
 
   const saveStatus = async (studentId: number | string, status: "present" | "absent") => {
+    if (dailyAttendanceLocked) return;
     const key = String(studentId);
     const current = rows.find((row) => String(row.student.id) === key);
     if (!current || current.saving || current.savedStatus === status) return;
@@ -342,6 +349,11 @@ export default function ClassTeacherAttendancePage() {
           Attendance is available only to assigned class teachers. No current class-teacher assignment was found for your account.
         </div>
       ) : null}
+      {!loading && dailyAttendanceLocked ? (
+        <div className="alert alert-warning" role="alert">
+          Daily Register is locked because the administrator selected Manual Summary for the current term.
+        </div>
+      ) : null}
 
       {!loading && step === "setup" && classTeacherAssignments.length > 0 ? (
         <div className="card height-auto">
@@ -370,6 +382,7 @@ export default function ClassTeacherAttendancePage() {
                   min={termStartDate || undefined}
                   max={latestAttendanceDate}
                   onChange={(event) => changeAttendanceDate(event.target.value)}
+                  disabled={dailyAttendanceLocked}
                 />
                 {termStartDate && termEndDate ? (
                   <small className="form-text text-muted">
@@ -389,6 +402,7 @@ export default function ClassTeacherAttendancePage() {
                       type="button"
                       className={`class-choice ${selected ? "is-selected" : ""}`}
                       onClick={() => setSelectedContextKey(assignment.context_key)}
+                      disabled={dailyAttendanceLocked}
                       aria-pressed={selected}
                     >
                       <strong>{assignment.class?.name ?? "Unnamed class"}</strong>
@@ -404,7 +418,7 @@ export default function ClassTeacherAttendancePage() {
               <button
                 type="button"
                 className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                disabled={!selectedAssignment || loadingRoster}
+                disabled={!selectedAssignment || loadingRoster || dailyAttendanceLocked}
                 onClick={() => void loadRoster()}
               >
                 {loadingRoster ? "Loading Students…" : "Continue"}

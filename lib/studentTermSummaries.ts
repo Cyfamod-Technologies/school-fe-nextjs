@@ -7,6 +7,7 @@ export interface StudentTermSummary {
   principal_comment_options?: string[];
   days_present?: number | null;
   days_absent?: number | null;
+  attendance_entry_mode?: "daily" | "manual";
   [key: string]: unknown;
 }
 
@@ -118,6 +119,8 @@ function extractSummary(
         : [],
       days_present: (payload as StudentTermSummary).days_present ?? null,
       days_absent: (payload as StudentTermSummary).days_absent ?? null,
+      attendance_entry_mode:
+        (payload as StudentTermSummary).attendance_entry_mode ?? "daily",
     };
   }
   const wrapper = payload as TermSummaryResponse;
@@ -137,6 +140,7 @@ function extractSummary(
         : [],
       days_present: wrapper.data.days_present ?? null,
       days_absent: wrapper.data.days_absent ?? null,
+      attendance_entry_mode: wrapper.data.attendance_entry_mode ?? "daily",
     };
   }
   return { ...EMPTY_SUMMARY };

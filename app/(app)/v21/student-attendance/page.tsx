@@ -16,6 +16,8 @@ import {
   deleteStudentAttendance,
   listStudentAttendance,
   saveStudentAttendance,
+  updateAttendanceEntryMode,
+  type AttendanceEntryMode,
   type StudentAttendanceRecord,
   type StudentAttendanceExportFilters,
 } from "@/lib/attendance";
@@ -24,7 +26,7 @@ import {
   updateStudentTermSummaryBatch,
   type StudentTermSummaryBatchRow,
 } from "@/lib/studentTermSummaries";
-import { isTeacherUser } from "@/lib/roleChecks";
+import { isAdminUser, isTeacherUser } from "@/lib/roleChecks";
 
 type FeedbackKind = "success" | "danger" | "warning" | "info";
 
@@ -79,6 +81,7 @@ export default function StudentAttendancePage() {
   const { user, schoolContext } = useAuth();
 
   const isTeacher = isTeacherUser(user);
+  const isAdmin = isAdminUser(user);
 
   const lockSessionAndTerm = isTeacher;
 
@@ -110,6 +113,8 @@ export default function StudentAttendancePage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const [modeSaving, setModeSaving] = useState(false);
+  const [modeFeedback, setModeFeedback] = useState<FeedbackState | null>(null);
   const [manualRows, setManualRows] = useState<ManualResultAttendanceRow[]>([]);
   const [manualLoading, setManualLoading] = useState(false);
   const [manualSaving, setManualSaving] = useState(false);
@@ -220,6 +225,12 @@ export default function StudentAttendancePage() {
     () => termsCache[filters.sessionId] ?? [],
     [termsCache, filters.sessionId],
   );
+  const selectedTerm = useMemo(
+    () => terms.find((term) => String(term.id) === filters.termId) ?? null,
+    [filters.termId, terms],
+  );
+  const attendanceEntryMode: AttendanceEntryMode =
+    selectedTerm?.attendance_entry_mode === "manual" ? "manual" : "daily";
   const arms = useMemo(
     () => (filters.classId ? armsCache[filters.classId] ?? [] : []),
     [armsCache, filters.classId],
@@ -295,6 +306,13 @@ export default function StudentAttendancePage() {
 
   const loadStudents = useCallback(async () => {
     resetFeedback();
+    if (attendanceEntryMode !== "daily") {
+      setFeedback({
+        type: "warning",
+        message: "Daily attendance is locked because Manual Summary is selected.",
+      });
+      return;
+    }
     if (!date) {
       setFeedback({
         type: "warning",
@@ -360,8 +378,8 @@ export default function StudentAttendancePage() {
         const existingMetadata =
           (existing as StudentAttendanceRecord | undefined)?.metadata ?? null;
         const existingComment =
-          existingMetadata && typeof (existingMetadata as any).comment === "string"
-            ? String((existingMetadata as any).comment)
+          existingMetadata && typeof existingMetadata.comment === "string"
+            ? String(existingMetadata.comment)
             : "";
         nextMap[key] = {
           status: (existing?.status as StudentAttendanceStatus) ?? "",
@@ -384,10 +402,15 @@ export default function StudentAttendancePage() {
     } finally {
       setLoading(false);
     }
-  }, [date, filters.classId, filters.armId, filters.sessionId, filters.termId]);
+  }, [attendanceEntryMode, date, filters.classId, filters.armId, filters.sessionId, filters.termId, resetFeedback]);
 
   const loadManualAttendance = useCallback(async () => {
-    if (!filters.sessionId || !filters.termId || !filters.classId) {
+    if (
+      attendanceEntryMode !== "manual" ||
+      !filters.sessionId ||
+      !filters.termId ||
+      !filters.classId
+    ) {
       setManualRows([]);
       return;
     }
@@ -441,6 +464,8 @@ export default function StudentAttendancePage() {
     filters.classId,
     filters.sessionId,
     filters.termId,
+    attendanceEntryMode,
+    resetManualFeedback,
   ]);
 
   useEffect(() => {
@@ -457,6 +482,7 @@ export default function StudentAttendancePage() {
     filters.sessionId,
     filters.termId,
     loadManualAttendance,
+    attendanceEntryMode,
   ]);
 
   useEffect(() => {
@@ -494,6 +520,7 @@ export default function StudentAttendancePage() {
   };
 
   const handleClearStatus = async (studentId: number | string) => {
+    if (attendanceEntryMode !== "daily") return;
     const key = String(studentId);
     const state = attendanceMap[key];
     if (!state) {
@@ -539,6 +566,7 @@ export default function StudentAttendancePage() {
   };
 
   const handleBulkUpdate = (status: StudentAttendanceStatus) => {
+    if (attendanceEntryMode !== "daily") return;
     setAttendanceMap((prev) => {
       const next: Record<string, AttendanceState> = {};
       Object.entries(prev).forEach(([key, value]) => {
@@ -554,6 +582,7 @@ export default function StudentAttendancePage() {
   const runManualAutoSave = useCallback(async () => {
     resetManualFeedback();
 
+    if (attendanceEntryMode !== "manual") return;
     if (!filters.sessionId || !filters.termId || !filters.classId) {
       return;
     }
@@ -657,6 +686,7 @@ export default function StudentAttendancePage() {
     filters.sessionId,
     filters.termId,
     resetManualFeedback,
+    attendanceEntryMode,
   ]);
 
   const scheduleManualAutoSave = useCallback(() => {
@@ -727,6 +757,13 @@ export default function StudentAttendancePage() {
 
   const handleSave = async () => {
     resetFeedback();
+    if (attendanceEntryMode !== "daily") {
+      setFeedback({
+        type: "warning",
+        message: "Daily attendance is locked because Manual Summary is selected.",
+      });
+      return;
+    }
     if (!date) {
       setFeedback({
         type: "warning",
@@ -798,6 +835,57 @@ export default function StudentAttendancePage() {
     window.open(url, "_blank");
   };
 
+  const handleModeChange = async (nextMode: AttendanceEntryMode) => {
+    if (!filters.sessionId || !filters.termId || nextMode === attendanceEntryMode) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      nextMode === "manual"
+        ? "Switch to Manual Summary? Daily attendance entry will be locked for this term. Existing daily records will be preserved."
+        : "Switch to Daily Register? Manual attendance entry will be hidden and locked for this term. Existing manual values will be preserved.",
+    );
+    if (!confirmed) return;
+
+    setModeSaving(true);
+    setModeFeedback(null);
+    try {
+      const updated = await updateAttendanceEntryMode({
+        session_id: filters.sessionId,
+        term_id: filters.termId,
+        attendance_entry_mode: nextMode,
+      });
+      setTermsCache((current) => ({
+        ...current,
+        [filters.sessionId]: (current[filters.sessionId] ?? []).map((term) =>
+          String(term.id) === filters.termId
+            ? { ...term, attendance_entry_mode: updated.attendance_entry_mode }
+            : term,
+        ),
+      }));
+      setStudents([]);
+      setAttendanceMap({});
+      setCurrentRecords({});
+      setModeFeedback({
+        type: "success",
+        message:
+          nextMode === "manual"
+            ? "Manual Summary is active. Daily attendance entry is locked."
+            : "Daily Register is active. Manual attendance entry is locked.",
+      });
+    } catch (error) {
+      setModeFeedback({
+        type: "danger",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to update attendance entry mode.",
+      });
+    } finally {
+      setModeSaving(false);
+    }
+  };
+
   const summaryLabel = useMemo(() => {
     if (!students.length || !date) {
       return "No students loaded.";
@@ -829,14 +917,16 @@ export default function StudentAttendancePage() {
                 type="button"
                 className="btn btn-outline-secondary btn-sm"
                 onClick={() => {
-                  loadStudents().catch((error) =>
-                    console.error(error),
-                  );
+                  if (attendanceEntryMode === "manual") {
+                    loadManualAttendance().catch((error) => console.error(error));
+                  } else {
+                    loadStudents().catch((error) => console.error(error));
+                  }
                   loadRecentAttendance().catch((error) =>
                     console.error(error),
                   );
                 }}
-                disabled={loading}
+                disabled={loading || manualLoading}
               >
                 <i className="fas fa-sync-alt mr-1" />
                 Refresh
@@ -935,13 +1025,54 @@ export default function StudentAttendancePage() {
             </div>
           </div>
 
+          <div className="border rounded p-3 mb-3">
+            <div className="d-flex flex-wrap justify-content-between align-items-center">
+              <div className="mr-3 mb-2">
+                <strong>Attendance Entry Mode</strong>
+                <div className="text-muted small">
+                  This setting applies only to the selected session and term.
+                </div>
+              </div>
+              <div className="attendance-mode-switch mb-2" role="group" aria-label="Attendance entry mode">
+                <button
+                  type="button"
+                  className={`btn attendance-mode-button ${attendanceEntryMode === "daily" ? "btn-primary" : "btn-outline-primary"}`}
+                  onClick={() => void handleModeChange("daily")}
+                  disabled={!isAdmin || modeSaving || !filters.sessionId || !filters.termId}
+                  aria-pressed={attendanceEntryMode === "daily"}
+                >
+                  Daily Register
+                </button>
+                <button
+                  type="button"
+                  className={`btn attendance-mode-button ${attendanceEntryMode === "manual" ? "btn-primary" : "btn-outline-primary"}`}
+                  onClick={() => void handleModeChange("manual")}
+                  disabled={!isAdmin || modeSaving || !filters.sessionId || !filters.termId}
+                  aria-pressed={attendanceEntryMode === "manual"}
+                >
+                  Manual Summary
+                </button>
+              </div>
+            </div>
+            {!filters.sessionId || !filters.termId ? (
+              <div className="text-warning small">Select a session and term to configure the mode.</div>
+            ) : !isAdmin ? (
+              <div className="text-muted small">Only a school administrator can change this setting.</div>
+            ) : null}
+            {modeFeedback ? (
+              <div className={`alert alert-${modeFeedback.type} mt-2 mb-0`} role="alert">
+                {modeFeedback.message}
+              </div>
+            ) : null}
+          </div>
+
           <div className="d-flex align-items-center flex-wrap">
             <button
               id="attendance-load-students"
               type="button"
               className="btn btn-outline-primary mr-3 mb-2"
               onClick={() => loadStudents().catch((error) => console.error(error))}
-              disabled={loading}
+              disabled={loading || attendanceEntryMode !== "daily"}
             >
               {loading ? "Loading..." : "Load Students"}
             </button>
@@ -951,6 +1082,7 @@ export default function StudentAttendancePage() {
                 className="btn btn-sm btn-outline-secondary"
                 data-bulk-status="present"
                 onClick={() => handleBulkUpdate("present")}
+                disabled={attendanceEntryMode !== "daily"}
               >
                 All Present
               </button>
@@ -959,6 +1091,7 @@ export default function StudentAttendancePage() {
                 className="btn btn-sm btn-outline-secondary"
                 data-bulk-status="absent"
                 onClick={() => handleBulkUpdate("absent")}
+                disabled={attendanceEntryMode !== "daily"}
               >
                 All Absent
               </button>
@@ -967,6 +1100,7 @@ export default function StudentAttendancePage() {
                 className="btn btn-sm btn-outline-secondary"
                 data-bulk-status="late"
                 onClick={() => handleBulkUpdate("late")}
+                disabled={attendanceEntryMode !== "daily"}
               >
                 All Late
               </button>
@@ -977,6 +1111,7 @@ export default function StudentAttendancePage() {
                 type="button"
                 className="btn btn-sm btn-outline-success"
                 onClick={() => handleExport("csv")}
+                disabled={attendanceEntryMode !== "daily"}
               >
                 Export CSV
               </button>
@@ -985,6 +1120,7 @@ export default function StudentAttendancePage() {
                 type="button"
                 className="btn btn-sm btn-outline-success"
                 onClick={() => handleExport("pdf")}
+                disabled={attendanceEntryMode !== "daily"}
               >
                 Export PDF
               </button>
@@ -1002,6 +1138,7 @@ export default function StudentAttendancePage() {
         </div>
       </div>
 
+      {attendanceEntryMode === "manual" ? (
       <div className="card mt-4">
         <div className="card-body">
           <div className="heading-layout1">
@@ -1169,9 +1306,15 @@ export default function StudentAttendancePage() {
           </div>
         </div>
       </div>
+      ) : null}
 
       <div className="card">
         <div className="card-body">
+          {attendanceEntryMode === "manual" ? (
+            <div className="alert alert-warning" role="alert">
+              Daily attendance is locked because Manual Summary is selected for this term.
+            </div>
+          ) : null}
           <div className="d-flex justify-content-between align-items-center flex-wrap mb-3">
             <div>
               <strong id="student-attendance-summary">{summaryLabel}</strong>
@@ -1230,6 +1373,7 @@ export default function StudentAttendancePage() {
                                 event.target.value as StudentAttendanceStatus,
                               )
                             }
+                            disabled={attendanceEntryMode !== "daily"}
                           >
                             {STATUS_OPTIONS.map((option) => (
                               <option key={option.value || "empty"} value={option.value}>
@@ -1247,6 +1391,7 @@ export default function StudentAttendancePage() {
                               handleCommentChange(student.id, event.target.value)
                             }
                             placeholder="Add comment"
+                            disabled={attendanceEntryMode !== "daily"}
                           />
                         </td>
                         <td>
@@ -1259,6 +1404,7 @@ export default function StudentAttendancePage() {
                             type="button"
                             className="btn btn-sm btn-outline-secondary"
                             onClick={() => handleClearStatus(student.id)}
+                            disabled={attendanceEntryMode !== "daily"}
                           >
                             {state.recordId ? "Clear Record" : "Reset"}
                           </button>
@@ -1286,7 +1432,7 @@ export default function StudentAttendancePage() {
               type="button"
               className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
               onClick={() => handleSave().catch((error) => console.error(error))}
-              disabled={saving}
+              disabled={saving || attendanceEntryMode !== "daily"}
             >
               {saving ? "Saving..." : "Save Attendance"}
             </button>
@@ -1326,8 +1472,8 @@ export default function StudentAttendancePage() {
                       <td>
                         {record.metadata &&
                         typeof record.metadata === "object" &&
-                        (record.metadata as any).comment
-                          ? String((record.metadata as any).comment)
+                        record.metadata.comment
+                          ? String(record.metadata.comment)
                           : "—"}
                       </td>
                       <td>{record.recorded_by?.name ?? "—"}</td>
@@ -1345,6 +1491,35 @@ export default function StudentAttendancePage() {
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        .attendance-mode-switch {
+          display: flex;
+          gap: 0.75rem;
+        }
+
+        .attendance-mode-button {
+          min-width: 190px;
+          min-height: 54px;
+          padding: 0.8rem 1.5rem;
+          border-width: 2px;
+          border-radius: 8px;
+          font-size: 1rem;
+          font-weight: 700;
+        }
+
+        @media (max-width: 575.98px) {
+          .attendance-mode-switch {
+            width: 100%;
+            flex-direction: column;
+          }
+
+          .attendance-mode-button {
+            width: 100%;
+            min-width: 0;
+          }
+        }
+      `}</style>
     </>
   );
 }

@@ -144,6 +144,10 @@ export default function StudentAttendancePage() {
     () => terms.find((term) => String(term.id) === termId),
     [terms, termId],
   );
+  const attendanceEntryMode =
+    attendance?.attendance_entry_mode ??
+    selectedTerm?.attendance_entry_mode ??
+    "daily";
   const firstTermMonth = dateMonth(selectedTerm?.start_date);
   const lastTermMonth = dateMonth(selectedTerm?.end_date);
 
@@ -217,7 +221,9 @@ export default function StudentAttendancePage() {
             <div className="item-title">
               <h3>Attendance Filters</h3>
               <p className="text-muted mb-0">
-                Choose a session, term, and month to view your daily record.
+                {attendanceEntryMode === "manual"
+                  ? "Choose a session and term to view your attendance summary."
+                  : "Choose a session, term, and month to view your daily record."}
               </p>
             </div>
           </div>
@@ -280,7 +286,7 @@ export default function StudentAttendancePage() {
                 ))}
               </select>
             </div>
-            <div className="col-md-4 mb-3">
+            <div className="col-md-4 mb-3" hidden={attendanceEntryMode === "manual"}>
               <label htmlFor="attendance-month">Month</label>
               <input
                 id="attendance-month"
@@ -293,6 +299,11 @@ export default function StudentAttendancePage() {
               />
             </div>
           </div>
+          {attendanceEntryMode === "manual" ? (
+            <div className="alert alert-info mb-0">
+              This term uses Manual Summary. Daily calendar records are not available.
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -316,6 +327,7 @@ export default function StudentAttendancePage() {
         </div>
       ) : null}
 
+      {attendanceEntryMode === "daily" ? (
       <div className="card height-auto">
         <div className="card-body">
           <div className="attendance-calendar-header">
@@ -380,6 +392,7 @@ export default function StudentAttendancePage() {
           </div>
         </div>
       </div>
+      ) : null}
 
       <style jsx>{`
         .attendance-calendar-header {

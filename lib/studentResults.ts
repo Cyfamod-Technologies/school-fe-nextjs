@@ -9,6 +9,7 @@ export interface StudentSessionOption {
     name: string;
     start_date?: string | null;
     end_date?: string | null;
+    attendance_entry_mode?: "daily" | "manual";
   }>;
 }
 
