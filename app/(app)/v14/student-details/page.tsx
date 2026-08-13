@@ -1197,8 +1197,8 @@ export default function StudentDetailsPage() {
       });
       setPinFeedback(
         regenerate
-          ? "Result PIN regenerated and sent successfully."
-          : "Result PIN generated and sent successfully.",
+          ? "Result PIN regenerated successfully. Use Send to release it."
+          : "Result PIN generated successfully. Use Send to release it.",
       );
       setPinFeedbackType("success");
       await loadResultPins();

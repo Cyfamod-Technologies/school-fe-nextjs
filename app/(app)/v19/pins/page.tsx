@@ -554,7 +554,7 @@ export default function PinsPage() {
       }
 
       await generateResultPinForStudent(selectedStudent, payload);
-      showFeedback("Result PIN generated and sent successfully.", "success");
+      showFeedback("Result PIN generated successfully. Use Send to release it.", "success");
       await loadPins();
     } catch (error) {
       console.error("Unable to generate result PIN", error);
@@ -823,7 +823,7 @@ export default function PinsPage() {
       };
 
       await generateResultPinForStudent(studentId, payload);
-      showFeedback("Result PIN regenerated and sent successfully.", "success");
+      showFeedback("Result PIN regenerated successfully. Use Send to release it.", "success");
       await loadPins();
     } catch (error) {
       console.error("Unable to regenerate result PIN", error);
