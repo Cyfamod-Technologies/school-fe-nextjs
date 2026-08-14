@@ -10,9 +10,11 @@ import {
   useState,
 } from "react";
 import {
+  BulkCommitError,
   BulkPreviewFailure,
   BulkPreviewRow,
   BulkPreviewSummary,
+  BulkRowUpdate,
   previewStudentBulkUpload,
   downloadStudentTemplate,
   commitStudentBulkUpload,
@@ -35,6 +37,24 @@ interface PreviewState {
   rows: BulkPreviewRow[];
   summary: BulkPreviewSummary | null;
   expiresAt: string | null;
+}
+
+interface UploadCompletionState {
+  message: string;
+  totalProcessed: number;
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
+interface RowUpdateState {
+  admission_no?: string;
+  deleted?: boolean;
+}
+
+interface DuplicateResolutionGroup {
+  admissionNo: string;
+  rows: BulkPreviewRow[];
 }
 
 type DuplicateAction = "skip" | "overwrite" | "allow";
@@ -62,20 +82,25 @@ export default function BulkStudentUploadPage() {
   const [uploading, setUploading] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [uploadCompletion, setUploadCompletion] = useState<UploadCompletionState | null>(null);
   const [validationFailure, setValidationFailure] = useState<BulkPreviewFailure | null>(null);
   const [duplicateDecisions, setDuplicateDecisions] = useState<Record<string, DuplicateAction>>({});
+  const [rowUpdates, setRowUpdates] = useState<Record<string, RowUpdateState>>({});
+  const [duplicateResolutionIndex, setDuplicateResolutionIndex] = useState(0);
+  const [scrollToFeedbackAfterConfirm, setScrollToFeedbackAfterConfirm] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const feedbackRef = useRef<HTMLDivElement | null>(null);
   const previewCardRef = useRef<HTMLDivElement | null>(null);
 
   // Derived state
   const canDownloadTemplate = !!selectedSessionId && !!selectedClassId;
   const currentStep = useMemo(() => {
     if (!canDownloadTemplate) return 1;
-    if (!selectedFile && !preview) return 2;
-    if (preview) return 3;
+    if (preview || uploadCompletion) return 3;
+    if (!selectedFile) return 2;
     return 2;
-  }, [canDownloadTemplate, selectedFile, preview]);
+  }, [canDownloadTemplate, preview, selectedFile, uploadCompletion]);
 
   const selectedSession = useMemo(
     () => sessions.find((s) => String(s.id) === selectedSessionId),
@@ -156,23 +181,43 @@ export default function BulkStudentUploadPage() {
   }, [preview]);
 
   useEffect(() => {
+    if (!uploadCompletion) return;
+    previewCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [uploadCompletion]);
+
+  useEffect(() => {
+    if (!scrollToFeedbackAfterConfirm || !feedback) return;
+    feedbackRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setScrollToFeedbackAfterConfirm(false);
+  }, [feedback, scrollToFeedbackAfterConfirm]);
+
+  useEffect(() => {
     if (!preview?.rows?.length) {
       setDuplicateDecisions({});
+      setRowUpdates({});
       return;
     }
 
     const initialDecisions: Record<string, DuplicateAction> = {};
+    const initialRowUpdates: Record<string, RowUpdateState> = {};
     preview.rows.forEach((row, index) => {
-      if (!row.duplicate?.id) return;
       const rowKey = String(row.source_row ?? index);
-      const preferred = row.duplicate_action ?? "skip";
+      initialRowUpdates[rowKey] = {
+        admission_no: row.admission_no && row.admission_no !== "Auto-generated"
+          ? String(row.admission_no)
+          : "",
+        deleted: false,
+      };
+      if (!row.duplicate?.id) return;
+      const preferred = row.duplicate_action ?? "allow";
       if (preferred === "allow" || preferred === "overwrite" || preferred === "skip") {
         initialDecisions[rowKey] = preferred;
       } else {
-        initialDecisions[rowKey] = "skip";
+        initialDecisions[rowKey] = "allow";
       }
     });
     setDuplicateDecisions(initialDecisions);
+    setRowUpdates(initialRowUpdates);
   }, [preview?.rows]);
 
   const summaryItems = useMemo(() => {
@@ -189,8 +234,11 @@ export default function BulkStudentUploadPage() {
   const resetUploadState = useCallback(() => {
     setSelectedFile(null);
     setPreview(null);
+    setUploadCompletion(null);
     setValidationFailure(null);
     setFeedback(null);
+    setRowUpdates({});
+    setDuplicateResolutionIndex(0);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -237,10 +285,11 @@ export default function BulkStudentUploadPage() {
   }, [getUploadParams, selectedSession, selectedClass, selectedClassArm]);
 
   const handleFileChosen = (file: File) => {
-    if (!file.name.toLowerCase().endsWith(".csv")) {
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith(".csv") && !fileName.endsWith(".xlsx")) {
       setFeedback({
         type: "warning",
-        message: "Only CSV files are supported. Please choose a .csv file.",
+        message: "Only CSV and XLSX files are supported. Please choose a .csv or .xlsx file.",
       });
       return;
     }
@@ -252,6 +301,7 @@ export default function BulkStudentUploadPage() {
       return;
     }
     setSelectedFile(file);
+    setUploadCompletion(null);
     setFeedback({
       type: "info",
       message: 'File selected. Click "Upload & Preview" to validate.',
@@ -291,7 +341,7 @@ export default function BulkStudentUploadPage() {
     if (!selectedFile) {
       setFeedback({
         type: "warning",
-        message: "Please choose a CSV file before uploading.",
+        message: "Please choose a CSV or XLSX file before uploading.",
       });
       return;
     }
@@ -301,14 +351,40 @@ export default function BulkStudentUploadPage() {
       type: "info",
       message: "Validating file. Please wait...",
     });
+    setUploadCompletion(null);
     setValidationFailure(null);
     setPreview(null);
 
     try {
       const params = getUploadParams();
-      const result = await previewStudentBulkUpload(selectedFile, params);
+      const sanitizedRowUpdates = Object.entries(rowUpdates).reduce<Record<string, BulkRowUpdate>>(
+        (accumulator, [rowKey, update]) => {
+          const admissionNumber = update.admission_no?.trim() ?? "";
+          if (admissionNumber || update.deleted) {
+            accumulator[rowKey] = {
+              ...(admissionNumber ? { admission_no: admissionNumber } : {}),
+              ...(update.deleted ? { deleted: true } : {}),
+            };
+          }
+          return accumulator;
+        },
+        {},
+      );
+      const result = await previewStudentBulkUpload(selectedFile, params, sanitizedRowUpdates);
       if (!result.ok) {
         setValidationFailure(result.error);
+        setPreview(
+          result.error.previewRows?.length
+            ? {
+                batchId: "",
+                rows: result.error.previewRows,
+                summary: {
+                  total_rows: result.error.previewRows.length,
+                },
+                expiresAt: null,
+              }
+            : null,
+        );
         setFeedback({
           type: "danger",
           message: result.error.message,
@@ -345,24 +421,42 @@ export default function BulkStudentUploadPage() {
       return;
     }
     setConfirming(true);
+    setScrollToFeedbackAfterConfirm(false);
     setFeedback({
       type: "info",
       message: "Creating students. This may take a moment...",
     });
 
     try {
-      const result = await commitStudentBulkUpload(preview.batchId, duplicateDecisions);
+      const sanitizedRowUpdates = Object.entries(rowUpdates).reduce<Record<string, RowUpdateState>>(
+        (accumulator, [rowKey, update]) => {
+          const admissionNumber = update.admission_no?.trim() ?? "";
+          if (admissionNumber) {
+            accumulator[rowKey] = { admission_no: admissionNumber };
+          }
+          return accumulator;
+        },
+        {},
+      );
+
+      const result = await commitStudentBulkUpload(
+        preview.batchId,
+        duplicateDecisions,
+        sanitizedRowUpdates,
+      );
       // Keep the success message visible instead of clearing feedback immediately.
       setSelectedFile(null);
       setPreview(null);
       setValidationFailure(null);
       setDuplicateDecisions({});
+      setRowUpdates({});
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
       const created = result.summary?.created ?? 0;
       const updated = result.summary?.updated ?? 0;
       const skipped = result.summary?.skipped ?? 0;
+      const totalProcessed = result.summary?.total_processed ?? created + updated + skipped;
       const summaryText = [
         created ? `${created} created` : null,
         updated ? `${updated} updated` : null,
@@ -370,15 +464,33 @@ export default function BulkStudentUploadPage() {
       ]
         .filter(Boolean)
         .join(", ");
+      const completionMessage =
+        result.message ?? `Upload complete! ${summaryText || `${totalProcessed} processed`}.`;
+      setUploadCompletion({
+        message: completionMessage,
+        totalProcessed,
+        created,
+        updated,
+        skipped,
+      });
       setFeedback({
         type: "success",
-        message: result.message ?? `Upload complete! ${summaryText || `${result.summary?.total_processed ?? 0} processed`}.`,
+        message: completionMessage,
       });
+      setScrollToFeedbackAfterConfirm(true);
     } catch (error) {
+      if (error instanceof BulkCommitError) {
+        setValidationFailure({
+          message: error.message,
+          errors: error.errors,
+          errorCsv: null,
+        });
+      }
       setFeedback({
         type: "danger",
         message: error instanceof Error ? error.message : "Bulk upload failed. Please retry.",
       });
+      setScrollToFeedbackAfterConfirm(true);
     } finally {
       setConfirming(false);
     }
@@ -418,13 +530,139 @@ export default function BulkStudentUploadPage() {
   };
 
   const previewRows = useMemo(() => preview?.rows ?? [], [preview?.rows]);
-  const validationErrors = validationFailure?.errors ?? [];
+  const workingPreviewRows = useMemo(
+    () =>
+      previewRows.filter((row, index) => {
+        const rowKey = String(row.source_row ?? index);
+        return !rowUpdates[rowKey]?.deleted;
+      }),
+    [previewRows, rowUpdates],
+  );
+  const validationErrors = useMemo(
+    () => validationFailure?.errors ?? [],
+    [validationFailure?.errors],
+  );
+  const totalRows = preview?.summary?.total_rows ?? workingPreviewRows.length;
+  const showingPreviewSubset = totalRows > workingPreviewRows.length;
+  const errorRowKeys = useMemo(
+    () =>
+      new Set(
+        validationErrors
+          .map((error) => String(error.row ?? "").trim())
+          .filter(Boolean),
+      ),
+    [validationErrors],
+  );
+  const duplicateResolutionGroups = useMemo<DuplicateResolutionGroup[]>(() => {
+    const duplicateErrorRows = new Set(
+      validationErrors
+        .filter(
+          (error) =>
+            String(error.column ?? "").trim().toLowerCase() === "admission number" &&
+            String(error.message ?? "").toLowerCase().includes("two students with admission number"),
+        )
+        .map((error) => String(error.row ?? "").trim())
+        .filter(Boolean),
+    );
+
+    if (!duplicateErrorRows.size) {
+      return [];
+    }
+
+    const grouped = new Map<string, BulkPreviewRow[]>();
+
+    workingPreviewRows.forEach((row, index) => {
+      const rowKey = String(row.source_row ?? index);
+      if (!duplicateErrorRows.has(rowKey)) {
+        return;
+      }
+
+      const admissionNo = (rowUpdates[rowKey]?.admission_no ?? row.admission_no ?? "")
+        .toString()
+        .trim();
+
+      if (!admissionNo || admissionNo === "Auto-generated") {
+        return;
+      }
+
+      const normalizedAdmissionNo = admissionNo.toLowerCase();
+      const currentRows = grouped.get(normalizedAdmissionNo) ?? [];
+      currentRows.push(row);
+      grouped.set(normalizedAdmissionNo, currentRows);
+    });
+
+    return Array.from(grouped.entries())
+      .filter(([, rows]) => rows.length > 1)
+      .map(([admissionNo, rows]) => ({ admissionNo, rows }))
+      .sort((left, right) => {
+        const leftRow = Number(left.rows[0]?.source_row ?? 0);
+        const rightRow = Number(right.rows[0]?.source_row ?? 0);
+        return leftRow - rightRow;
+      });
+  }, [workingPreviewRows, rowUpdates, validationErrors]);
+  const hasPendingDuplicateResolutionChanges = useMemo(
+    () => Object.values(rowUpdates).some((update) => !!update.deleted),
+    [rowUpdates],
+  );
+  const isDuplicateResolutionOpen =
+    !!validationFailure &&
+    (duplicateResolutionGroups.length > 0 || hasPendingDuplicateResolutionChanges);
+  const activeDuplicateResolutionGroup = duplicateResolutionGroups[duplicateResolutionIndex] ?? null;
+
+  useEffect(() => {
+    if (!isDuplicateResolutionOpen) {
+      setDuplicateResolutionIndex(0);
+      return;
+    }
+
+    setDuplicateResolutionIndex((current) => {
+      if (current < duplicateResolutionGroups.length) {
+        return current;
+      }
+      return 0;
+    });
+  }, [duplicateResolutionGroups.length, isDuplicateResolutionOpen]);
 
   const handleDuplicateDecisionChange = (rowKey: string, action: DuplicateAction) => {
     setDuplicateDecisions((prev) => ({
       ...prev,
       [rowKey]: action,
     }));
+  };
+
+  const handleAdmissionNumberChange = (rowKey: string, value: string) => {
+    setRowUpdates((prev) => ({
+      ...prev,
+      [rowKey]: {
+        ...prev[rowKey],
+        admission_no: value,
+        deleted: false,
+      },
+    }));
+  };
+
+  const handleRowDeleteToggle = (rowKey: string, deleted: boolean) => {
+    setRowUpdates((prev) => ({
+      ...prev,
+      [rowKey]: {
+        ...prev[rowKey],
+        deleted,
+      },
+    }));
+  };
+
+  const handleDuplicateResolutionBack = () => {
+    setDuplicateResolutionIndex((current) => Math.max(0, current - 1));
+  };
+
+  const handleDuplicateResolutionNext = () => {
+    setDuplicateResolutionIndex((current) =>
+      Math.min(duplicateResolutionGroups.length - 1, current + 1),
+    );
+  };
+
+  const handleDuplicateResolutionDone = async () => {
+    await handleUploadPreview();
   };
 
   return (
@@ -617,7 +855,11 @@ export default function BulkStudentUploadPage() {
               ) : (
                 <>
                   {feedback && (
-                    <div className={`alert alert-${feedback.type}`} role="alert">
+                    <div
+                      ref={feedbackRef}
+                      className={`alert alert-${feedback.type}`}
+                      role="alert"
+                    >
                       {feedback.type === "success" && <i className="fas fa-check-circle mr-2" />}
                       {feedback.type === "danger" && <i className="fas fa-exclamation-circle mr-2" />}
                       {feedback.type === "warning" && <i className="fas fa-exclamation-triangle mr-2" />}
@@ -671,9 +913,9 @@ export default function BulkStudentUploadPage() {
                     <div className="icon">
                       <i className="fas fa-cloud-upload-alt" />
                     </div>
-                    <p className="lead mb-1">Drag & drop your completed CSV here</p>
+                    <p className="lead mb-1">Drag & drop your completed CSV or XLSX here</p>
                     <p className="text-muted small mb-3">
-                      Only .csv files are supported. Maximum size 5MB.
+                      Only .csv and .xlsx files are supported. Maximum size 5MB.
                     </p>
                     <button
                       type="button"
@@ -686,7 +928,7 @@ export default function BulkStudentUploadPage() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".csv,text/csv"
+                      accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                       className="d-none"
                       onChange={handleFileInputChange}
                     />
@@ -735,134 +977,218 @@ export default function BulkStudentUploadPage() {
       </div>
 
       {/* Step 3: Preview Card */}
-      {preview && (
+      {(preview || uploadCompletion) && (
         <div ref={previewCardRef} id="bulk-preview-card" className="card height-auto mb-4">
           <div className="card-body">
-            <div className="step-card-header d-flex justify-content-between align-items-start">
-              <div>
-                <div className="step-badge step-badge-success">Step 3</div>
-                <h4>Review & Confirm</h4>
-                <p className="text-muted mb-0">
-                  Review the parsed data below. Click &quot;Confirm Upload&quot; to create all students.
-                </p>
-              </div>
-              <div className="d-flex align-items-center">
-                {preview.expiresAt && (
-                  <span className="text-muted small mr-3">
-                    <i className="fas fa-clock mr-1" />
-                    Expires: {formatDateTime(preview.expiresAt)}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                  onClick={() => handleConfirmUpload().catch(() => undefined)}
-                  disabled={confirming}
-                >
-                  {confirming ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <i className="fas fa-check mr-2" />
-                      Confirm Upload
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <div className="row mt-4">
-              <div className="col-lg-3">
-                <div className="upload-summary-card">
-                  <h5>
-                    <i className="fas fa-chart-bar mr-2" />
-                    Upload Summary
-                  </h5>
-                  <ul className="upload-summary-list">
-                    {summaryItems.map((item) => (
-                      <li key={item.label}>
-                        <span>{item.label}</span>
-                        <span className="value">{item.value}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-              <div className="col-lg-9">
-                <div className="table-responsive">
-                  <table className="table display text-nowrap bulk-preview-table">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Name</th>
-                        <th>Admission No</th>
-                        <th>Session</th>
-                        <th>Class</th>
-                        <th>Parent Email</th>
-                        <th>Duplicate</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {previewRows.length ? (
-                        previewRows.map((row, index) => (
-                          <tr key={`preview-${index}`}>
-                            <td>{index + 1}</td>
-                            <td>{row.name ?? ""}</td>
-                            <td>{row.admission_no ?? ""}</td>
-                            <td>{row.session ?? ""}</td>
-                            <td>
-                              {[row.class, row.class_arm]
-                                .filter(Boolean)
-                                .join(" / ")}
-                            </td>
-                            <td>{row.parent_email ?? ""}</td>
-                            <td>
-                              {row.duplicate?.id ? (
-                                <span className="badge badge-warning">
-                                  Duplicate
-                                </span>
-                              ) : (
-                                <span className="badge badge-success">New</span>
-                              )}
-                            </td>
-                            <td>
-                              {row.duplicate?.id ? (
-                                <select
-                                  className="form-control"
-                                  value={duplicateDecisions[String(row.source_row ?? index)] ?? "skip"}
-                                  onChange={(event) =>
-                                    handleDuplicateDecisionChange(
-                                      String(row.source_row ?? index),
-                                      event.target.value as DuplicateAction
-                                    )
-                                  }
-                                >
-                                  <option value="skip">Skip</option>
-                                  <option value="overwrite">Overwrite</option>
-                                  <option value="allow">Allow duplicate</option>
-                                </select>
-                              ) : (
-                                <span className="text-muted small">Create</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))
+            {preview ? (
+              <>
+                <div className="step-card-header d-flex justify-content-between align-items-start">
+                  <div>
+                    <div className="step-badge step-badge-success">Step 3</div>
+                    <h4>Review & Confirm</h4>
+                    <p className="text-muted mb-0">
+                      Review the parsed data below. You can edit admission numbers here before clicking &quot;Confirm Upload&quot;.
+                    </p>
+                  </div>
+                  <div className="d-flex align-items-center">
+                    {preview.expiresAt && (
+                      <span className="text-muted small mr-3">
+                        <i className="fas fa-clock mr-1" />
+                        Expires: {formatDateTime(preview.expiresAt)}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                      onClick={() => handleConfirmUpload().catch(() => undefined)}
+                      disabled={confirming || !preview.batchId || !!validationFailure}
+                    >
+                      {confirming ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true" />
+                          Processing...
+                        </>
                       ) : (
-                        <tr>
-                          <td colSpan={8} className="text-center text-muted">
-                            No preview rows available.
-                          </td>
-                        </tr>
+                        <>
+                          <i className="fas fa-check mr-2" />
+                          Confirm Upload
+                        </>
                       )}
-                    </tbody>
-                  </table>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </div>
+
+                <div className="row mt-4">
+                  <div className="col-lg-3">
+                    <div className="upload-summary-card">
+                      <h5>
+                        <i className="fas fa-chart-bar mr-2" />
+                        Upload Summary
+                      </h5>
+                      <ul className="upload-summary-list">
+                        {summaryItems.map((item) => (
+                          <li key={item.label}>
+                            <span>{item.label}</span>
+                            <span className="value">{item.value}</span>
+                          </li>
+                        ))}
+                        <li>
+                          <span>Rows in Preview</span>
+                          <span className="value">{workingPreviewRows.length}</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div className="col-lg-9">
+                    {showingPreviewSubset ? (
+                      <div className="alert alert-info">
+                        <i className="fas fa-info-circle mr-2" />
+                        Showing the first {workingPreviewRows.length} students in the preview out of {totalRows} rows in the file.
+                        All validated rows will be included when you confirm the upload.
+                      </div>
+                    ) : null}
+                    <div className="table-responsive">
+                      <table className="table display text-nowrap bulk-preview-table">
+                        <thead>
+                          <tr>
+                            <th>File Row</th>
+                            <th>Name</th>
+                            <th>Admission No</th>
+                            <th>Session</th>
+                            <th>Class</th>
+                            <th>Parent Email</th>
+                            <th>Duplicate</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {workingPreviewRows.length ? (
+                            workingPreviewRows.map((row, index) => {
+                              const rowKey = String(row.source_row ?? index);
+                              const hasRowError = errorRowKeys.has(rowKey);
+                              const rowClassName = [
+                                hasRowError ? "preview-row-error" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ");
+
+                              return (
+                              <tr
+                                key={`preview-${index}`}
+                                className={rowClassName || undefined}
+                              >
+                                <td>{row.source_row ?? index + 1}</td>
+                                <td>{row.name ?? ""}</td>
+                                <td>
+                                  <input
+                                    type="text"
+                                    className={`form-control${hasRowError ? " is-invalid" : ""}`}
+                                    value={rowUpdates[rowKey]?.admission_no ?? ""}
+                                    onChange={(event) =>
+                                      handleAdmissionNumberChange(
+                                        rowKey,
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder={row.admission_no === "Auto-generated" ? "Auto-generated" : ""}
+                                  />
+                                </td>
+                                <td>{row.session ?? ""}</td>
+                                <td>
+                                  {[row.class, row.class_arm]
+                                    .filter(Boolean)
+                                    .join(" / ")}
+                                </td>
+                                <td>{row.parent_email ?? ""}</td>
+                                <td>
+                                  {row.duplicate?.id ? (
+                                    <span className="badge badge-warning">
+                                      Duplicate
+                                    </span>
+                                  ) : (
+                                    <span className="badge badge-success">New</span>
+                                  )}
+                                </td>
+                                <td>
+                                  {row.duplicate?.id ? (
+                                    <select
+                                      className="form-control"
+                                      value={duplicateDecisions[rowKey] ?? "allow"}
+                                      onChange={(event) =>
+                                        handleDuplicateDecisionChange(
+                                          rowKey,
+                                          event.target.value as DuplicateAction
+                                        )
+                                      }
+                                    >
+                                      <option value="skip">Skip</option>
+                                      <option value="overwrite">Overwrite</option>
+                                      <option value="allow">Allow duplicate</option>
+                                    </select>
+                                  ) : (
+                                    <span className="text-muted small">Create</span>
+                                  )}
+                                </td>
+                              </tr>
+                            )})
+                          ) : (
+                            <tr>
+                              <td colSpan={8} className="text-center text-muted">
+                                No preview rows available.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : uploadCompletion ? (
+              <>
+                <div className="step-card-header">
+                  <div className="step-badge step-badge-success">Completed</div>
+                  <h4>Upload Result</h4>
+                  <p className="text-muted mb-0">
+                    The upload request finished. Review the result summary below.
+                  </p>
+                </div>
+
+                <div className="alert alert-success mt-4" role="alert">
+                  <i className="fas fa-check-circle mr-2" />
+                  {uploadCompletion.message}
+                </div>
+
+                <div className="row mt-4">
+                  <div className="col-lg-3">
+                    <div className="upload-summary-card">
+                      <h5>
+                        <i className="fas fa-chart-bar mr-2" />
+                        Result Summary
+                      </h5>
+                      <ul className="upload-summary-list">
+                        <li>
+                          <span>Total Processed</span>
+                          <span className="value">{uploadCompletion.totalProcessed}</span>
+                        </li>
+                        <li>
+                          <span>Created</span>
+                          <span className="value">{uploadCompletion.created}</span>
+                        </li>
+                        <li>
+                          <span>Updated</span>
+                          <span className="value">{uploadCompletion.updated}</span>
+                        </li>
+                        <li>
+                          <span>Skipped</span>
+                          <span className="value">{uploadCompletion.skipped}</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       )}
@@ -924,6 +1250,125 @@ export default function BulkStudentUploadPage() {
           </div>
         </div>
       )}
+
+      {isDuplicateResolutionOpen ? (
+        <div className="duplicate-resolution-modal">
+          <div className="duplicate-resolution-backdrop" />
+          <div className="duplicate-resolution-dialog card height-auto">
+            <div className="card-body">
+              <div className="step-card-header">
+                <div className="step-badge">Resolve Duplicates</div>
+                <h4>Duplicate Admission Number in CSV</h4>
+                <p className="text-muted mb-0">
+                  Review this duplicate group and edit the admission numbers before continuing.
+                </p>
+              </div>
+
+              {activeDuplicateResolutionGroup ? (
+                <>
+                  <div className="duplicate-resolution-status">
+                    <span>
+                      Duplicate set {duplicateResolutionIndex + 1} of {duplicateResolutionGroups.length}
+                    </span>
+                  </div>
+
+                  <div className="duplicate-resolution-list">
+                    {activeDuplicateResolutionGroup.rows.map((row, index) => {
+                      const rowKey = String(row.source_row ?? index);
+                      const isDeleted = !!rowUpdates[rowKey]?.deleted;
+
+                      return (
+                        <div key={`duplicate-resolution-${rowKey}`} className="duplicate-resolution-item">
+                          <div className="duplicate-resolution-item-header">
+                            <span className="badge badge-danger">File Row {row.source_row ?? index + 1}</span>
+                            <span className="duplicate-resolution-name">{row.name ?? "Unnamed Student"}</span>
+                            <button
+                              type="button"
+                              className={`btn-fill-sm ${isDeleted ? "btn-outline-secondary" : "btn-outline-danger"}`}
+                              onClick={() => handleRowDeleteToggle(rowKey, !isDeleted)}
+                            >
+                              {isDeleted ? "Restore row" : "Delete this row"}
+                            </button>
+                          </div>
+                          <div className="row">
+                            <div className="col-md-6 form-group mb-3">
+                              <label className="mb-2">Admission Number</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={rowUpdates[rowKey]?.admission_no ?? ""}
+                                disabled={isDeleted}
+                                onChange={(event) =>
+                                  handleAdmissionNumberChange(rowKey, event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="col-md-6 form-group mb-3">
+                              <label className="mb-2">Class</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={[row.class, row.class_arm].filter(Boolean).join(" / ")}
+                                disabled
+                              />
+                            </div>
+                          </div>
+                          {isDeleted ? (
+                            <div className="alert alert-warning mb-0">
+                              This row will be removed from the upload when you click Done.
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="alert alert-success mb-4">
+                  All duplicate rows in the file have been handled locally. Click Done to revalidate and return to the main upload screen.
+                </div>
+              )}
+
+              <div className="duplicate-resolution-actions">
+                <button
+                  type="button"
+                  className="btn-fill-lg btn-light text-dark"
+                  onClick={handleDuplicateResolutionBack}
+                  disabled={!activeDuplicateResolutionGroup || duplicateResolutionIndex === 0 || uploading}
+                >
+                  Back
+                </button>
+                {activeDuplicateResolutionGroup && duplicateResolutionIndex < duplicateResolutionGroups.length - 1 ? (
+                  <button
+                    type="button"
+                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                    onClick={handleDuplicateResolutionNext}
+                    disabled={uploading}
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                    onClick={() => handleDuplicateResolutionDone().catch(() => undefined)}
+                    disabled={uploading}
+                  >
+                    {uploading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true" />
+                        Revalidating...
+                      </>
+                    ) : (
+                      "Done"
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <style jsx>{`
         .bulk-upload-progress {
@@ -1218,6 +1663,95 @@ export default function BulkStudentUploadPage() {
         .upload-summary-list li .value {
           font-weight: 700;
           color: #6366f1;
+        }
+
+        :global(.bulk-preview-table tbody tr.preview-row-error) {
+          background: #fef2f2;
+        }
+
+        :global(.bulk-preview-table tbody tr.preview-row-error td) {
+          border-color: #fecaca;
+        }
+
+        :global(.bulk-preview-table tbody tr.preview-row-error td:first-child) {
+          color: #b91c1c;
+          font-weight: 700;
+        }
+
+        :global(.bulk-preview-table .form-control.is-invalid) {
+          border-color: #dc2626;
+          background: #fff5f5;
+        }
+
+        .duplicate-resolution-modal {
+          position: fixed;
+          inset: 0;
+          z-index: 1200;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 1.5rem;
+        }
+
+        .duplicate-resolution-backdrop {
+          position: absolute;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.55);
+        }
+
+        .duplicate-resolution-dialog {
+          position: relative;
+          width: min(920px, 100%);
+          max-height: calc(100vh - 3rem);
+          overflow-y: auto;
+          z-index: 1;
+          border-radius: 16px;
+          box-shadow: 0 20px 60px rgba(15, 23, 42, 0.22);
+        }
+
+        .duplicate-resolution-status {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 1rem;
+          padding: 1rem 1.25rem;
+          border-radius: 12px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          margin-bottom: 1rem;
+        }
+
+        .duplicate-resolution-list {
+          display: grid;
+          gap: 1rem;
+        }
+
+        .duplicate-resolution-item {
+          border: 1px solid #fecaca;
+          border-radius: 14px;
+          padding: 1rem;
+          background: #fff7f7;
+        }
+
+        .duplicate-resolution-item-header {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          margin-bottom: 1rem;
+          flex-wrap: wrap;
+        }
+
+        .duplicate-resolution-name {
+          font-size: 1rem;
+          font-weight: 700;
+          color: #7f1d1d;
+        }
+
+        .duplicate-resolution-actions {
+          margin-top: 1.5rem;
+          display: flex;
+          justify-content: space-between;
+          gap: 1rem;
         }
 
         .bulk-upload-steps {

@@ -152,3 +152,19 @@ export async function updateStudentProfile(
   );
   return response.student;
 }
+
+export interface ChangeStudentPasswordPayload {
+  current_password: string;
+  password: string;
+  password_confirmation: string;
+}
+
+export async function changeStudentPassword(
+  payload: ChangeStudentPasswordPayload,
+): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>("/api/v1/student/password/change", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    authScope: "student",
+  });
+}

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { listSessions, type Session } from "@/lib/sessions";
-import { listTermsBySession, type Term } from "@/lib/terms";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import { listClassArms, type ClassArm } from "@/lib/classArms";
 import {
@@ -21,7 +20,6 @@ import {
 
 interface Filters {
   session_id: string;
-  term_id: string;
   school_class_id: string;
   class_arm_id: string;
   class_section_id: string;
@@ -36,7 +34,6 @@ interface TargetPlacement {
 
 const initialFilters: Filters = {
   session_id: "",
-  term_id: "",
   school_class_id: "",
   class_arm_id: "",
   class_section_id: "",
@@ -51,7 +48,6 @@ const initialTarget: TargetPlacement = {
 
 export default function StudentPromotionPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [termsCache, setTermsCache] = useState<Record<string, Term[]>>({});
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [armsCache, setArmsCache] = useState<Record<string, ClassArm[]>>({});
   const [sectionsCache, setSectionsCache] = useState<Record<string, ClassArmSection[]>>({});
@@ -76,23 +72,6 @@ export default function StudentPromotionPage() {
       .then(setClasses)
       .catch((err) => console.error("Unable to load classes", err));
   }, []);
-
-  useEffect(() => {
-    if (!filters.session_id) {
-      return;
-    }
-    if (termsCache[filters.session_id]) {
-      return;
-    }
-    listTermsBySession(filters.session_id)
-      .then((data) =>
-        setTermsCache((prev) => ({
-          ...prev,
-          [filters.session_id]: data,
-        })),
-      )
-      .catch((err) => console.error("Unable to load terms", err));
-  }, [filters.session_id, termsCache]);
 
   useEffect(() => {
     if (!filters.school_class_id) {
@@ -128,20 +107,6 @@ export default function StudentPromotionPage() {
       )
       .catch((err) => console.error("Unable to load sections", err));
   }, [filters.school_class_id, filters.class_arm_id, sectionsCache]);
-
-  useEffect(() => {
-    if (!target.session_id || termsCache[target.session_id]) {
-      return;
-    }
-    listTermsBySession(target.session_id)
-      .then((data) =>
-        setTermsCache((prev) => ({
-          ...prev,
-          [target.session_id]: data,
-        })),
-      )
-      .catch((err) => console.error("Unable to load target terms", err));
-  }, [target.session_id, termsCache]);
 
   useEffect(() => {
     if (!target.school_class_id) {
@@ -190,8 +155,7 @@ export default function StudentPromotionPage() {
         const response = await listStudents({
           page: 1,
           per_page: 200,
-          session_id: filters.session_id,
-          term_id: filters.term_id || undefined,
+          current_session_id: filters.session_id,
           school_class_id: filters.school_class_id || undefined,
           class_arm_id: filters.class_arm_id || undefined,
           class_section_id: filters.class_section_id || undefined,
@@ -214,13 +178,6 @@ export default function StudentPromotionPage() {
     };
     load().catch((err) => console.error(err));
   }, [filters]);
-
-  const termsForFilter = useMemo(() => {
-    if (!filters.session_id) {
-      return [];
-    }
-    return termsCache[filters.session_id] ?? [];
-  }, [filters.session_id, termsCache]);
 
   const armsForFilter = useMemo(() => {
     if (!filters.school_class_id) {
@@ -310,8 +267,7 @@ export default function StudentPromotionPage() {
       await listStudents({
         page: 1,
         per_page: 200,
-        session_id: filters.session_id,
-        term_id: filters.term_id || undefined,
+        current_session_id: filters.session_id,
         school_class_id: filters.school_class_id || undefined,
         class_arm_id: filters.class_arm_id || undefined,
         class_section_id: filters.class_section_id || undefined,
@@ -371,7 +327,6 @@ export default function StudentPromotionPage() {
                       setFilters((prev) => ({
                         ...prev,
                         session_id: event.target.value,
-                        term_id: "",
                       }))
                     }
                     required
@@ -380,28 +335,6 @@ export default function StudentPromotionPage() {
                     {sessions.map((session) => (
                       <option key={session.id} value={session.id}>
                         {session.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-md-6 col-12 form-group">
-                  <label htmlFor="promotion-term">Term</label>
-                  <select
-                    id="promotion-term"
-                    className="form-control"
-                    value={filters.term_id}
-                    onChange={(event) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        term_id: event.target.value,
-                      }))
-                    }
-                    disabled={!filters.session_id}
-                  >
-                    <option value="">All terms</option>
-                    {termsForFilter.map((term) => (
-                      <option key={term.id} value={term.id}>
-                        {term.name}
                       </option>
                     ))}
                   </select>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { apiFetch } from '@/lib/apiClient';
+import { getErrorMessage } from "@/lib/errors";
 
 interface Structure {
   id: string;
@@ -92,12 +93,16 @@ export default function AssessmentComponentStructures() {
         apiFetch(`/api/v1/settings/assessment-component-structures/component/${componentId}`),
         apiFetch('/api/v1/classes'),
         apiFetch('/api/v1/terms'),
-      ])) as any[];
+      ])) as [
+        { component?: AssessmentComponent; structures?: Structure[] },
+        SchoolClass[] | { data?: SchoolClass[] },
+        SessionTerm[] | { data?: SessionTerm[] },
+      ];
 
-      setComponent((structuresRes as any)?.component);
-      setStructures((structuresRes as any)?.structures || []);
-      setClasses(Array.isArray(classesRes) ? classesRes : (classesRes as any)?.data || []);
-      setTerms(Array.isArray(termsRes) ? termsRes : (termsRes as any)?.data || []);
+      setComponent(structuresRes?.component ?? null);
+      setStructures(structuresRes?.structures || []);
+      setClasses(Array.isArray(classesRes) ? classesRes : classesRes?.data || []);
+      setTerms(Array.isArray(termsRes) ? termsRes : termsRes?.data || []);
     } catch (err) {
       console.error('Error loading data:', err);
       setError('Failed to load data');
@@ -184,9 +189,9 @@ export default function AssessmentComponentStructures() {
       });
       setShowForm(false);
       await loadData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving structure:', err);
-      setError(err.message || 'Failed to save structure');
+      setError(getErrorMessage(err, 'Failed to save structure'));
     } finally {
       setSubmitting(false);
     }
@@ -207,9 +212,9 @@ export default function AssessmentComponentStructures() {
 
       setSuccess('Structure deleted successfully');
       await loadData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error deleting structure:', err);
-      setError(err.message || 'Failed to delete structure');
+      setError(getErrorMessage(err, 'Failed to delete structure'));
     }
   };
 

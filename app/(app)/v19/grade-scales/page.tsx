@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { updateSchoolProfile } from "@/lib/school";
 import {
   listGradeScales,
   updateGradeScaleRanges,
@@ -365,10 +367,15 @@ const defaultResultSettings: ResultPageSettings = {
   show_remarks: true,
   hide_student_identity: false,
   allow_shared_pin_access: false,
+  require_pin_for_pdf_download: true,
+  enable_session_result_print: false,
+  collapse_session_ca: false,
   comment_mode: "manual",
+  signatory_title: "principal",
 };
 
 export default function GradeScalesPage() {
+  const { schoolContext, refreshSchoolContext, refreshAuth } = useAuth();
   const [loading, setLoading] = useState(true);
   const [scales, setScales] = useState<GradeScale[]>([]);
   const [selectedScaleId, setSelectedScaleId] = useState<string>("");
@@ -417,6 +424,27 @@ export default function GradeScalesPage() {
   const [resultSettingsError, setResultSettingsError] = useState<string | null>(
     null,
   );
+  const [skillScope, setSkillScope] = useState({
+    skill_categories_separate_by_class: false,
+    skill_types_separate_by_class: false,
+  });
+  const [skillScopeSaving, setSkillScopeSaving] = useState(false);
+  const [skillScopeInfo, setSkillScopeInfo] = useState<string | null>(null);
+  const [skillScopeError, setSkillScopeError] = useState<string | null>(null);
+  const isAutomaticCommentMode = resultSettings.comment_mode === "range";
+
+  useEffect(() => {
+    const school = schoolContext.school;
+    if (!school) return;
+    setSkillScope({
+      skill_categories_separate_by_class: Boolean(
+        school.skill_categories_separate_by_class,
+      ),
+      skill_types_separate_by_class: Boolean(
+        school.skill_types_separate_by_class,
+      ),
+    });
+  }, [schoolContext.school]);
 
   useEffect(() => {
     let active = true;
@@ -455,10 +483,7 @@ export default function GradeScalesPage() {
     fetchResultPageSettings()
       .then((data) => {
         if (!active) return;
-        setResultSettings({
-          ...data,
-          comment_mode: "manual",
-        });
+        setResultSettings(data);
       })
       .catch((error) => {
         console.error("Unable to load result page settings", error);
@@ -570,6 +595,16 @@ export default function GradeScalesPage() {
         key: "allow_shared_pin_access" as const,
         label: "Shared Scratch Cards",
         hint: "Allow any active scratch card for the same session and term to unlock the logged-in student's own result.",
+      },
+      {
+        key: "enable_session_result_print" as const,
+        label: "Session Result Printing",
+        hint: "Enable the separate session-result print page and sidebar link for schools that print cumulative first-to-third-term sheets.",
+      },
+      {
+        key: "collapse_session_ca" as const,
+        label: "Collapse Session CAs",
+        hint: "Combine all non-exam assessment scores into one CA column for each term on the session result sheet.",
       },
     ],
     [],
@@ -755,7 +790,7 @@ export default function GradeScalesPage() {
   };
 
   const handleResultSettingToggle = (
-    key: Exclude<keyof ResultPageSettings, "comment_mode">,
+    key: Exclude<keyof ResultPageSettings, "comment_mode" | "signatory_title">,
   ) => {
     setResultSettings((prev) => ({
       ...prev,
@@ -769,14 +804,8 @@ export default function GradeScalesPage() {
 
     try {
       setResultSettingsSaving(true);
-      const saved = await updateResultPageSettings({
-        ...resultSettings,
-        comment_mode: "manual",
-      });
-      setResultSettings({
-        ...saved,
-        comment_mode: "manual",
-      });
+      const saved = await updateResultPageSettings(resultSettings);
+      setResultSettings(saved);
       setResultSettingsInfo("Result page settings updated successfully.");
     } catch (error) {
       console.error("Unable to save result page settings", error);
@@ -787,6 +816,24 @@ export default function GradeScalesPage() {
       );
     } finally {
       setResultSettingsSaving(false);
+    }
+  };
+
+  const handleSkillScopeSave = async () => {
+    setSkillScopeError(null);
+    setSkillScopeInfo(null);
+    setSkillScopeSaving(true);
+    try {
+      await updateSchoolProfile(skillScope);
+      await Promise.all([refreshSchoolContext(), refreshAuth()]);
+      setSkillScopeInfo("Skill scope updated successfully.");
+    } catch (error) {
+      console.error("Unable to save skill scope", error);
+      setSkillScopeError(
+        error instanceof Error ? error.message : "Unable to save skill scope.",
+      );
+    } finally {
+      setSkillScopeSaving(false);
     }
   };
 
@@ -1182,6 +1229,86 @@ export default function GradeScalesPage() {
         <div className="card-body">
           <div className="heading-layout1">
             <div className="item-title">
+              <h3>Skill Scope</h3>
+            </div>
+            <button
+              type="button"
+              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+              onClick={handleSkillScopeSave}
+              disabled={skillScopeSaving || !schoolContext.school}
+            >
+              {skillScopeSaving ? "Saving..." : "Save Skill Scope"}
+            </button>
+          </div>
+          <p className="text-muted mb-3">
+            Choose whether skill categories and skills are shared school-wide or
+            configured separately for each class.
+          </p>
+          {skillScopeInfo ? (
+            <div className="alert alert-info">{skillScopeInfo}</div>
+          ) : null}
+          {skillScopeError ? (
+            <div className="alert alert-danger">{skillScopeError}</div>
+          ) : null}
+          <div className="row gutters-20">
+            <div className="col-md-6 col-12 form-group">
+              <div className="form-check">
+                <input
+                  id="grade-scale-skill-categories-by-class"
+                  className="form-check-input"
+                  type="checkbox"
+                  checked={skillScope.skill_categories_separate_by_class}
+                  onChange={(event) =>
+                    setSkillScope((previous) => ({
+                      ...previous,
+                      skill_categories_separate_by_class: event.target.checked,
+                    }))
+                  }
+                  disabled={skillScopeSaving}
+                />
+                <label
+                  className="form-check-label"
+                  htmlFor="grade-scale-skill-categories-by-class"
+                >
+                  Separate skill categories by class
+                </label>
+              </div>
+            </div>
+            <div className="col-md-6 col-12 form-group">
+              <div className="form-check">
+                <input
+                  id="grade-scale-skills-by-class"
+                  className="form-check-input"
+                  type="checkbox"
+                  checked={skillScope.skill_types_separate_by_class}
+                  onChange={(event) =>
+                    setSkillScope((previous) => ({
+                      ...previous,
+                      skill_types_separate_by_class: event.target.checked,
+                    }))
+                  }
+                  disabled={skillScopeSaving}
+                />
+                <label
+                  className="form-check-label"
+                  htmlFor="grade-scale-skills-by-class"
+                >
+                  Separate skills by class
+                </label>
+              </div>
+            </div>
+          </div>
+          <small className="form-text text-muted">
+            Leave both options off to share categories and skills across the
+            whole school.
+          </small>
+        </div>
+      </div>
+
+      <div className="card mb-4">
+        <div className="card-body">
+          <div className="heading-layout1">
+            <div className="item-title">
               <h3>Active Scale</h3>
             </div>
             <div className="item-title">
@@ -1241,6 +1368,55 @@ export default function GradeScalesPage() {
             <div className="alert alert-info">Loading settings...</div>
           ) : null}
           <div className="row gutters-20">
+            <div className="col-md-6 col-12 form-group">
+              <label htmlFor="grade-scale-result-comment-mode">
+                Result Comment Mode
+              </label>
+              <select
+                id="grade-scale-result-comment-mode"
+                className="form-control"
+                value={resultSettings.comment_mode}
+                onChange={(event) =>
+                  setResultSettings((prev) => ({
+                    ...prev,
+                    comment_mode:
+                      event.target.value as ResultPageSettings["comment_mode"],
+                  }))
+                }
+                disabled={resultSettingsLoading || resultSettingsSaving}
+              >
+                <option value="manual">Manual</option>
+                <option value="range">Automatic</option>
+              </select>
+              <small className="form-text text-muted">
+                Automatic uses score-based comments. Manual allows saved comment
+                templates and custom edits per student.
+              </small>
+            </div>
+            <div className="col-md-6 col-12 form-group">
+              <label htmlFor="grade-scale-result-signatory-title">
+                Main Result Signatory Title
+              </label>
+              <select
+                id="grade-scale-result-signatory-title"
+                className="form-control"
+                value={resultSettings.signatory_title}
+                onChange={(event) =>
+                  setResultSettings((prev) => ({
+                    ...prev,
+                    signatory_title:
+                      event.target.value as ResultPageSettings["signatory_title"],
+                  }))
+                }
+                disabled={resultSettingsLoading || resultSettingsSaving}
+              >
+                <option value="principal">Principal</option>
+                <option value="director">Director</option>
+              </select>
+              <small className="form-text text-muted">
+                Controls the label shown for the signatory comment and signature on the main result sheet.
+              </small>
+            </div>
             {resultSettingOptions.map((option) => (
               <div key={option.key} className="col-md-6 col-12 form-group">
                 <div className="form-check">
@@ -1371,55 +1547,66 @@ export default function GradeScalesPage() {
         </div>
       </div>
 
-      <div className="card height-auto mt-4">
-        <div className="card-body">
-          <div className="heading-layout1">
-            <div className="item-title">
-              <h3>Result Comment Templates (Optional)</h3>
+      {isAutomaticCommentMode ? (
+        <div className="card height-auto mt-4">
+          <div className="card-body">
+            <div className="alert alert-info mb-0">
+              Automatic comment mode is active. Result comment templates are
+              hidden until you switch back to manual.
             </div>
-            <div className="d-flex align-items-center">
-              <button
-                type="button"
-                className="btn btn-sm btn-outline-primary mr-2"
-                onClick={handleAddCommentRange}
-                disabled={!selectedScaleId || commentSaving}
-              >
-                <i className="fas fa-plus" /> Add Comment
-              </button>
-              <button
-                type="button"
-                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                onClick={handleCommentSave}
-                disabled={commentSaving || !selectedScaleId}
-              >
-                {commentSaving ? "Saving..." : "Save Changes"}
-              </button>
-            </div>
-          </div>
-          <p className="text-muted mb-3">
-            Add reusable teacher and principal comments that staff can pick and
-            still edit as custom text when needed.
-          </p>
-          {commentInfoMessage ? (
-            <div className="alert alert-info">{commentInfoMessage}</div>
-          ) : null}
-          {commentErrorMessage ? (
-            <div className="alert alert-danger">{commentErrorMessage}</div>
-          ) : null}
-          <div className="table-responsive">
-            <table className="table table-bordered table-striped">
-              <thead>
-                <tr>
-                  <th>Teacher Comment</th>
-                  <th>Principal Comment</th>
-                  <th className="text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody>{renderCommentTableBody()}</tbody>
-            </table>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="card height-auto mt-4">
+          <div className="card-body">
+            <div className="heading-layout1">
+              <div className="item-title">
+                <h3>Result Comment Templates (Optional)</h3>
+              </div>
+              <div className="d-flex align-items-center">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-primary mr-2"
+                  onClick={handleAddCommentRange}
+                  disabled={!selectedScaleId || commentSaving}
+                >
+                  <i className="fas fa-plus" /> Add Comment
+                </button>
+                <button
+                  type="button"
+                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                  onClick={handleCommentSave}
+                  disabled={commentSaving || !selectedScaleId}
+                >
+                  {commentSaving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </div>
+            <p className="text-muted mb-3">
+              Add reusable teacher and principal comments that staff can pick and
+              still edit as custom text when needed.
+            </p>
+            {commentInfoMessage ? (
+              <div className="alert alert-info">{commentInfoMessage}</div>
+            ) : null}
+            {commentErrorMessage ? (
+              <div className="alert alert-danger">{commentErrorMessage}</div>
+            ) : null}
+            <div className="table-responsive">
+              <table className="table table-bordered table-striped">
+                <thead>
+                  <tr>
+                    <th>Teacher Comment</th>
+                    <th>Principal Comment</th>
+                    <th className="text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody>{renderCommentTableBody()}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

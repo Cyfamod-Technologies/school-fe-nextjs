@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/apiClient';
+import { getErrorMessage } from "@/lib/errors";
 
 interface Quiz {
   id: string;
@@ -70,8 +71,8 @@ export default function AdminDashboard() {
       const response = await apiFetch<{ data: Quiz[] }>('/api/v1/cbt/quizzes');
       setQuizzes(response.data || []);
       setError(null);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load quizzes');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to load quizzes'));
       console.error('Error loading quizzes:', err);
     } finally {
       setLoading(false);
@@ -84,7 +85,7 @@ export default function AdminDashboard() {
         method: 'POST',
       });
       loadQuizzes();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error publishing quiz:', err);
     }
   };
@@ -95,7 +96,7 @@ export default function AdminDashboard() {
         method: 'POST',
       });
       loadQuizzes();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error unpublishing quiz:', err);
     }
   };
@@ -108,7 +109,7 @@ export default function AdminDashboard() {
         method: 'DELETE',
       });
       loadQuizzes();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error deleting quiz:', err);
     }
   };

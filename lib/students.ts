@@ -1,4 +1,11 @@
 import { apiFetch } from "@/lib/apiClient";
+import { BACKEND_URL } from "@/lib/config";
+import { getCookie } from "@/lib/cookies";
+
+export interface StudentDelectionWithDependenciesError extends Error {
+  dependencies?: string[];
+  isDependencyError?: boolean;
+}
 
 export interface StudentName {
   id?: number | string;
@@ -14,6 +21,9 @@ export interface StudentSummary {
   gender?: string | null;
   photo_url?: string | null;
   status?: string | null;
+  school_class_id?: number | string | null;
+  class_arm_id?: number | string | null;
+  class_section_id?: number | string | null;
   school_class?: StudentName & { class_arm?: StudentName | null };
   class_arm?: StudentName | null;
   class_section?: StudentName | null;
@@ -52,6 +62,7 @@ export interface StudentFilters {
   school_class_id?: string;
   class_arm_id?: string;
   class_section_id?: string;
+  status?: string;
 }
 
 function buildQuery(params: Record<string, string | number | undefined>): string {
@@ -77,8 +88,11 @@ export async function listStudents(
     session_id: filters.session_id,
     term_id: filters.term_id,
     current_session_id: filters.current_session_id,
+    current_term_id: filters.current_term_id,
     school_class_id: filters.school_class_id,
     class_arm_id: filters.class_arm_id,
+    class_section_id: filters.class_section_id,
+    status: filters.status,
   });
 
   const payload = await apiFetch<StudentListResponse>(
@@ -162,10 +176,121 @@ export async function updateStudent(
   });
 }
 
+export interface RegeneratedAdmissionNumber {
+  id: number | string;
+  previous_admission_no?: string | null;
+  admission_no: string;
+}
+
+export interface RegenerateAdmissionNumbersResponse {
+  message: string;
+  data: RegeneratedAdmissionNumber[];
+}
+
+export async function regenerateAdmissionNumbers(
+  studentIds: Array<number | string>,
+): Promise<RegenerateAdmissionNumbersResponse> {
+  return apiFetch<RegenerateAdmissionNumbersResponse>(
+    "/api/v1/students/regenerate-admission-numbers",
+    {
+      method: "POST",
+      body: JSON.stringify({ student_ids: studentIds.map(String) }),
+    },
+  );
+}
+
+export async function resetStudentPassword(
+  studentId: number | string,
+): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(
+    `/api/v1/students/${studentId}/reset-password`,
+    { method: "POST" },
+  );
+}
+
+export interface StudentDelectionWithDependenciesError extends Error {
+  dependencies?: string[];
+  isDependencyError?: boolean;
+}
+
 export async function deleteStudent(
   studentId: number | string,
 ): Promise<void> {
-  await apiFetch(`/api/v1/students/${studentId}`, {
+  const token = getCookie("token");
+  const response = await fetch(`${BACKEND_URL}/api/v1/students/${studentId}`, {
     method: "DELETE",
+    credentials: "include",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
   });
+
+  if (!response.ok) {
+    let message = response.statusText;
+    let dependencies: string[] | undefined;
+
+    if (response.status === 422) {
+      // Check if it's a dependency error
+      try {
+        const data = await response.json();
+        message = data.message || message;
+        dependencies = data.dependencies;
+      } catch {
+        // ignore parse errors
+      }
+
+      const error = new Error(message) as StudentDelectionWithDependenciesError;
+      error.dependencies = dependencies;
+      error.isDependencyError = true;
+      throw error;
+    }
+
+    if (response.status === 401) {
+      throw new Error("Session expired. Re-checking authentication.");
+    }
+
+    try {
+      const data = await response.json();
+      message = data.message || message;
+    } catch {
+      // ignore parse errors, fall back to status text
+    }
+
+    throw new Error(message || `Request failed (${response.status})`);
+  }
+}
+
+export async function deleteDependentRecords(
+  studentId: number | string,
+): Promise<{ message: string; deleted_counts: Record<string, number> }> {
+  const token = getCookie("token");
+  const response = await fetch(
+    `${BACKEND_URL}/api/v1/students/${studentId}/dependent-records`,
+    {
+      method: "DELETE",
+      credentials: "include",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    let message = response.statusText;
+    try {
+      const data = await response.json();
+      message = data.message || message;
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(message || `Failed to delete dependent records`);
+  }
+
+  const data = await response.json();
+  return {
+    message: data.message,
+    deleted_counts: data.deleted_counts,
+  } as { message: string; deleted_counts: Record<string, number> };
 }

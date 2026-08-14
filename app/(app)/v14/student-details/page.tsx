@@ -16,8 +16,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   deleteStudent,
   getStudent,
+  listStudents,
+  resetStudentPassword,
   type StudentDetail,
+  type StudentSummary,
+  type StudentDelectionWithDependenciesError,
 } from "@/lib/students";
+import DeleteStudentModal from "@/components/DeleteStudentModal";
 import { resolveBackendUrl } from "@/lib/config";
 import { getCookie } from "@/lib/cookies";
 import { listSessions, type Session } from "@/lib/sessions";
@@ -30,6 +35,10 @@ import {
   type StudentSkillRating,
   type StudentSkillType,
 } from "@/lib/studentSkillRatings";
+import {
+  fetchResultPageSettings,
+  type ResultPageSettings,
+} from "@/lib/resultPageSettings";
 import {
   getStudentTermSummary,
   updateStudentTermSummary,
@@ -45,14 +54,59 @@ import {
   invalidateResultPin,
   type ResultPin,
 } from "@/lib/resultPins";
+import {
+  fetchTeacherDashboard,
+  type TeacherDashboardResponse,
+} from "@/lib/staff";
 import { isTeacherUser } from "@/lib/roleChecks";
 
 const passthroughLoader: ImageLoader = ({ src }) => src;
+
+const defaultResultPageSettings: ResultPageSettings = {
+  show_grade: true,
+  show_position: true,
+  show_class_average: true,
+  show_lowest: true,
+  show_highest: true,
+  show_remarks: true,
+  hide_student_identity: false,
+  allow_shared_pin_access: false,
+  require_pin_for_pdf_download: true,
+  enable_session_result_print: false,
+  collapse_session_ca: false,
+  comment_mode: "manual",
+  signatory_title: "principal",
+};
+
+interface StudentNavigationTarget {
+  href: string;
+  label: string;
+}
+
+const buildStudentDisplayName = (
+  student: Pick<
+    StudentSummary,
+    "first_name" | "middle_name" | "last_name" | "admission_no"
+  >,
+): string => {
+  const fullName = [
+    student.first_name,
+    student.middle_name,
+    student.last_name,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return fullName || student.admission_no || "Student";
+};
 
 export default function StudentDetailsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const studentId = searchParams.get("id");
+  const querySessionId = searchParams.get("session_id") ?? "";
+  const queryTermId = searchParams.get("term_id") ?? "";
   const filterQuery = useMemo(() => {
     const params = new URLSearchParams();
     const search = searchParams.get("search");
@@ -99,11 +153,29 @@ export default function StudentDetailsPage() {
   const allStudentsHref = useMemo(() => {
     return filterQuery ? `/v14/all-students?${filterQuery}` : "/v14/all-students";
   }, [filterQuery]);
-  const { schoolContext, user, hasPermission } = useAuth();
+  const listPage = useMemo(() => {
+    const parsed = Number(searchParams.get("page"));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  }, [searchParams]);
+  const listPerPage = useMemo(() => {
+    const parsed = Number(searchParams.get("per_page"));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 10;
+  }, [searchParams]);
+  const listSortBy = searchParams.get("sortBy") || "last_name";
+  const listSortDirection: "asc" | "desc" =
+    searchParams.get("sortDirection") === "desc" ? "desc" : "asc";
+  const { schoolContext, user, hasPermission, loading: authLoading } = useAuth();
 
   const isTeacher = isTeacherUser(user);
-  const hidePrintResult =
-    studentId === "4cc05231-689a-4c36-9ba5-8fb4d8b6c51e";
+  const [resultPageSettings, setResultPageSettings] = useState<ResultPageSettings>(
+    defaultResultPageSettings,
+  );
+  const effectiveCommentMode: ResultPageSettings["comment_mode"] =
+    user?.school?.result_comment_mode === "range" ||
+    resultPageSettings.comment_mode === "range"
+      ? "range"
+      : "manual";
+  const isAutomaticCommentMode = effectiveCommentMode === "range";
   const canOpenResultEntry = hasPermission([
     "results.entry.view",
     "results.entry.enter",
@@ -112,13 +184,77 @@ export default function StudentDetailsPage() {
   ]);
 
   const [student, setStudent] = useState<StudentDetail | null>(null);
+  const [previousStudent, setPreviousStudent] =
+    useState<StudentNavigationTarget | null>(null);
+  const [nextStudent, setNextStudent] = useState<StudentNavigationTarget | null>(null);
+  const [studentNavLoading, setStudentNavLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletionDependencies, setDeletionDependencies] = useState<string[]>([]);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [resettingStudentPassword, setResettingStudentPassword] = useState(false);
+  const [passwordResetFeedback, setPasswordResetFeedback] = useState<string | null>(null);
+  const [passwordResetError, setPasswordResetError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [termsCache, setTermsCache] = useState<Record<string, Term[]>>({});
   const [selectedSession, setSelectedSession] = useState<string>("");
   const [selectedTerm, setSelectedTerm] = useState<string>("");
+  const detailsContextQuery = useMemo(() => {
+    const params = new URLSearchParams(filterQuery);
+
+    if (selectedSession) {
+      params.set("session_id", selectedSession);
+    } else if (querySessionId) {
+      params.set("session_id", querySessionId);
+    }
+
+    if (selectedTerm) {
+      params.set("term_id", selectedTerm);
+    } else if (queryTermId) {
+      params.set("term_id", queryTermId);
+    }
+
+    return params.toString();
+  }, [filterQuery, querySessionId, queryTermId, selectedSession, selectedTerm]);
+  const editStudentHref = useMemo(() => {
+    if (!studentId) {
+      return "/v14/edit-student";
+    }
+
+    return detailsContextQuery
+      ? `/v14/edit-student?id=${studentId}&${detailsContextQuery}`
+      : `/v14/edit-student?id=${studentId}`;
+  }, [detailsContextQuery, studentId]);
+  const buildStudentDetailsHref = useCallback(
+    (targetStudentId: number | string) => {
+      return detailsContextQuery
+        ? `/v14/student-details?id=${targetStudentId}&${detailsContextQuery}`
+        : `/v14/student-details?id=${targetStudentId}`;
+    },
+    [detailsContextQuery],
+  );
+  const studentListFilters = useMemo(
+    () => ({
+      page: listPage,
+      per_page: listPerPage,
+      sortBy: listSortBy,
+      sortDirection: listSortDirection,
+      search: searchParams.get("search") ?? undefined,
+      current_session_id: searchParams.get("current_session_id") ?? undefined,
+      school_class_id: searchParams.get("school_class_id") ?? undefined,
+      class_arm_id: searchParams.get("class_arm_id") ?? undefined,
+      class_section_id: searchParams.get("class_section_id") ?? undefined,
+    }),
+    [
+      listPage,
+      listPerPage,
+      listSortBy,
+      listSortDirection,
+      searchParams,
+    ],
+  );
   const studentResultEntryHref = useMemo(() => {
     if (!studentId) {
       return "/v14/student-result-entry";
@@ -136,6 +272,7 @@ export default function StudentDetailsPage() {
 
     const sessionCandidate =
       selectedSession ||
+      querySessionId ||
       (schoolContext.current_session_id != null
         ? String(schoolContext.current_session_id)
         : student?.current_session_id != null
@@ -144,6 +281,7 @@ export default function StudentDetailsPage() {
 
     const termCandidate =
       selectedTerm ||
+      queryTermId ||
       (schoolContext.current_term_id != null
         ? String(schoolContext.current_term_id)
         : student?.current_term_id != null
@@ -161,6 +299,8 @@ export default function StudentDetailsPage() {
     return `/v14/student-result-entry?${params.toString()}`;
   }, [
     filterQuery,
+    querySessionId,
+    queryTermId,
     schoolContext.current_session_id,
     schoolContext.current_term_id,
     selectedSession,
@@ -170,6 +310,93 @@ export default function StudentDetailsPage() {
     studentId,
   ]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const mapTarget = (candidate: StudentSummary | null): StudentNavigationTarget | null => {
+      if (!candidate?.id) {
+        return null;
+      }
+
+      return {
+        href: buildStudentDetailsHref(candidate.id),
+        label: buildStudentDisplayName(candidate),
+      };
+    };
+
+    const loadStudentNavigation = async () => {
+      if (!studentId) {
+        setPreviousStudent(null);
+        setNextStudent(null);
+        return;
+      }
+
+      setStudentNavLoading(true);
+
+      try {
+        const response = await listStudents(studentListFilters);
+        const currentStudents = Array.isArray(response.data) ? response.data : [];
+        const currentIndex = currentStudents.findIndex(
+          (candidate) => String(candidate.id) === String(studentId),
+        );
+
+        let previousCandidate =
+          currentIndex > 0 ? currentStudents[currentIndex - 1] : null;
+        let nextCandidate =
+          currentIndex >= 0 && currentIndex < currentStudents.length - 1
+            ? currentStudents[currentIndex + 1]
+            : null;
+
+        if (!previousCandidate && currentIndex === 0 && response.current_page > 1) {
+          const previousPage = await listStudents({
+            ...studentListFilters,
+            page: response.current_page - 1,
+          });
+          const previousPageStudents = Array.isArray(previousPage.data)
+            ? previousPage.data
+            : [];
+          previousCandidate =
+            previousPageStudents[previousPageStudents.length - 1] ?? null;
+        }
+
+        if (
+          !nextCandidate &&
+          currentIndex >= 0 &&
+          currentIndex === currentStudents.length - 1 &&
+          response.current_page < response.last_page
+        ) {
+          const nextPage = await listStudents({
+            ...studentListFilters,
+            page: response.current_page + 1,
+          });
+          const nextPageStudents = Array.isArray(nextPage.data) ? nextPage.data : [];
+          nextCandidate = nextPageStudents[0] ?? null;
+        }
+
+        if (!cancelled) {
+          setPreviousStudent(mapTarget(previousCandidate));
+          setNextStudent(mapTarget(nextCandidate));
+        }
+      } catch (err) {
+        console.error("Unable to load adjacent students", err);
+        if (!cancelled) {
+          setPreviousStudent(null);
+          setNextStudent(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setStudentNavLoading(false);
+        }
+      }
+    };
+
+    void loadStudentNavigation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [buildStudentDetailsHref, studentId, studentListFilters]);
+
   const [skillTypes, setSkillTypes] = useState<StudentSkillType[]>([]);
   const [skillRatings, setSkillRatings] = useState<StudentSkillRating[]>([]);
   const [skillLoading, setSkillLoading] = useState(false);
@@ -178,6 +405,8 @@ export default function StudentDetailsPage() {
   const [skillError, setSkillError] = useState<string | null>(null);
   const [skillValues, setSkillValues] = useState<Record<string, string>>({});
   const [skillsModalOpen, setSkillsModalOpen] = useState(false);
+  const [teacherDashboard, setTeacherDashboard] =
+    useState<TeacherDashboardResponse | null>(null);
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewHtml, setPreviewHtml] = useState("");
@@ -218,9 +447,9 @@ export default function StudentDetailsPage() {
   const [pinFeedbackType, setPinFeedbackType] = useState<"success" | "warning">("success");
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinProcessing, setPinProcessing] = useState(false);
-  const [printProcessing, setPrintProcessing] = useState(false);
 
   const ratingOptions = ["0", "1", "2", "3", "4", "5"];
+  const termSelectionTouchedRef = useRef(false);
   const skillAutoSaveTimersRef = useRef<Record<string, number>>({});
   const lastSkillSaveKeyRef = useRef<Record<string, string>>({});
   const skillRatingsLoadRequestRef = useRef(0);
@@ -241,12 +470,94 @@ export default function StudentDetailsPage() {
   const hasManualAttendance =
     termSummary.days_present != null || termSummary.days_absent != null;
 
+  const canManageSkillRatings = useMemo(() => {
+    if (!isTeacher) {
+      return true;
+    }
+    if (!student || !teacherDashboard) {
+      return false;
+    }
+
+    const classId = String(
+      student.school_class_id ?? student.school_class?.id ?? "",
+    );
+    const studentArmId = String(
+      student.class_arm_id ?? student.class_arm?.id ?? "",
+    );
+    const studentSectionId = String(
+      student.class_section_id ?? student.class_section?.id ?? "",
+    );
+
+    if (!classId) {
+      return false;
+    }
+
+    return teacherDashboard.assignments.some((assignment) => {
+      if (!assignment.is_class_teacher) {
+        return false;
+      }
+      if (String(assignment.class?.id ?? "") !== classId) {
+        return false;
+      }
+
+      const assignmentArmId = assignment.class_arm?.id
+        ? String(assignment.class_arm.id)
+        : "";
+      const assignmentSectionId = assignment.class_section?.id
+        ? String(assignment.class_section.id)
+        : "";
+
+      if (assignmentArmId && assignmentArmId !== studentArmId) {
+        return false;
+      }
+      if (assignmentSectionId && assignmentSectionId !== studentSectionId) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [isTeacher, student, teacherDashboard]);
+
   const terms = useMemo(() => {
     if (!selectedSession) {
       return [];
     }
     return termsCache[selectedSession] ?? [];
   }, [selectedSession, termsCache]);
+  const preferredSelectedTerm = useMemo(() => {
+    if (!selectedSession) {
+      return "";
+    }
+
+    if (queryTermId) {
+      return queryTermId;
+    }
+
+    if (
+      schoolContext.current_session_id != null &&
+      schoolContext.current_term_id != null &&
+      String(schoolContext.current_session_id) === selectedSession
+    ) {
+      return String(schoolContext.current_term_id);
+    }
+
+    if (
+      student?.current_session_id != null &&
+      student?.current_term_id != null &&
+      String(student.current_session_id) === selectedSession
+    ) {
+      return String(student.current_term_id);
+    }
+
+    return "";
+  }, [
+    queryTermId,
+    schoolContext.current_session_id,
+    schoolContext.current_term_id,
+    selectedSession,
+    student?.current_session_id,
+    student?.current_term_id,
+  ]);
 
   const skillRatingsMap = useMemo(() => {
     const map = new Map<string, StudentSkillRating>();
@@ -459,8 +770,10 @@ export default function StudentDetailsPage() {
   }, [student?.id, selectedSession, selectedTerm]);
 
   const loadResultPins = useCallback(async () => {
-    if (!student?.id || !selectedSession || !selectedTerm) {
+    if (isTeacher || !student?.id || !selectedSession || !selectedTerm) {
       setPins([]);
+      setPinError(null);
+      setPinLoading(false);
       return;
     }
     setPinLoading(true);
@@ -482,7 +795,7 @@ export default function StudentDetailsPage() {
     } finally {
       setPinLoading(false);
     }
-  }, [student?.id, selectedSession, selectedTerm]);
+  }, [isTeacher, student?.id, selectedSession, selectedTerm]);
 
   const loadAttendanceReport = useCallback(async () => {
     if (!student?.id || !selectedSession || !selectedTerm) {
@@ -516,8 +829,28 @@ export default function StudentDetailsPage() {
   }, [loadSkillRatings]);
 
   useEffect(() => {
+    if (!canManageSkillRatings) {
+      setSkillsModalOpen(false);
+    }
+  }, [canManageSkillRatings]);
+
+  useEffect(() => {
     void loadTermSummary();
   }, [loadTermSummary]);
+
+  useEffect(() => {
+    if (!student?.id || !selectedSession || !selectedTerm) {
+      return;
+    }
+
+    void loadTermSummary();
+  }, [
+    loadTermSummary,
+    resultPageSettings.comment_mode,
+    selectedSession,
+    selectedTerm,
+    student?.id,
+  ]);
 
   useEffect(() => {
     void loadResultPins();
@@ -531,6 +864,7 @@ export default function StudentDetailsPage() {
     const newSession = event.target.value;
     setSelectedSession(newSession);
     setSelectedTerm("");
+    termSelectionTouchedRef.current = false;
     setSkillValues({});
     setSkillFeedback(null);
     setSkillError(null);
@@ -541,6 +875,7 @@ export default function StudentDetailsPage() {
   };
 
   const handleTermChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    termSelectionTouchedRef.current = true;
     setSelectedTerm(event.target.value);
     setSkillValues({});
     setSkillFeedback(null);
@@ -553,7 +888,12 @@ export default function StudentDetailsPage() {
 
   const saveSkillRating = useCallback(
     async (skillTypeId: string, value: string) => {
-      if (!student?.id || !selectedSession || !selectedTerm) {
+      if (
+        !student?.id ||
+        !selectedSession ||
+        !selectedTerm ||
+        !canManageSkillRatings
+      ) {
         return;
       }
       const trimmedValue = value.trim();
@@ -602,12 +942,18 @@ export default function StudentDetailsPage() {
         );
       }
     },
-    [student?.id, selectedSession, selectedTerm, skillRatings],
+    [
+      canManageSkillRatings,
+      student?.id,
+      selectedSession,
+      selectedTerm,
+      skillRatings,
+    ],
   );
 
   const scheduleSkillSave = useCallback(
     (skillTypeId: string, value: string) => {
-      if (!selectedSession || !selectedTerm) {
+      if (!selectedSession || !selectedTerm || !canManageSkillRatings) {
         return;
       }
       const trimmedValue = value.trim();
@@ -621,11 +967,14 @@ export default function StudentDetailsPage() {
         void saveSkillRating(skillTypeId, trimmedValue);
       }, 400);
     },
-    [saveSkillRating, selectedSession, selectedTerm],
+    [canManageSkillRatings, saveSkillRating, selectedSession, selectedTerm],
   );
 
   const handleSkillValueChange = useCallback(
     (skillTypeId: string) => (event: ChangeEvent<HTMLSelectElement>) => {
+      if (!canManageSkillRatings) {
+        return;
+      }
       const value = event.target.value;
       setSkillValues((prev) => ({
         ...prev,
@@ -633,7 +982,7 @@ export default function StudentDetailsPage() {
       }));
       scheduleSkillSave(skillTypeId, value);
     },
-    [scheduleSkillSave],
+    [canManageSkillRatings, scheduleSkillSave],
   );
 
   const handleTermSummaryChange = (
@@ -898,16 +1247,20 @@ export default function StudentDetailsPage() {
     }
     params.set("student_id", studentId);
     const sessionCandidate =
-      (schoolContext.current_session_id != null
-        ? String(schoolContext.current_session_id)
-        : selectedSession ||
+      (selectedSession ||
+        querySessionId ||
+        (schoolContext.current_session_id != null
+          ? String(schoolContext.current_session_id)
+          : "") ||
           (student?.current_session_id != null
             ? String(student.current_session_id)
             : ""));
     const termCandidate =
-      (schoolContext.current_term_id != null
-        ? String(schoolContext.current_term_id)
-        : selectedTerm ||
+      (selectedTerm ||
+        queryTermId ||
+        (schoolContext.current_term_id != null
+          ? String(schoolContext.current_term_id)
+          : "") ||
           (student?.current_term_id != null
             ? String(student.current_term_id)
             : ""));
@@ -919,6 +1272,8 @@ export default function StudentDetailsPage() {
     }
     return params;
   }, [
+    querySessionId,
+    queryTermId,
     selectedSession,
     selectedTerm,
     student?.current_session_id,
@@ -997,32 +1352,6 @@ export default function StudentDetailsPage() {
     return response.text();
   }, [buildPrintParams, studentId]);
 
-  const handlePrintResult = useCallback(async () => {
-    setPrintProcessing(true);
-    try {
-      const html = await fetchPrintableResultHtml();
-      const printWindow = window.open("", "_blank");
-      if (!printWindow) {
-        window.alert(
-          "Unable to open result window. Please allow pop-ups for this site.",
-        );
-        return;
-      }
-      printWindow.document.open();
-      printWindow.document.write(html);
-      printWindow.document.close();
-    } catch (error) {
-      console.error("Unable to load printable result", error);
-      window.alert(
-        error instanceof Error
-          ? error.message
-          : "Unable to load printable result.",
-      );
-    } finally {
-      setPrintProcessing(false);
-    }
-  }, [fetchPrintableResultHtml]);
-
   const handlePreviewResult = useCallback(async () => {
     setPreviewOpen(true);
     setPreviewLoading(true);
@@ -1090,6 +1419,61 @@ export default function StudentDetailsPage() {
   };
 
   useEffect(() => {
+    let active = true;
+
+    fetchResultPageSettings()
+      .then((data) => {
+        if (!active) {
+          return;
+        }
+        setResultPageSettings(data);
+      })
+      .catch((error) => {
+        console.error("Unable to load result comment mode", error);
+        if (!active) {
+          return;
+        }
+        setResultPageSettings((prev) => ({
+          ...prev,
+          comment_mode:
+            user?.school?.result_comment_mode === "range" ? "range" : "manual",
+        }));
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.school?.result_comment_mode]);
+
+  useEffect(() => {
+    if (!isTeacher) {
+      setTeacherDashboard(null);
+      return;
+    }
+
+    let active = true;
+
+    fetchTeacherDashboard()
+      .then((dashboard) => {
+        if (!active) {
+          return;
+        }
+        setTeacherDashboard(dashboard);
+      })
+      .catch((error) => {
+        console.error("Unable to load teacher assignments", error);
+        if (!active) {
+          return;
+        }
+        setTeacherDashboard(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isTeacher]);
+
+  useEffect(() => {
     if (!studentId) {
       router.replace(allStudentsHref);
       return;
@@ -1125,23 +1509,30 @@ export default function StudentDetailsPage() {
       return;
     }
     if (!selectedSession) {
-      if (schoolContext.current_session_id != null) {
+      if (querySessionId) {
+        setSelectedSession(querySessionId);
+      } else if (!authLoading && schoolContext.current_session_id != null) {
         setSelectedSession(String(schoolContext.current_session_id));
-      } else if (student.current_session_id != null) {
+      } else if (!authLoading && student.current_session_id != null) {
         setSelectedSession(String(student.current_session_id));
       }
     }
     if (!selectedTerm) {
-      if (schoolContext.current_term_id != null) {
+      if (queryTermId) {
+        setSelectedTerm(queryTermId);
+      } else if (!authLoading && schoolContext.current_term_id != null) {
         setSelectedTerm(String(schoolContext.current_term_id));
-      } else if (student.current_term_id != null) {
+      } else if (!authLoading && student.current_term_id != null) {
         setSelectedTerm(String(student.current_term_id));
       }
     }
   }, [
+    authLoading,
     student,
     selectedSession,
     selectedTerm,
+    querySessionId,
+    queryTermId,
     schoolContext.current_session_id,
     schoolContext.current_term_id,
   ]);
@@ -1174,14 +1565,78 @@ export default function StudentDetailsPage() {
       return;
     }
     const terms = termsCache[selectedSession];
-    if (!terms || terms.length === 0) {
+    if (!terms) {
+      return;
+    }
+    if (terms.length === 0) {
       setSelectedTerm("");
       return;
     }
-    if (!selectedTerm || !terms.find((term) => String(term.id) === selectedTerm)) {
+    const hasSelectedTerm = terms.some(
+      (term) => String(term.id) === selectedTerm,
+    );
+    const hasPreferredTerm =
+      preferredSelectedTerm &&
+      terms.some((term) => String(term.id) === preferredSelectedTerm);
+
+    if (
+      hasPreferredTerm &&
+      (!termSelectionTouchedRef.current || !hasSelectedTerm) &&
+      selectedTerm !== preferredSelectedTerm
+    ) {
+      setSelectedTerm(preferredSelectedTerm);
+      return;
+    }
+
+    if (!hasSelectedTerm) {
       setSelectedTerm(String(terms[0].id));
     }
-  }, [selectedSession, selectedTerm, termsCache]);
+  }, [preferredSelectedTerm, selectedSession, selectedTerm, termsCache]);
+
+  useEffect(() => {
+    if (!studentId) {
+      return;
+    }
+
+    if (authLoading && !selectedSession && !selectedTerm) {
+      return;
+    }
+
+    const currentSessionParam = searchParams.get("session_id") ?? "";
+    const currentTermParam = searchParams.get("term_id") ?? "";
+
+    if (
+      (currentSessionParam && !selectedSession) ||
+      (currentTermParam && !selectedTerm)
+    ) {
+      return;
+    }
+
+    if (
+      currentSessionParam === selectedSession &&
+      currentTermParam === selectedTerm
+    ) {
+      return;
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (selectedSession) {
+      params.set("session_id", selectedSession);
+    } else {
+      params.delete("session_id");
+    }
+
+    if (selectedTerm) {
+      params.set("term_id", selectedTerm);
+    } else {
+      params.delete("term_id");
+    }
+
+    router.replace(`/v14/student-details?${params.toString()}`, {
+      scroll: false,
+    });
+  }, [authLoading, router, searchParams, selectedSession, selectedTerm, studentId]);
 
   useEffect(() => {
     setSkillFeedback(null);
@@ -1212,6 +1667,32 @@ export default function StudentDetailsPage() {
       .join(" ");
   }, [student]);
 
+  const handleResetStudentPassword = async () => {
+    if (!studentId || isTeacher || resettingStudentPassword) return;
+
+    const confirmed = window.confirm(
+      `Reset ${fullName || "this student"}'s portal password to the default password? The student will need to sign in again.`,
+    );
+    if (!confirmed) return;
+
+    setResettingStudentPassword(true);
+    setPasswordResetFeedback(null);
+    setPasswordResetError(null);
+
+    try {
+      const response = await resetStudentPassword(studentId);
+      setPasswordResetFeedback(
+        response.message || "Student password reset successfully.",
+      );
+    } catch (err) {
+      setPasswordResetError(
+        err instanceof Error ? err.message : "Unable to reset the student password.",
+      );
+    } finally {
+      setResettingStudentPassword(false);
+    }
+  };
+
   const photoUrl = useMemo(() => {
     if (!student?.photo_url) {
       return "/assets/img/figure/student.png";
@@ -1223,26 +1704,50 @@ export default function StudentDetailsPage() {
     if (!studentId || removing) {
       return;
     }
-    if (
-      !window.confirm(
-        "Delete this student? This will fail if the student has dependent records (results, attendance, etc.).",
-      )
-    ) {
-      return;
-    }
     setRemoving(true);
+    setDeleteError(null);
+    setDeletionDependencies([]);
+
     try {
       await deleteStudent(studentId);
       router.push(allStudentsHref);
     } catch (err) {
-      console.error("Unable to delete student", err);
-      alert(
-        err instanceof Error ? err.message : "Unable to delete student.",
-      );
-    } finally {
       setRemoving(false);
+      console.error("Unable to delete student", err);
+
+      // Check if it's a dependency error
+      if (
+        err instanceof Error &&
+        "isDependencyError" in err &&
+        err.isDependencyError
+      ) {
+        const dependencyError = err as StudentDelectionWithDependenciesError;
+        if (dependencyError.dependencies && dependencyError.dependencies.length > 0) {
+          setDeletionDependencies(dependencyError.dependencies);
+          setDeleteModalOpen(true);
+          return;
+        }
+      }
+
+      const errorMessage =
+        err instanceof Error ? err.message : "Unable to delete student.";
+      setDeleteError(errorMessage);
+      alert(errorMessage);
     }
   };
+
+  const handleDeleteClick = () => {
+    setDeleteError(null);
+    setDeletionDependencies([]);
+    if (
+      window.confirm(
+        "Delete this student? This will fail if the student has dependent records (results, attendance, etc.).",
+      )
+    ) {
+      handleDelete();
+    }
+  };
+
 
   if (!studentId) {
     return null;
@@ -1300,6 +1805,40 @@ export default function StudentDetailsPage() {
 
       <div className="card height-auto">
         <div className="card-body">
+          <div className="heading-layout1">
+            <div className="item-title">
+              <h3>Student Navigation</h3>
+              <p className="mb-0 text-muted small">
+                Move through the current filtered student list without going back
+                to the directory.
+              </p>
+            </div>
+          </div>
+          <div className="student-nav-actions">
+            <button
+              type="button"
+              className="btn-fill-lg student-nav-button student-nav-button--previous"
+              onClick={() => previousStudent && router.push(previousStudent.href)}
+              disabled={!previousStudent || studentNavLoading}
+              title={previousStudent ? `Previous: ${previousStudent.label}` : "No previous student"}
+            >
+              {previousStudent ? `Previous (${previousStudent.label})` : "Previous Student"}
+            </button>
+            <button
+              type="button"
+              className="btn-fill-lg student-nav-button student-nav-button--next"
+              onClick={() => nextStudent && router.push(nextStudent.href)}
+              disabled={!nextStudent || studentNavLoading}
+              title={nextStudent ? `Next: ${nextStudent.label}` : "No next student"}
+            >
+              {nextStudent ? `Next (${nextStudent.label})` : "Next Student"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card height-auto mt-4">
+        <div className="card-body">
           <div className="d-flex justify-content-between align-items-start mb-4">
             <div className="d-flex align-items-center">
               <Image
@@ -1326,31 +1865,19 @@ export default function StudentDetailsPage() {
               </div>
             </div>
             <div className="btn-group">
-              <Link
-                href={
-                  filterQuery
-                    ? `/v14/edit-student?id=${studentId}&${filterQuery}`
-                    : `/v14/edit-student?id=${studentId}`
-                }
-                className="btn btn-outline-primary"
-              >
-                Edit
-              </Link>
-              {!isTeacher && !hidePrintResult ? (
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary"
-                  onClick={handlePrintResult}
-                  disabled={printProcessing}
+              {!isTeacher ? (
+                <Link
+                  href={editStudentHref}
+                  className="btn btn-outline-primary"
                 >
-                  {printProcessing ? "Loading…" : "Print Result"}
-                </button>
+                  Edit
+                </Link>
               ) : null}
               {!isTeacher ? (
                 <button
                   type="button"
                   className="btn btn-outline-danger"
-                  onClick={handleDelete}
+                  onClick={handleDeleteClick}
                   disabled={removing}
                 >
                   {removing ? "Deleting…" : "Delete"}
@@ -1465,6 +1992,7 @@ export default function StudentDetailsPage() {
                 className="form-control"
                 value={selectedSession}
                 onChange={handleSessionChange}
+                disabled={isTeacher}
               >
                 <option value="">Select session</option>
                 {sessions.map((session) => (
@@ -1480,7 +2008,7 @@ export default function StudentDetailsPage() {
                 className="form-control"
                 value={selectedTerm}
                 onChange={handleTermChange}
-                disabled={!selectedSession}
+                disabled={isTeacher || !selectedSession}
               >
                 <option value="">Select term</option>
                 {terms.map((term) => (
@@ -1492,13 +2020,19 @@ export default function StudentDetailsPage() {
             </div>
           </div>
           <div className="d-flex justify-content-end align-items-center flex-wrap">
-            <button
-              type="button"
-              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mb-2"
-              onClick={() => setSkillsModalOpen(true)}
-            >
-              Open Skill Ratings
-            </button>
+            {canManageSkillRatings ? (
+              <button
+                type="button"
+                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mb-2"
+                onClick={() => setSkillsModalOpen(true)}
+              >
+                Open Skill Ratings
+              </button>
+            ) : (
+              <span className="text-muted small mb-2">
+                Skill ratings are available only to the assigned class teacher.
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -1770,19 +2304,23 @@ export default function StudentDetailsPage() {
             <div className="item-title">
               <h3>Term Comments</h3>
               <p className="mb-0 text-muted small">
-                Applies to the selected session and term above.
+                {isAutomaticCommentMode
+                  ? "Automatic score-based comments apply to the selected session and term."
+                  : "Applies to the selected session and term above."}
               </p>
             </div>
-            <div>
-              <button
-                type="button"
-                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-                onClick={() => void handlePreviewResult()}
-                disabled={previewLoading || !selectedSession || !selectedTerm}
-              >
-                {previewLoading ? "Preparing…" : "Preview Result"}
-              </button>
-            </div>
+            {!isTeacher ? (
+              <div>
+                <button
+                  type="button"
+                  className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                  onClick={() => void handlePreviewResult()}
+                  disabled={previewLoading || !selectedSession || !selectedTerm}
+                >
+                  {previewLoading ? "Preparing…" : "Preview Result"}
+                </button>
+              </div>
+            ) : null}
           </div>
           <form className="mb-3" onSubmit={handleTermSummarySubmit}>
             <div className="row">
@@ -1790,30 +2328,32 @@ export default function StudentDetailsPage() {
                 <label className="text-dark-medium">
                   Class Teacher&apos;s Comment
                 </label>
-                <select
-                  className="form-control mb-2"
-                  value={
-                    teacherCommentOptions.includes(
-                      termSummary.class_teacher_comment ?? "",
-                    )
-                      ? termSummary.class_teacher_comment ?? ""
-                      : ""
-                  }
-                  onChange={(event) =>
-                    handleTermSummaryChange(
-                      "class_teacher_comment",
-                      event.target.value,
-                    )
-                  }
-                  disabled={!selectedSession || !selectedTerm}
-                >
-                  <option value="">Select saved comment (optional)</option>
-                  {teacherCommentOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+                {!isAutomaticCommentMode ? (
+                  <select
+                    className="form-control mb-2"
+                    value={
+                      teacherCommentOptions.includes(
+                        termSummary.class_teacher_comment ?? "",
+                      )
+                        ? termSummary.class_teacher_comment ?? ""
+                        : ""
+                    }
+                    onChange={(event) =>
+                      handleTermSummaryChange(
+                        "class_teacher_comment",
+                        event.target.value,
+                      )
+                    }
+                    disabled={!selectedSession || !selectedTerm}
+                  >
+                    <option value="">Select saved comment (optional)</option>
+                    {teacherCommentOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
                 <textarea
                   className="form-control"
                   style={{ backgroundColor: "#f8f8f8" }}
@@ -1826,37 +2366,47 @@ export default function StudentDetailsPage() {
                       event.target.value,
                     )
                   }
-                  disabled={!selectedSession || !selectedTerm}
+                  disabled={
+                    !selectedSession || !selectedTerm || isAutomaticCommentMode
+                  }
                 />
+                {isAutomaticCommentMode ? (
+                  <small className="form-text text-muted">
+                    This comment is generated automatically from the student&apos;s
+                    score.
+                  </small>
+                ) : null}
               </div>
               <div className="col-md-6 col-12 form-group">
                 <label className="text-dark-medium">
                   Principal&apos;s Comment
                 </label>
-                <select
-                  className="form-control mb-2"
-                  value={
-                    principalCommentOptions.includes(
-                      termSummary.principal_comment ?? "",
-                    )
-                      ? termSummary.principal_comment ?? ""
-                      : ""
-                  }
-                  onChange={(event) =>
-                    handleTermSummaryChange(
-                      "principal_comment",
-                      event.target.value,
-                    )
-                  }
-                  disabled={!selectedSession || !selectedTerm}
-                >
-                  <option value="">Select saved comment (optional)</option>
-                  {principalCommentOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+                {!isAutomaticCommentMode ? (
+                  <select
+                    className="form-control mb-2"
+                    value={
+                      principalCommentOptions.includes(
+                        termSummary.principal_comment ?? "",
+                      )
+                        ? termSummary.principal_comment ?? ""
+                        : ""
+                    }
+                    onChange={(event) =>
+                      handleTermSummaryChange(
+                        "principal_comment",
+                        event.target.value,
+                      )
+                    }
+                    disabled={!selectedSession || !selectedTerm}
+                  >
+                    <option value="">Select saved comment (optional)</option>
+                    {principalCommentOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
                 <textarea
                   className="form-control"
                   style={{ backgroundColor: "#f8f8f8" }}
@@ -1869,18 +2419,34 @@ export default function StudentDetailsPage() {
                       event.target.value,
                     )
                   }
-                  disabled={!selectedSession || !selectedTerm}
+                  disabled={
+                    !selectedSession || !selectedTerm || isAutomaticCommentMode
+                  }
                 />
+                {isAutomaticCommentMode ? (
+                  <small className="form-text text-muted">
+                    This comment is generated automatically from the student&apos;s
+                    score.
+                  </small>
+                ) : null}
               </div>
             </div>
-            <button
-              type="submit"
-              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
-              disabled={termSummarySaving || !selectedSession || !selectedTerm}
-            >
-              {termSummarySaving ? "Saving…" : "Save Comments"}
-            </button>
+            {!isAutomaticCommentMode ? (
+              <button
+                type="submit"
+                className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+                disabled={termSummarySaving || !selectedSession || !selectedTerm}
+              >
+                {termSummarySaving ? "Saving…" : "Save Comments"}
+              </button>
+            ) : null}
           </form>
+          {isAutomaticCommentMode ? (
+            <div className="alert alert-info">
+              Automatic comment mode is active. These comments are generated
+              from the student&apos;s average score and cannot be edited here.
+            </div>
+          ) : null}
           {termSummaryFeedback ? (
             <div
               className={`alert alert-${termSummaryFeedbackType}`}
@@ -1931,6 +2497,51 @@ export default function StudentDetailsPage() {
       ) : null}
 
       <style jsx>{`
+        .student-nav-actions {
+          display: flex;
+          flex-wrap: nowrap;
+          justify-content: space-between;
+          gap: 1rem;
+        }
+
+        .student-nav-button {
+          flex: 1 1 0;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 0;
+          border: none;
+          color: #ffffff;
+          font-weight: 700;
+          font-size: 1.6rem;
+          padding: 1.25rem 2rem;
+        }
+
+        .student-nav-button--previous {
+          background: #3b82f6;
+        }
+
+        .student-nav-button--next {
+          background: #10b981;
+        }
+
+        @media (max-width: 767px) {
+          .student-nav-actions {
+            flex-direction: column;
+            gap: 10px;
+          }
+          .student-nav-button {
+            font-size: 1.8rem !important;
+            padding: 25px 30px !important;
+            width: 100%;
+          }
+        }
+
+        .student-nav-button:disabled {
+          opacity: 0.65;
+          cursor: not-allowed;
+        }
+
         .result-preview-backdrop {
           position: fixed;
           inset: 0;
@@ -2034,6 +2645,16 @@ export default function StudentDetailsPage() {
         }
 
         @media (max-width: 768px) {
+          .student-nav-actions {
+            gap: 0.75rem;
+          }
+
+          .student-nav-button {
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+            font-size: 0.9rem;
+          }
+
           .skills-scrollbar-range {
             display: none;
           }
@@ -2093,27 +2714,27 @@ export default function StudentDetailsPage() {
         }
       `}</style>
 
-      <div className="card height-auto mt-4">
-        <div className="card-body">
-          <div className="heading-layout1">
-            <div className="item-title">
-              <h3>Result PIN</h3>
-              <p className="mb-0 text-muted small">
-                Linked to the selected session and term.
-              </p>
+      {!isTeacher ? (
+        <div className="card height-auto mt-4">
+          <div className="card-body">
+            <div className="heading-layout1">
+              <div className="item-title">
+                <h3>Result PIN</h3>
+                <p className="mb-0 text-muted small">
+                  Linked to the selected session and term.
+                </p>
+              </div>
             </div>
-          </div>
-          {pinFeedback ? (
-            <div className={`alert alert-${pinFeedbackType}`} role="alert">
-              {pinFeedback}
-            </div>
-          ) : null}
-          {pinError ? (
-            <div className="alert alert-danger" role="alert">
-              {pinError}
-            </div>
-          ) : null}
-          {!isTeacher ? (
+            {pinFeedback ? (
+              <div className={`alert alert-${pinFeedbackType}`} role="alert">
+                {pinFeedback}
+              </div>
+            ) : null}
+            {pinError ? (
+              <div className="alert alert-danger" role="alert">
+                {pinError}
+              </div>
+            ) : null}
             <div className="mb-3">
               <button
                 type="button"
@@ -2136,49 +2757,47 @@ export default function StudentDetailsPage() {
                 Regenerate PIN
               </button>
             </div>
-          ) : null}
-          <div className="table-responsive">
-            <table className="table display text-nowrap">
-              <thead>
-                <tr>
-                  <th>Session</th>
-                  <th>Term</th>
-                  <th>PIN</th>
-                  <th>Status</th>
-                  <th>Expires</th>
-                  <th>Updated</th>
-                  {!isTeacher ? <th>Actions</th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {pinLoading ? (
+            <div className="table-responsive">
+              <table className="table display text-nowrap">
+                <thead>
                   <tr>
-                    <td colSpan={pinTableColspan}>Loading result PINs…</td>
+                    <th>Session</th>
+                    <th>Term</th>
+                    <th>PIN</th>
+                    <th>Status</th>
+                    <th>Expires</th>
+                    <th>Updated</th>
+                    <th>Actions</th>
                   </tr>
-                ) : pins.length === 0 ? (
-                  <tr>
-                    <td colSpan={pinTableColspan}>
-                      {selectedSession && selectedTerm
-                        ? "No result PIN generated for this term."
-                        : "Select a session and term to view the PIN."}
-                    </td>
-                  </tr>
-                ) : (
-                  pins.map((pin) => (
-                    <tr key={String(pin.id)}>
-                      <td>{pin.session?.name ?? "—"}</td>
-                      <td>{pin.term?.name ?? "—"}</td>
-                      <td>
-                        <code>{maskPin(pin.pin_code)}</code>
+                </thead>
+                <tbody>
+                  {pinLoading ? (
+                    <tr>
+                      <td colSpan={pinTableColspan}>Loading result PINs…</td>
+                    </tr>
+                  ) : pins.length === 0 ? (
+                    <tr>
+                      <td colSpan={pinTableColspan}>
+                        {selectedSession && selectedTerm
+                          ? "No result PIN generated for this term."
+                          : "Select a session and term to view the PIN."}
                       </td>
-                      <td>
-                        <span className={pinStatusClass(pin.status)}>
-                          {(pin.status ?? "unknown").toLowerCase()}
-                        </span>
-                      </td>
-                      <td>{formatDate(pin.expires_at)}</td>
-                      <td>{formatDateTime(pin.updated_at)}</td>
-                      {!isTeacher ? (
+                    </tr>
+                  ) : (
+                    pins.map((pin) => (
+                      <tr key={String(pin.id)}>
+                        <td>{pin.session?.name ?? "—"}</td>
+                        <td>{pin.term?.name ?? "—"}</td>
+                        <td>
+                          <code>{maskPin(pin.pin_code)}</code>
+                        </td>
+                        <td>
+                          <span className={pinStatusClass(pin.status)}>
+                            {(pin.status ?? "unknown").toLowerCase()}
+                          </span>
+                        </td>
+                        <td>{formatDate(pin.expires_at)}</td>
+                        <td>{formatDateTime(pin.updated_at)}</td>
                         <td>
                           <button
                             type="button"
@@ -2200,15 +2819,68 @@ export default function StudentDetailsPage() {
                             </button>
                           ) : null}
                         </td>
-                      ) : null}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
+
+      {!isTeacher ? (
+        <div className="card height-auto mt-4">
+          <div className="card-body">
+            <div className="heading-layout1">
+              <div className="item-title">
+                <h3>Student Portal Password</h3>
+                <p className="mb-0 text-muted small">
+                  Reset this student&apos;s login password to the default password.
+                </p>
+              </div>
+            </div>
+            {passwordResetFeedback ? (
+              <div className="alert alert-success" role="alert">
+                {passwordResetFeedback}
+              </div>
+            ) : null}
+            {passwordResetError ? (
+              <div className="alert alert-danger" role="alert">
+                {passwordResetError}
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark"
+              onClick={() => void handleResetStudentPassword()}
+              disabled={resettingStudentPassword}
+            >
+              {resettingStudentPassword
+                ? "Resetting Password…"
+                : "Reset Password to 123456"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <DeleteStudentModal
+        isOpen={deleteModalOpen}
+        studentName={student ? buildStudentDisplayName(student) : undefined}
+        studentId={studentId}
+        dependencies={deletionDependencies}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setRemoving(false);
+        }}
+        onDeleteSuccess={() => {
+          router.push(allStudentsHref);
+        }}
+        onDeleteError={(errorMsg) => {
+          setDeleteError(errorMsg);
+          alert(errorMsg);
+        }}
+      />
     </>
   );
 }

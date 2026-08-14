@@ -10,7 +10,11 @@ export interface ResultPageSettings {
   show_remarks: boolean;
   hide_student_identity: boolean;
   allow_shared_pin_access: boolean;
+  require_pin_for_pdf_download: boolean;
+  enable_session_result_print: boolean;
+  collapse_session_ca: boolean;
   comment_mode: "manual" | "range";
+  signatory_title: "principal" | "director";
 }
 
 const defaultSettings: ResultPageSettings = {
@@ -22,7 +26,11 @@ const defaultSettings: ResultPageSettings = {
   show_remarks: true,
   hide_student_identity: false,
   allow_shared_pin_access: false,
+  require_pin_for_pdf_download: true,
+  enable_session_result_print: false,
+  collapse_session_ca: false,
   comment_mode: "manual",
+  signatory_title: "principal",
 };
 
 type ResultPageSettingsResponse =
@@ -66,6 +74,11 @@ function normalizeSettings(payload: ResultPageSettingsResponse): ResultPageSetti
     settings.comment_mode === "range" || settings.comment_mode === "manual"
       ? settings.comment_mode
       : defaultSettings.comment_mode;
+  const signatoryTitle =
+    settings.signatory_title === "director" ||
+    settings.signatory_title === "principal"
+      ? settings.signatory_title
+      : defaultSettings.signatory_title;
 
   return {
     show_grade: parseBoolean(settings.show_grade, defaultSettings.show_grade),
@@ -97,7 +110,20 @@ function normalizeSettings(payload: ResultPageSettingsResponse): ResultPageSetti
       settings.allow_shared_pin_access,
       defaultSettings.allow_shared_pin_access,
     ),
+    require_pin_for_pdf_download: parseBoolean(
+      settings.require_pin_for_pdf_download,
+      defaultSettings.require_pin_for_pdf_download,
+    ),
+    enable_session_result_print: parseBoolean(
+      settings.enable_session_result_print,
+      defaultSettings.enable_session_result_print,
+    ),
+    collapse_session_ca: parseBoolean(
+      settings.collapse_session_ca,
+      defaultSettings.collapse_session_ca,
+    ),
     comment_mode: commentMode,
+    signatory_title: signatoryTitle,
   };
 }
 

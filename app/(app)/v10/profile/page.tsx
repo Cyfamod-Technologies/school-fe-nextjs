@@ -287,6 +287,18 @@ export default function SchoolProfilePage() {
                             {schoolContext.current_term?.name ?? "Not set"}
                           </td>
                         </tr>
+                        <tr>
+                          <td>No. of School Days in Term:</td>
+                          <td
+                            id="school-term-opened-days"
+                            className="font-medium text-dark-medium"
+                          >
+                            {school?.term_school_opened_days !== null &&
+                            school?.term_school_opened_days !== undefined
+                              ? school.term_school_opened_days
+                              : "Not set"}
+                          </td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>

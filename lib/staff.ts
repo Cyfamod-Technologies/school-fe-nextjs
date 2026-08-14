@@ -184,6 +184,7 @@ export interface TeacherAssignmentSubject {
   id: string;
   name?: string | null;
   code?: string | null;
+  is_subject_teacher?: boolean;
 }
 
 export interface AssignmentMetadata {
@@ -199,6 +200,7 @@ export interface TeacherAssignmentSummary {
   session?: AssignmentMetadata | null;
   term?: AssignmentMetadata | null;
   subjects: TeacherAssignmentSubject[];
+  is_class_teacher?: boolean;
 }
 
 export interface TeacherDashboardStats {

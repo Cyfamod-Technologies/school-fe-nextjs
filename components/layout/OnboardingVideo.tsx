@@ -33,6 +33,10 @@ export function OnboardingVideo() {
     }
     const dismissed = sessionStorage.getItem(DISMISS_KEY);
     if (dismissed) {
+      // Deliberately deferred to a client-only effect: sessionStorage isn't
+      // available during SSR, and setting this during the initial render
+      // would mismatch the server-rendered HTML. Must run after mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsDismissed(true);
       return;
     }

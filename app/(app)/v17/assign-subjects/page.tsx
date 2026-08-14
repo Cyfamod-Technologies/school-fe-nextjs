@@ -64,7 +64,7 @@ export default function AssignSubjectsPage() {
   const [form, setForm] = useState<AssignmentForm>(initialForm);
   const [filters, setFilters] = useState<AssignmentFilters>(initialFilters);
 
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
   const perPage = 10;
@@ -103,21 +103,23 @@ export default function AssignSubjectsPage() {
   const handleSubjectToggle = useCallback(
     (subjectId: string, checked: boolean) => {
       setForm((prev) => {
-        let nextIds: string[];
-        if (checked) {
-          if (editingId) {
-            nextIds = [subjectId];
-          } else {
-            const ids = new Set(prev.subjectIds);
-            ids.add(subjectId);
-            nextIds = Array.from(ids);
-          }
-        } else {
-          nextIds = prev.subjectIds.filter((id) => id !== subjectId);
+        if (editingId) {
+          return {
+            ...prev,
+            subjectIds: checked ? [subjectId] : [],
+          };
         }
+
+        const nextIds = new Set(prev.subjectIds);
+        if (checked) {
+          nextIds.add(subjectId);
+        } else {
+          nextIds.delete(subjectId);
+        }
+
         return {
           ...prev,
-          subjectIds: nextIds,
+          subjectIds: Array.from(nextIds),
         };
       });
     },
@@ -327,28 +329,28 @@ export default function AssignSubjectsPage() {
         return;
       }
 
-      const successIds: string[] = [];
-      const failures: Array<{ id: string; message: string }> = [];
+      const response = await createSubjectAssignment({
+        subject_ids: form.subjectIds,
+        school_class_id: form.school_class_id,
+        class_arm_id: form.class_arm_id || null,
+        class_section_id: form.class_section_id || null,
+      });
 
-      for (const subjectId of form.subjectIds) {
-        try {
-          await createSubjectAssignment({
-            subject_id: subjectId,
-            school_class_id: form.school_class_id,
-            class_arm_id: form.class_arm_id || null,
-            class_section_id: form.class_section_id || null,
-          });
-          successIds.push(subjectId);
-        } catch (error) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : "Unable to save assignment.";
-          failures.push({ id: subjectId, message });
-        }
-      }
+      const createdCount =
+        typeof response.created_count === "number"
+          ? response.created_count
+          : Array.isArray(response.data)
+            ? response.data.length
+            : response.data
+              ? 1
+              : 0;
+      const skippedIds = response.skipped_subject_ids ?? [];
+      const skippedCount =
+        typeof response.skipped_count === "number"
+          ? response.skipped_count
+          : skippedIds.length;
 
-      if (successIds.length) {
+      if (createdCount) {
         setEditingId(null);
         setForm({
           ...initialForm,
@@ -358,32 +360,25 @@ export default function AssignSubjectsPage() {
         await fetchAssignments();
       }
 
-      if (failures.length) {
-        const uniqueMessages = Array.from(
-          new Set(
-            failures.map(({ id, message }) => {
-              const label = subjectLabelMap.get(id) ?? "Selected subject";
-              return `${label}: ${message}`;
-            }),
-          ),
-        );
-
+      if (createdCount && skippedCount) {
+        const skippedLabels = skippedIds
+          .map((id) => subjectLabelMap.get(id) ?? "Selected subject")
+          .join(", ");
         setFormFeedback({
-          type: successIds.length ? "warning" : "danger",
-          message:
-            successIds.length && failures.length
-              ? `Assigned ${successIds.length} subject${
-                  successIds.length === 1 ? "" : "s"
-                }, but ${failures.length} failed. ${uniqueMessages.join(" ")}`
-              : uniqueMessages.join(" ") || "Unable to save assignment.",
+          type: "warning",
+          message: `Assigned ${createdCount} subject${
+            createdCount === 1 ? "" : "s"
+          }. Skipped ${skippedCount} already assigned subject${
+            skippedCount === 1 ? "" : "s"
+          }${skippedLabels ? `: ${skippedLabels}` : ""}.`,
         });
-      } else if (successIds.length) {
+      } else if (createdCount) {
         setFormFeedback({
           type: "success",
           message:
-            successIds.length === 1
+            createdCount === 1
               ? "Subject assigned successfully."
-              : `Assigned ${successIds.length} subjects successfully.`,
+              : `Assigned ${createdCount} subjects successfully.`,
         });
       }
     } catch (err) {
@@ -398,7 +393,7 @@ export default function AssignSubjectsPage() {
   };
 
   const handleEdit = async (assignment: SubjectAssignment) => {
-    setEditingId(assignment.id);
+    setEditingId(`${assignment.id}`);
     setFormFeedback(null);
 
     const classId = assignment.school_class_id
@@ -418,7 +413,7 @@ export default function AssignSubjectsPage() {
 
     startTransition(() => {
       setForm({
-        subjectIds: assignment.subject_id ? [`${assignment.subject_id}`] : [],
+        subjectIds: assignment.subject_id ? [assignment.subject_id] : [],
         school_class_id: classId,
         class_arm_id: armId,
         class_section_id: sectionId,
@@ -482,9 +477,42 @@ export default function AssignSubjectsPage() {
                 <div className="row">
                   <div className="col-12 form-group">
                     <label>Subjects *</label>
-                    <div className="border rounded p-2 subject-checkbox-list">
-                      {subjectOptions.length ? (
-                        subjectOptions.map((option) => (
+                    {!editingId ? (
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <small className="text-muted">
+                          {form.subjectIds.length} selected
+                        </small>
+                        <div className="d-flex align-items-center">
+                          <button
+                            type="button"
+                            className="btn btn-link btn-sm p-0 mr-3"
+                            onClick={() =>
+                              setForm((prev) => ({
+                                ...prev,
+                                subjectIds: subjectOptions.map((option) => option.value),
+                              }))
+                            }
+                          >
+                            Select all
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-link btn-sm p-0"
+                            onClick={() =>
+                              setForm((prev) => ({
+                                ...prev,
+                                subjectIds: [],
+                              }))
+                            }
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                    {subjectOptions.length ? (
+                      <div className="border rounded p-2 subject-checkbox-list">
+                        {subjectOptions.map((option) => (
                           <div className="form-check" key={option.value}>
                             <input
                               className="form-check-input"
@@ -502,15 +530,15 @@ export default function AssignSubjectsPage() {
                               {option.label}
                             </label>
                           </div>
-                        ))
-                      ) : (
-                        <p className="text-muted mb-0">No subjects available.</p>
-                      )}
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-muted mb-0">No subjects available.</p>
+                    )}
                     <small className="form-text text-muted">
                       {editingId
                         ? "Select the subject that should remain assigned."
-                        : "Tick one or more subjects to assign to the selected class."}
+                        : "Tick one or more subjects to assign to the selected class or class arm."}
                     </small>
                   </div>
                   <div className="col-12 form-group">

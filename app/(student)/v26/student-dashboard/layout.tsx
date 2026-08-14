@@ -33,6 +33,7 @@ function StudentGuard({ children }: { children: React.ReactNode }) {
     { href: "/v26/student-dashboard", label: "Dashboard" },
     { href: "/v26/student-dashboard/bio-data", label: "Bio-data" },
     { href: "/v26/student-dashboard/my-result", label: "My Result" },
+    { href: "/v26/student-dashboard/result-pins", label: "Result PINs" },
   ];
 
   return (

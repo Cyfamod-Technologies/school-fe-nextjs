@@ -33,7 +33,7 @@ export interface CreateSkillRatingPayload {
   rating_value: number;
 }
 
-export interface UpdateSkillRatingPayload extends Partial<CreateSkillRatingPayload> {}
+export type UpdateSkillRatingPayload = Partial<CreateSkillRatingPayload>;
 
 function buildQuery(params: Record<string, string | number | undefined>) {
   const search = new URLSearchParams();

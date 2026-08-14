@@ -90,7 +90,7 @@ const formatScore = (value: unknown): string => {
   if (Number.isNaN(numeric)) {
     return "";
   }
-  return numeric.toFixed(2);
+  return numeric.toFixed(2).replace(/\.?0+$/, "");
 };
 
 const buildClassLabel = (student: StudentSummary): string => {
@@ -217,6 +217,23 @@ export default function ResultsEntryPage() {
     [getComponentMaxScore],
   );
 
+  const getComponentDisplayLabel = useCallback(
+    (component: AssessmentComponent) => {
+      const baseLabel = String(component.label ?? "").trim();
+      if (!baseLabel) {
+        return component.name;
+      }
+
+      if (baseLabel.includes("%") && !/\d+(?:\.\d+)?\s*%/.test(baseLabel)) {
+        const scorePercentLabel = `${getComponentMaxScoreLabel(String(component.id))}%`;
+        return `${component.name} (${baseLabel.replace(/%/g, scorePercentLabel)})`;
+      }
+
+      return `${component.name} (${baseLabel})`;
+    },
+    [getComponentMaxScoreLabel],
+  );
+
   useEffect(() => {
     if (!selectedClass || !selectedTerm || displayComponents.length === 0) {
       setComponentMaxScores({});
@@ -336,6 +353,56 @@ export default function ResultsEntryPage() {
     );
     return subjects.filter((subject) => assignedSubjectIds.has(String(subject.id)));
   }, [subjects, selectedClass, isTeacher, teacherDashboard, subjectAssignments]);
+
+  const editableTeacherSubjectIds = useMemo(() => {
+    const subjectIds = new Set<string>();
+
+    if (!isTeacher || !teacherDashboard || !selectedClass) {
+      return subjectIds;
+    }
+
+    teacherDashboard.assignments.forEach((assignment) => {
+      if (String(assignment.class?.id ?? "") !== selectedClass) {
+        return;
+      }
+
+      const assignmentArmId = assignment.class_arm?.id
+        ? String(assignment.class_arm.id)
+        : "";
+      const assignmentSectionId = assignment.class_section?.id
+        ? String(assignment.class_section.id)
+        : "";
+
+      if (assignmentArmId && assignmentArmId !== selectedArm) {
+        return;
+      }
+      if (assignmentSectionId && assignmentSectionId !== selectedSection) {
+        return;
+      }
+
+      assignment.subjects.forEach((subject) => {
+        if (subject.is_subject_teacher ?? !assignment.is_class_teacher) {
+          subjectIds.add(String(subject.id));
+        }
+      });
+    });
+
+    return subjectIds;
+  }, [
+    isTeacher,
+    selectedArm,
+    selectedClass,
+    selectedSection,
+    teacherDashboard,
+  ]);
+
+  const canEditSelectedSubject = useMemo(() => {
+    if (!isTeacher || !selectedSubject) {
+      return true;
+    }
+
+    return editableTeacherSubjectIds.has(String(selectedSubject));
+  }, [editableTeacherSubjectIds, isTeacher, selectedSubject]);
 
   const ensureTerms = useCallback(
     async (sessionId: string): Promise<Term[]> => {
@@ -890,6 +957,9 @@ export default function ResultsEntryPage() {
       if (!selectedSession || !selectedTerm || !selectedSubject) {
         return;
       }
+      if (isTeacher && !canEditSelectedSubject) {
+        return;
+      }
       const trimmedScore = scoreInput.trim();
       const trimmedRemark = remarkInput.trim();
 
@@ -1054,6 +1124,8 @@ export default function ResultsEntryPage() {
       selectedSession,
       selectedSubject,
       selectedTerm,
+      canEditSelectedSubject,
+      isTeacher,
     ],
   );
 
@@ -1065,6 +1137,9 @@ export default function ResultsEntryPage() {
       nextRemark: string,
     ) => {
       if (!selectedSession || !selectedTerm || !selectedSubject) {
+        return;
+      }
+      if (isTeacher && !canEditSelectedSubject) {
         return;
       }
       const cell = row.cells[componentId];
@@ -1095,7 +1170,14 @@ export default function ResultsEntryPage() {
         void autoSaveRow(studentKey, componentId, trimmedScore, trimmedRemark);
       }, 600);
     },
-    [autoSaveRow, selectedSession, selectedSubject, selectedTerm],
+    [
+      autoSaveRow,
+      canEditSelectedSubject,
+      isTeacher,
+      selectedSession,
+      selectedSubject,
+      selectedTerm,
+    ],
   );
 
   useEffect(() => {
@@ -1332,6 +1414,15 @@ export default function ResultsEntryPage() {
       return;
     }
 
+    if (isTeacher && !canEditSelectedSubject) {
+      setFeedback({
+        type: "warning",
+        message:
+          "You can view this subject because you are a class teacher, but scores can only be entered for subjects assigned to you.",
+      });
+      return;
+    }
+
     if (!displayComponents.length) {
       setFeedback({
         type: "info",
@@ -1552,6 +1643,8 @@ export default function ResultsEntryPage() {
     }
   }, [
     displayComponents,
+    canEditSelectedSubject,
+    isTeacher,
     getComponentMaxScore,
     getComponentMaxScoreLabel,
     resetMessages,
@@ -1719,12 +1812,9 @@ export default function ResultsEntryPage() {
                 >
                   <option value="">All components</option>
                   {components.map((component) => {
-                    const label = component.label
-                      ? `${component.name} (${component.label})`
-                      : component.name;
                     return (
                       <option key={component.id} value={component.id}>
-                        {label}
+                        {getComponentDisplayLabel(component)}
                       </option>
                     );
                   })}
@@ -1752,6 +1842,13 @@ export default function ResultsEntryPage() {
             </div>
           ) : null}
 
+          {isTeacher && selectedSubject && !canEditSelectedSubject ? (
+            <div className="alert alert-info" role="alert">
+              You can view this subject as a class teacher, but scores can only
+              be entered for subjects assigned to you.
+            </div>
+          ) : null}
+
           <div className="table-responsive">
             <table className="table display text-nowrap results-entry-table">
               <thead>
@@ -1761,14 +1858,11 @@ export default function ResultsEntryPage() {
                   <th>Admission No</th>
                   <th>Class</th>
                   {displayComponents.map((component) => {
-                    const label = component.label
-                      ? `${component.name} (${component.label})`
-                      : component.name;
                     const componentId = String(component.id);
                     return (
                       <th key={component.id} style={{ width: "140px" }}>
                         <div className="text-muted small font-weight-bold">
-                          {label}
+                          {getComponentDisplayLabel(component)}
                         </div>
                         <div className="text-muted small">
                           Max {getComponentMaxScoreLabel(componentId)}
@@ -1841,7 +1935,11 @@ export default function ResultsEntryPage() {
                                 max={getComponentMaxScore(componentId)}
                                 step={0.01}
                                 value={cell.score}
+                                disabled={!canEditSelectedSubject}
                                 onChange={(event) => {
+                                  if (!canEditSelectedSubject) {
+                                    return;
+                                  }
                                   const nextScore = event.target.value;
                                   updateCell(index, componentId, {
                                     score: nextScore,

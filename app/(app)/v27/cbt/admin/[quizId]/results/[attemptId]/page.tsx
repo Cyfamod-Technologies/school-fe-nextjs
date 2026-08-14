@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/apiClient';
+import { getErrorMessage } from "@/lib/errors";
 
 type QuestionType = 'mcq' | 'multiple_select' | 'true_false' | 'short_answer';
 
@@ -93,8 +94,8 @@ export default function AttemptReviewPage() {
         );
 
         setData(response.data);
-      } catch (err: any) {
-        setError(err.message || 'Failed to load attempt answers');
+      } catch (err) {
+        setError(getErrorMessage(err, 'Failed to load attempt answers'));
       } finally {
         setLoading(false);
       }

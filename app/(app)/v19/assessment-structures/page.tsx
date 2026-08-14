@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/apiClient';
+import { getErrorMessage } from "@/lib/errors";
 
 interface AssessmentComponent {
   id: string;
@@ -25,18 +26,20 @@ export default function AssessmentStructuresPage() {
     try {
       setLoading(true);
       setError('');
-      const res = await apiFetch('/api/v1/settings/assessment-components') as any;
-      
-      if (res?.data) {
-        setComponents(res.data);
-      } else if (Array.isArray(res)) {
+      const res = await apiFetch('/api/v1/settings/assessment-components') as
+        AssessmentComponent[] | { data?: AssessmentComponent[] };
+
+
+      if (Array.isArray(res)) {
         setComponents(res);
+      } else if (res?.data) {
+        setComponents(res.data);
       } else {
         setComponents([]);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error loading components:', err);
-      setError(err.message || 'Failed to load assessment components. Please check your backend connection.');
+      setError(getErrorMessage(err, 'Failed to load assessment components. Please check your backend connection.'));
       setComponents([]);
     } finally {
       setLoading(false);
@@ -195,7 +198,7 @@ export default function AssessmentStructuresPage() {
               </div>
               <ol className="mb-0">
                 <li><strong>1. Click on a component</strong> from the grid above</li>
-                <li><strong>2. Click "Add Structure"</strong> to create a new score configuration</li>
+                <li><strong>2. Click &quot;Add Structure&quot;</strong> to create a new score configuration</li>
                 <li><strong>3. Select optional class and/or term</strong> to make it specific</li>
                 <li><strong>4. Set the max score</strong> teachers can assign for this component</li>
                 <li><strong>5. Save and repeat</strong> for other classes/terms as needed</li>

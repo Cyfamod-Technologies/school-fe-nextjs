@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { StudentAuthProvider, useStudentAuth } from '@/contexts/StudentAuthContext';
 import { apiFetch } from '@/lib/apiClient';
+import { getErrorMessage } from "@/lib/errors";
 
 interface QuizResult {
   id: string;
@@ -134,8 +135,8 @@ function ResultsPageInner() {
         }
 
         setError(null);
-      } catch (err: any) {
-        setError(err.message || 'Failed to load results');
+      } catch (err) {
+        setError(getErrorMessage(err, 'Failed to load results'));
         console.error('Error loading results:', err);
       } finally {
         setLoading(false);

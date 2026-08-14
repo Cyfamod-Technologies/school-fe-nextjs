@@ -1,9 +1,11 @@
 'use client';
+import Link from "next/link";
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/apiClient';
+import { getErrorMessage } from "@/lib/errors";
 
 interface Quiz {
   id: string;
@@ -191,8 +193,8 @@ export default function EditQuizPage() {
         if (classesRes.status !== 'fulfilled') {
           setError('Some quiz options could not be loaded. Check permissions for classes.');
         }
-      } catch (err: any) {
-        setError(err.message || 'Failed to load quiz data');
+      } catch (err) {
+        setError(getErrorMessage(err, 'Failed to load quiz data'));
       } finally {
         setLoading(false);
       }
@@ -240,10 +242,10 @@ export default function EditQuizPage() {
             return prev;
           });
         }
-      } catch (err: any) {
+      } catch (err) {
         if (!cancelled) {
           setSubjects([]);
-          setSubjectsError(err.message || 'Failed to load subjects for the selected class.');
+          setSubjectsError(getErrorMessage(err, 'Failed to load subjects for the selected class.'));
         }
       } finally {
         if (!cancelled) {
@@ -318,8 +320,8 @@ export default function EditQuizPage() {
       setQuiz(refreshed);
       setQuizForm(refreshed);
       setSuccess('Quiz settings saved.');
-    } catch (err: any) {
-      setError(err.message || 'Failed to save quiz settings');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to save quiz settings'));
     } finally {
       setSavingQuiz(false);
     }
@@ -340,8 +342,8 @@ export default function EditQuizPage() {
       setQuiz(response.data);
       setQuizForm(response.data);
       setSuccess('Quiz published successfully.');
-    } catch (err: any) {
-      setError(err.message || 'Failed to publish quiz');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to publish quiz'));
     } finally {
       setPublishing(false);
     }
@@ -357,8 +359,8 @@ export default function EditQuizPage() {
       setQuiz(response.data);
       setQuizForm(response.data);
       setSuccess('Quiz unpublished successfully.');
-    } catch (err: any) {
-      setError(err.message || 'Failed to unpublish quiz');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to unpublish quiz'));
     } finally {
       setPublishing(false);
     }
@@ -408,7 +410,7 @@ export default function EditQuizPage() {
         <h3>Edit Quiz</h3>
         <ul>
           <li>
-            <a href="/v27/cbt/admin">Quiz Management</a>
+            <Link href="/v27/cbt/admin">Quiz Management</Link>
           </li>
           <li>Edit Quiz</li>
         </ul>

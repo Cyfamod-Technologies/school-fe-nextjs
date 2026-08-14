@@ -216,6 +216,7 @@ export const PERMISSIONS = {
   RESULTS_BULK_GENERATE: 'results.bulk.generate',
   RESULTS_BULK_DOWNLOAD: 'results.bulk.download',
   RESULTS_BULK_PRINT: 'results.bulk.print',
+  RESULTS_SESSION_VIEW: 'results.session.view',
 
   // ============================================
   // Check Result (v14)

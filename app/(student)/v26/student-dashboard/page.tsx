@@ -3,7 +3,8 @@
 import { useStudentAuth } from "@/contexts/StudentAuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useMemo, useEffect } from "react";
+import { FormEvent, useMemo, useEffect, useState } from "react";
+import { changeStudentPassword } from "@/lib/studentAuth";
 
 const styles = `
 .student-dashboard-container {
@@ -310,6 +311,22 @@ const styles = `
   color: white;
 }
 
+.password-form {
+  padding: 1.5rem;
+}
+
+.password-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.password-form label {
+  color: var(--sd-ink);
+  font-weight: 600;
+}
+
 .breadcrumbs-area {
   margin-bottom: 2rem;
   color: var(--sd-ink);
@@ -353,12 +370,22 @@ const styles = `
     width: 100%;
     text-align: center;
   }
+
+  .password-form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 `;
 
 export default function StudentDashboardHome() {
   const { student, loading } = useStudentAuth();
   const router = useRouter();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordFeedback, setPasswordFeedback] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !student) {
@@ -366,30 +393,22 @@ export default function StudentDashboardHome() {
     }
   }, [loading, student, router]);
 
-  if (loading || !student) {
-    return (
-      <div className="card">
-        <div className="card-body text-center">
-          <div className="spinner-border text-primary mb-3" role="status" />
-          <p className="text-muted mb-0">Loading your dashboard…</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Get unique subjects to avoid duplicates
+  // Get unique subjects to avoid duplicates. Guards on `student` being null
+  // internally rather than skipping the hook via an early return above --
+  // hooks must run in the same order on every render.
   const uniqueSubjects = useMemo(() => {
-    if (!Array.isArray(student.subjects)) return [];
+    if (!student || !Array.isArray(student.subjects)) return [];
     const seen = new Set<string>();
     return student.subjects.filter((subject) => {
       if (seen.has(subject.id)) return false;
       seen.add(subject.id);
       return true;
     });
-  }, [student.subjects]);
+  }, [student]);
 
-  const summaryCards = useMemo(
-    () => [
+  const summaryCards = useMemo(() => {
+    if (!student) return [];
+    return [
       {
         label: "Current Session",
         value: student.current_session?.name ?? "Not set",
@@ -415,9 +434,19 @@ export default function StudentDashboardHome() {
         value: uniqueSubjects.length,
         icon: "📖",
       },
-    ],
-    [student, uniqueSubjects.length],
-  );
+    ];
+  }, [student, uniqueSubjects.length]);
+
+  if (loading || !student) {
+    return (
+      <div className="card">
+        <div className="card-body text-center">
+          <div className="spinner-border text-primary mb-3" role="status" />
+          <p className="text-muted mb-0">Loading your dashboard…</p>
+        </div>
+      </div>
+    );
+  }
 
   const profileItems = [
     { label: "Admission No", value: student.admission_no },
@@ -427,6 +456,40 @@ export default function StudentDashboardHome() {
     { label: "Class", value: student.school_class?.name ?? "Not set" },
     { label: "Class Arm", value: student.class_arm?.name ?? "Not set" },
   ];
+
+  const handlePasswordChange = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordFeedback(null);
+    setPasswordError(null);
+
+    if (newPassword.length < 6) {
+      setPasswordError("The new password must contain at least 6 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("The new password and confirmation do not match.");
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      const response = await changeStudentPassword({
+        current_password: currentPassword,
+        password: newPassword,
+        password_confirmation: confirmPassword,
+      });
+      setPasswordFeedback(response.message || "Password changed successfully.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setPasswordError(
+        err instanceof Error ? err.message : "Unable to change your password.",
+      );
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
 
   return (
     <>
@@ -563,8 +626,79 @@ export default function StudentDashboardHome() {
                 >
                   View Results
                 </Link>
+                <Link
+                  href="/v26/student-dashboard/result-pins"
+                  className="btn-action btn-action-secondary"
+                >
+                  Result PINs
+                </Link>
               </div>
             </div>
+          </div>
+
+          <div className="quick-actions-section">
+            <div className="quick-actions-header">
+              <h4 style={{ margin: 0 }}>Change Password</h4>
+            </div>
+            <form className="password-form" onSubmit={handlePasswordChange}>
+              {passwordFeedback ? (
+                <div className="alert alert-success" role="alert">
+                  {passwordFeedback}
+                </div>
+              ) : null}
+              {passwordError ? (
+                <div className="alert alert-danger" role="alert">
+                  {passwordError}
+                </div>
+              ) : null}
+              <div className="password-form-grid">
+                <div className="form-group mb-0">
+                  <label htmlFor="current-password">Current Password</label>
+                  <input
+                    id="current-password"
+                    type="password"
+                    className="form-control"
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    autoComplete="current-password"
+                    required
+                  />
+                </div>
+                <div className="form-group mb-0">
+                  <label htmlFor="new-password">New Password</label>
+                  <input
+                    id="new-password"
+                    type="password"
+                    className="form-control"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    autoComplete="new-password"
+                    minLength={6}
+                    required
+                  />
+                </div>
+                <div className="form-group mb-0">
+                  <label htmlFor="confirm-password">Confirm New Password</label>
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    className="form-control"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    autoComplete="new-password"
+                    minLength={6}
+                    required
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                className="btn-action btn-action-primary"
+                disabled={passwordSaving}
+              >
+                {passwordSaving ? "Changing Password…" : "Change Password"}
+              </button>
+            </form>
           </div>
         </div>
       </div>

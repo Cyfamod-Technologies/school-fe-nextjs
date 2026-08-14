@@ -64,6 +64,7 @@ export const PERMISSION_ACTIONS: PermissionActionEntry[] = [
   { function: "Generate Results", description: "Generate bulk result sheets", permission: "results.bulk.generate" },
   { function: "Download Results", description: "Download result PDFs", permission: "results.bulk.download" },
   { function: "Print Results", description: "Print result sheets", permission: "results.bulk.print" },
+  { function: "View Session Results", description: "Access session results page", permission: "results.session.view" },
   { function: "Check Result", description: "View individual result", permission: "results.check" },
   
   // Skills & Ratings

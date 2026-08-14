@@ -23,8 +23,8 @@ export async function getCurrentTeacherAssignments(
 ): Promise<TeacherAssignments> {
   try {
     const [classAssignmentsResponse, subjectAssignmentsResponse] = await Promise.all([
-      apiFetch<any>(`${API_ROUTES.classTeachers}?session_id=${sessionId}&term_id=${termId}&per_page=500`),
-      apiFetch<any>(`${API_ROUTES.subjectTeacherAssignments}?session_id=${sessionId}&term_id=${termId}&per_page=500`),
+      apiFetch<{ data?: TeacherAssignmentItem[] }>(`${API_ROUTES.classTeachers}?session_id=${sessionId}&term_id=${termId}&per_page=500`),
+      apiFetch<{ data?: TeacherAssignmentItem[] }>(`${API_ROUTES.subjectTeacherAssignments}?session_id=${sessionId}&term_id=${termId}&per_page=500`),
     ]);
 
     return {

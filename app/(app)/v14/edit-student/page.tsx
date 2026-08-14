@@ -153,6 +153,8 @@ export default function EditStudentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const studentId = searchParams.get("id");
+  const selectedSessionId = searchParams.get("session_id");
+  const selectedTermId = searchParams.get("term_id");
   const filterQuery = useMemo(() => {
     const params = new URLSearchParams();
     const search = searchParams.get("search");
@@ -199,6 +201,28 @@ export default function EditStudentPage() {
   const allStudentsHref = useMemo(() => {
     return filterQuery ? `/v14/all-students?${filterQuery}` : "/v14/all-students";
   }, [filterQuery]);
+  const studentDetailsContextQuery = useMemo(() => {
+    const params = new URLSearchParams(filterQuery);
+
+    if (selectedSessionId) {
+      params.set("session_id", selectedSessionId);
+    }
+
+    if (selectedTermId) {
+      params.set("term_id", selectedTermId);
+    }
+
+    return params.toString();
+  }, [filterQuery, selectedSessionId, selectedTermId]);
+  const studentDetailsHref = useMemo(() => {
+    if (!studentId) {
+      return "/v14/student-details";
+    }
+
+    return studentDetailsContextQuery
+      ? `/v14/student-details?id=${studentId}&${studentDetailsContextQuery}`
+      : `/v14/student-details?id=${studentId}`;
+  }, [studentDetailsContextQuery, studentId]);
 
   const [form, setForm] = useState<StudentFormState>(initialForm);
   const [student, setStudent] = useState<StudentDetail | null>(null);
@@ -605,11 +629,7 @@ export default function EditStudentPage() {
     setSubmitting(true);
     try {
       await updateStudentRequest(studentId, payload);
-      router.push(
-        filterQuery
-          ? `/v14/student-details?id=${studentId}&${filterQuery}`
-          : `/v14/student-details?id=${studentId}`,
-      );
+      router.push(studentDetailsHref);
     } catch (err) {
       console.error("Unable to update student", err);
       setError(
@@ -1032,11 +1052,7 @@ export default function EditStudentPage() {
                   {submitting ? "Saving…" : "Save Changes"}
                 </button>
                 <Link
-                  href={
-                    filterQuery
-                      ? `/v14/student-details?id=${studentId}&${filterQuery}`
-                      : `/v14/student-details?id=${studentId}`
-                  }
+                  href={studentDetailsHref}
                   className="btn-fill-lg bg-blue-dark btn-hover-yellow"
                 >
                   Cancel

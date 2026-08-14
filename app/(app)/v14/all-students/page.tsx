@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { PermissionGate } from "@/components/PermissionGate";
 import { PERMISSIONS } from "@/lib/permissionKeys";
 import { listSessions, type Session } from "@/lib/sessions";
+import { listTermsBySession, type Term } from "@/lib/terms";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import {
   listClassArms,
@@ -20,17 +21,24 @@ import {
 import {
   listStudents,
   deleteStudent,
+  deleteDependentRecords,
+  regenerateAdmissionNumbers,
   type StudentListResponse,
   type StudentSummary,
 } from "@/lib/students";
 import { resolveBackendUrl } from "@/lib/config";
-import { isTeacherUser } from "@/lib/roleChecks";
+import { isAdminUser, isTeacherUser } from "@/lib/roleChecks";
+import {
+  fetchTeacherDashboard,
+  type TeacherDashboardResponse,
+} from "@/lib/staff";
 
 const passthroughLoader: ImageLoader = ({ src }) => src;
 
 interface FilterState {
   search: string;
   current_session_id: string;
+  term_id: string;
   school_class_id: string;
   class_arm_id: string;
   class_section_id: string;
@@ -39,6 +47,7 @@ interface FilterState {
 const initialFilters: FilterState = {
   search: "",
   current_session_id: "",
+  term_id: "",
   school_class_id: "",
   class_arm_id: "",
   class_section_id: "",
@@ -49,6 +58,7 @@ export default function AllStudentsPage() {
   const searchParams = useSearchParams();
 
   const isTeacher = isTeacherUser(user);
+  const isAdmin = isAdminUser(user);
 
   const perPageOptions = [10, 25, 50, 100];
   const initialPage = (() => {
@@ -67,6 +77,7 @@ export default function AllStudentsPage() {
     ...initialFilters,
     search: searchParams.get("search") ?? "",
     current_session_id: searchParams.get("current_session_id") ?? "",
+    term_id: searchParams.get("term_id") ?? "",
     school_class_id: searchParams.get("school_class_id") ?? "",
     class_arm_id: searchParams.get("class_arm_id") ?? "",
     class_section_id: searchParams.get("class_section_id") ?? "",
@@ -77,6 +88,7 @@ export default function AllStudentsPage() {
   const [perPage, setPerPage] = useState(initialPerPage);
 
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [termsCache, setTermsCache] = useState<Record<string, Term[]>>({});
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [classArms, setClassArms] = useState<ClassArm[]>([]);
   const [classSections, setClassSections] = useState<ClassArmSection[]>([]);
@@ -84,6 +96,8 @@ export default function AllStudentsPage() {
 
   const [data, setData] = useState<StudentListResponse | null>(null);
   const [students, setStudents] = useState<StudentSummary[]>([]);
+  const [teacherDashboard, setTeacherDashboard] =
+    useState<TeacherDashboardResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bulkFeedback, setBulkFeedback] = useState<{
@@ -92,6 +106,7 @@ export default function AllStudentsPage() {
   } | null>(null);
   const [selectedStudentIds, setSelectedStudentIds] = useState<Record<string, boolean>>({});
   const [deletingSelected, setDeletingSelected] = useState(false);
+  const [regeneratingAdmissionNumbers, setRegeneratingAdmissionNumbers] = useState(false);
 
   const fetchStudents = useCallback(async () => {
     setLoading(true);
@@ -103,6 +118,7 @@ export default function AllStudentsPage() {
         sortDirection,
         search: filters.search || undefined,
         current_session_id: filters.current_session_id || undefined,
+        current_term_id: filters.term_id || undefined,
         school_class_id: filters.school_class_id || undefined,
         class_arm_id: filters.class_arm_id || undefined,
       });
@@ -121,6 +137,40 @@ export default function AllStudentsPage() {
     }
   }, [filters, page, perPage, sortBy, sortDirection]);
 
+  const terms = useMemo(() => {
+    if (!filters.current_session_id) return [];
+    return termsCache[filters.current_session_id] ?? [];
+  }, [filters.current_session_id, termsCache]);
+
+  const assessmentSheetHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (filters.current_session_id) params.set("session_id", filters.current_session_id);
+    if (filters.term_id) params.set("term_id", filters.term_id);
+    if (filters.school_class_id) params.set("class_id", filters.school_class_id);
+    if (filters.class_arm_id) params.set("arm_id", filters.class_arm_id);
+    const query = params.toString();
+    return query ? `/v14/assessment-sheet?${query}` : "/v14/assessment-sheet";
+  }, [filters.current_session_id, filters.term_id, filters.school_class_id, filters.class_arm_id]);
+
+  const broadsheetHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (filters.current_session_id) params.set("session_id", filters.current_session_id);
+    if (filters.term_id) params.set("term_id", filters.term_id);
+    if (filters.school_class_id) params.set("school_class_id", filters.school_class_id);
+    if (filters.class_arm_id) params.set("class_arm_id", filters.class_arm_id);
+    const query = params.toString();
+    return query ? `/v14/broadsheet?${query}` : "/v14/broadsheet";
+  }, [filters.current_session_id, filters.term_id, filters.school_class_id, filters.class_arm_id]);
+
+  useEffect(() => {
+    if (!filters.current_session_id || termsCache[filters.current_session_id]) return;
+    listTermsBySession(filters.current_session_id)
+      .then((loaded) =>
+        setTermsCache((prev) => ({ ...prev, [filters.current_session_id]: loaded }))
+      )
+      .catch((err) => console.error("Unable to load terms", err));
+  }, [filters.current_session_id, termsCache]);
+
   useEffect(() => {
     listSessions()
       .then(setSessions)
@@ -132,31 +182,54 @@ export default function AllStudentsPage() {
 
   useEffect(() => {
     if (!isTeacher) {
+      setTeacherDashboard(null);
       return;
     }
 
-    if (!filters.current_session_id) {
-      const contextSessionId = schoolContext.current_session_id
-        ? String(schoolContext.current_session_id)
-        : "";
-      const fallbackSessionId =
-        !contextSessionId && sessions.length > 0
-          ? String(sessions[0].id)
-          : "";
+    let active = true;
 
-      if (contextSessionId || fallbackSessionId) {
-        setFilters((prev) => ({
-          ...prev,
-          current_session_id: contextSessionId || fallbackSessionId,
-        }));
+    fetchTeacherDashboard()
+      .then((dashboard) => {
+        if (active) {
+          setTeacherDashboard(dashboard);
+        }
+      })
+      .catch((err) => {
+        console.error("Unable to load teacher assignments", err);
+        if (active) {
+          setTeacherDashboard(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isTeacher]);
+
+  useEffect(() => {
+    const currentSessionId = schoolContext.current_session_id
+      ? String(schoolContext.current_session_id)
+      : "";
+    const currentTermId = schoolContext.current_term_id
+      ? String(schoolContext.current_term_id)
+      : "";
+
+    setFilters((prev) => {
+      if (
+        prev.current_session_id === currentSessionId &&
+        prev.term_id === currentTermId
+      ) {
+        return prev;
       }
-    }
-  }, [
-    isTeacher,
-    filters.current_session_id,
-    schoolContext.current_session_id,
-    sessions,
-  ]);
+
+      return {
+        ...prev,
+        current_session_id: currentSessionId,
+        term_id: currentTermId,
+      };
+    });
+    setPage(1);
+  }, [schoolContext.current_session_id, schoolContext.current_term_id]);
 
   useEffect(() => {
     if (!filters.school_class_id) {
@@ -303,6 +376,57 @@ export default function AllStudentsPage() {
     return sortDirection === "asc" ? " ▲" : " ▼";
   };
 
+  const canViewStudentRecord = useCallback(
+    (student: StudentSummary) => {
+      if (!isTeacher) {
+        return true;
+      }
+      if (!teacherDashboard) {
+        return false;
+      }
+
+      const classId = String(
+        student.school_class_id ?? student.school_class?.id ?? "",
+      );
+      if (!classId) {
+        return false;
+      }
+
+      const studentArmId = String(
+        student.class_arm_id ?? student.class_arm?.id ?? "",
+      );
+      const studentSectionId = String(
+        student.class_section_id ?? student.class_section?.id ?? "",
+      );
+
+      return teacherDashboard.assignments.some((assignment) => {
+        if (!assignment.is_class_teacher) {
+          return false;
+        }
+        if (String(assignment.class?.id ?? "") !== classId) {
+          return false;
+        }
+
+        const assignmentArmId = assignment.class_arm?.id
+          ? String(assignment.class_arm.id)
+          : "";
+        const assignmentSectionId = assignment.class_section?.id
+          ? String(assignment.class_section.id)
+          : "";
+
+        if (assignmentArmId && assignmentArmId !== studentArmId) {
+          return false;
+        }
+        if (assignmentSectionId && assignmentSectionId !== studentSectionId) {
+          return false;
+        }
+
+        return true;
+      });
+    },
+    [isTeacher, teacherDashboard],
+  );
+
   const handleToggleStudent = useCallback(
     (studentId: string | number) => () => {
       const key = String(studentId);
@@ -352,7 +476,10 @@ export default function AllStudentsPage() {
     setDeletingSelected(true);
     try {
       const results = await Promise.allSettled(
-        selectedStudentIdList.map((studentId) => deleteStudent(studentId)),
+        selectedStudentIdList.map(async (studentId) => {
+          await deleteDependentRecords(studentId);
+          await deleteStudent(studentId);
+        }),
       );
       const succeededIds = selectedStudentIdList.filter(
         (_studentId, index) => results[index]?.status === "fulfilled",
@@ -401,7 +528,51 @@ export default function AllStudentsPage() {
     } finally {
       setDeletingSelected(false);
     }
-  }, [deleteStudent, deletingSelected, fetchStudents, page, selectedStudentIdList, students.length]);
+  }, [deletingSelected, fetchStudents, page, selectedStudentIdList, students.length]);
+
+  const handleRegenerateAdmissionNumbers = useCallback(async () => {
+    if (
+      !selectedStudentIdList.length ||
+      regeneratingAdmissionNumbers ||
+      deletingSelected
+    ) {
+      return;
+    }
+
+    const count = selectedStudentIdList.length;
+    const confirmed = window.confirm(
+      `Regenerate the admission number for ${count} selected student${count === 1 ? "" : "s"}? Their previous admission number${count === 1 ? "" : "s"} will no longer work for student login.`,
+    );
+    if (!confirmed) return;
+
+    setBulkFeedback(null);
+    setRegeneratingAdmissionNumbers(true);
+    try {
+      const response = await regenerateAdmissionNumbers(selectedStudentIdList);
+      setSelectedStudentIds({});
+      await fetchStudents();
+      setBulkFeedback({
+        type: "success",
+        message: response.message,
+      });
+    } catch (err) {
+      console.error("Unable to regenerate admission numbers", err);
+      setBulkFeedback({
+        type: "danger",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Unable to regenerate admission numbers.",
+      });
+    } finally {
+      setRegeneratingAdmissionNumbers(false);
+    }
+  }, [
+    deletingSelected,
+    fetchStudents,
+    regeneratingAdmissionNumbers,
+    selectedStudentIdList,
+  ]);
 
   return (
     <>
@@ -493,14 +664,35 @@ export default function AllStudentsPage() {
                   setFilters((prev) => ({
                     ...prev,
                     current_session_id: event.target.value,
+                    term_id: "",
                   }));
                 }}
-                disabled={isTeacher}
+                disabled
               >
-                <option value="">All Sessions</option>
+                <option value="">Current session not configured</option>
                 {sessions.map((session) => (
                   <option key={session.id} value={session.id}>
                     {session.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-lg-2 col-12 form-group">
+              <label htmlFor="filter-term">Term</label>
+              <select
+                id="filter-term"
+                className="form-control"
+                value={filters.term_id}
+                onChange={(event) => {
+                  setPage(1);
+                  setFilters((prev) => ({ ...prev, term_id: event.target.value }));
+                }}
+                disabled
+              >
+                <option value="">Current term not configured</option>
+                {terms.map((term) => (
+                  <option key={term.id} value={term.id}>
+                    {term.name}
                   </option>
                 ))}
               </select>
@@ -560,7 +752,15 @@ export default function AllStudentsPage() {
                 className="btn btn-outline-secondary w-100"
                 onClick={() => {
                   setPage(1);
-                  setFilters(initialFilters);
+                  setFilters({
+                    ...initialFilters,
+                    current_session_id: schoolContext.current_session_id
+                      ? String(schoolContext.current_session_id)
+                      : "",
+                    term_id: schoolContext.current_term_id
+                      ? String(schoolContext.current_term_id)
+                      : "",
+                  });
                   setClassArms([]);
                   setClassSections([]);
                 }}
@@ -573,14 +773,7 @@ export default function AllStudentsPage() {
           <div className="d-flex justify-content-between align-items-center mb-3">
             <div>
               <div className="d-flex flex-wrap align-items-center">
-                {isTeacher ? (
-                  <Link
-                    href="/v14/add-student"
-                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
-                  >
-                    Add Student
-                  </Link>
-                ) : (
+                {!isTeacher ? (
                   <PermissionGate permission={PERMISSIONS.STUDENTS_CREATE}>
                     <Link
                       href="/v14/add-student"
@@ -589,14 +782,52 @@ export default function AllStudentsPage() {
                       Add Student
                     </Link>
                   </PermissionGate>
-                )}
+                ) : null}
+                {!isTeacher ? (
+                  <Link
+                    href={assessmentSheetHref}
+                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
+                  >
+                    Assessment Sheet
+                  </Link>
+                ) : null}
+                {!isTeacher ? (
+                  <Link
+                    href={broadsheetHref}
+                    className="btn-fill-lg btn-gradient-yellow btn-hover-bluedark mr-2"
+                  >
+                    {`Broadsheet${data?.total ? ` (${data.total})` : ""}`}
+                  </Link>
+                ) : null}
+                {isAdmin ? (
+                  <PermissionGate permission={PERMISSIONS.STUDENTS_UPDATE}>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-lg mr-2"
+                      onClick={handleRegenerateAdmissionNumbers}
+                      disabled={
+                        regeneratingAdmissionNumbers ||
+                        deletingSelected ||
+                        !selectedStudentCount
+                      }
+                    >
+                      {regeneratingAdmissionNumbers
+                        ? "Regenerating…"
+                        : `Regenerate Adm No${selectedStudentCount ? ` (${selectedStudentCount})` : ""}`}
+                    </button>
+                  </PermissionGate>
+                ) : null}
                 {!isTeacher ? (
                   <PermissionGate permission={PERMISSIONS.STUDENTS_DELETE}>
                     <button
                       type="button"
                       className="btn btn-danger btn-lg"
                       onClick={handleDeleteSelected}
-                      disabled={deletingSelected || !selectedStudentCount}
+                      disabled={
+                        deletingSelected ||
+                        regeneratingAdmissionNumbers ||
+                        !selectedStudentCount
+                      }
                     >
                       {deletingSelected
                         ? "Deleting…"
@@ -686,6 +917,7 @@ export default function AllStudentsPage() {
                     const photoSrc = student.photo_url
                       ? resolveBackendUrl(student.photo_url)
                       : "/assets/img/figure/student.png";
+                    const showViewAction = canViewStudentRecord(student);
                     return (
                       <tr key={student.id}>
                         <td>
@@ -723,26 +955,30 @@ export default function AllStudentsPage() {
                         </td>
                         <td>
                           <div className="d-flex gap-2">
-                            <Link
-                              href={buildStudentLink(
-                                "/v14/student-details",
-                                student.id,
-                              )}
-                              className="btn btn-sm btn-outline-primary mr-1"
-                            >
-                              View
-                            </Link>
-                            <PermissionGate permission={PERMISSIONS.STUDENTS_UPDATE}>
+                            {showViewAction ? (
                               <Link
                                 href={buildStudentLink(
-                                  "/v14/edit-student",
+                                  "/v14/student-details",
                                   student.id,
                                 )}
-                                className="btn btn-sm btn-outline-secondary"
+                                className="btn btn-sm btn-outline-primary mr-1"
                               >
-                                Edit
+                                View
                               </Link>
-                            </PermissionGate>
+                            ) : null}
+                            {!isTeacher ? (
+                              <PermissionGate permission={PERMISSIONS.STUDENTS_UPDATE}>
+                                <Link
+                                  href={buildStudentLink(
+                                    "/v14/edit-student",
+                                    student.id,
+                                  )}
+                                  className="btn btn-sm btn-outline-secondary"
+                                >
+                                  Edit
+                                </Link>
+                              </PermissionGate>
+                            ) : null}
                           </div>
                         </td>
                       </tr>

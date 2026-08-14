@@ -64,6 +64,11 @@ export interface BulkUploadParams {
   class_arm_id?: string | number;
 }
 
+export interface BulkRowUpdate {
+  admission_no?: string;
+  deleted?: boolean;
+}
+
 export interface BulkPreviewRow {
   name?: string | null;
   admission_no?: string | null;
@@ -107,6 +112,7 @@ export interface BulkPreviewFailure {
   message: string;
   errors: BulkValidationError[];
   errorCsv?: string | null;
+  previewRows?: BulkPreviewRow[];
 }
 
 export type BulkPreviewResult =
@@ -126,6 +132,7 @@ interface BulkPreviewResponsePayload {
 export async function previewStudentBulkUpload(
   file: File,
   params?: BulkUploadParams,
+  rowUpdates?: Record<string, BulkRowUpdate>,
 ): Promise<BulkPreviewResult> {
   const formData = new FormData();
   formData.append("file", file);
@@ -139,6 +146,9 @@ export async function previewStudentBulkUpload(
   }
   if (params?.class_arm_id) {
     formData.append("class_arm_id", String(params.class_arm_id));
+  }
+  if (rowUpdates && Object.keys(rowUpdates).length) {
+    formData.append("row_updates", JSON.stringify(rowUpdates));
   }
 
   const headers = buildAuthHeaders();
@@ -170,6 +180,9 @@ export async function previewStudentBulkUpload(
           ? payload.errors
           : [],
         errorCsv: payload?.error_csv ?? null,
+        previewRows: Array.isArray(payload?.preview_rows)
+          ? (payload.preview_rows as BulkPreviewRow[])
+          : [],
       },
     };
   }
@@ -199,18 +212,46 @@ export interface BulkCommitResult {
   [key: string]: unknown;
 }
 
-type BulkCommitResponsePayload = BulkCommitResult;
+export interface BulkCommitFailure {
+  message: string;
+  errors: BulkValidationError[];
+}
+
+export class BulkCommitError extends Error {
+  errors: BulkValidationError[];
+
+  constructor(message: string, errors: BulkValidationError[] = []) {
+    super(message);
+    this.name = "BulkCommitError";
+    this.errors = errors;
+  }
+}
+
+type BulkCommitResponsePayload = BulkCommitResult & {
+  errors?: BulkValidationError[];
+};
 
 export async function commitStudentBulkUpload(
   batchId: string,
   decisions?: Record<string, "skip" | "overwrite" | "allow">,
+  rowUpdates?: Record<string, BulkRowUpdate>,
 ): Promise<BulkCommitResult> {
   const headers = buildAuthHeaders();
   headers.set("Content-Type", "application/json");
 
-  const body = decisions && Object.keys(decisions).length
-    ? JSON.stringify({ decisions })
-    : undefined;
+  const requestPayload: {
+    decisions?: Record<string, "skip" | "overwrite" | "allow">;
+    row_updates?: Record<string, BulkRowUpdate>;
+  } = {};
+
+  if (decisions && Object.keys(decisions).length) {
+    requestPayload.decisions = decisions;
+  }
+  if (rowUpdates && Object.keys(rowUpdates).length) {
+    requestPayload.row_updates = rowUpdates;
+  }
+
+  const body = Object.keys(requestPayload).length ? JSON.stringify(requestPayload) : undefined;
 
   const response = await fetch(
     `${BACKEND_URL}${API_ROUTES.studentsBulkCommit}/${encodeURIComponent(batchId)}/commit`,
@@ -222,18 +263,19 @@ export async function commitStudentBulkUpload(
     },
   );
 
-  let payload: BulkCommitResponsePayload | null = null;
+  let responsePayload: BulkCommitResponsePayload | null = null;
   try {
-    payload = (await response.json()) as BulkCommitResponsePayload;
+    responsePayload = (await response.json()) as BulkCommitResponsePayload;
   } catch {
-    payload = null;
+    responsePayload = null;
   }
 
   if (!response.ok) {
-    throw new Error(
-      payload?.message ?? `Bulk upload failed (${response.status}).`,
+    throw new BulkCommitError(
+      responsePayload?.message ?? `Bulk upload failed (${response.status}).`,
+      Array.isArray(responsePayload?.errors) ? responsePayload.errors : [],
     );
   }
 
-  return payload ?? {};
+  return responsePayload ?? {};
 }

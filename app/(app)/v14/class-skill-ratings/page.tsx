@@ -121,20 +121,23 @@ export default function ClassSkillRatingsPage() {
 
   const lockSessionAndTerm = isTeacher;
 
-  // Load skill types once so the Skill dropdown is available without needing
-  // to click "Load Students & Skills" first.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const types = await listSkillTypes();
+        const types = await listSkillTypes({
+          schoolClassId: selectedClass || undefined,
+        });
         if (cancelled) return;
         const mapped: StudentSkillType[] = types.map((type) => ({
           id: String(type.id),
           name: String(type.name ?? ""),
-          description: (type as any).description ?? null,
-          skill_category_id: (type as any).skill_category_id ?? "",
-          category: (type as any).category ?? null,
+          description: type.description ?? null,
+          skill_category_id:
+            type.skill_category_id !== undefined && type.skill_category_id !== null
+              ? String(type.skill_category_id)
+              : "",
+          category: type.category ?? null,
         }));
         setSkillTypes(mapped);
       } catch (err) {
@@ -144,7 +147,7 @@ export default function ClassSkillRatingsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedClass]);
 
   const terms = useMemo(() => {
     if (!selectedSession) {
@@ -166,12 +169,12 @@ export default function ClassSkillRatingsPage() {
     }
     const allowedIds = new Set<string>();
     teacherDashboard.assignments.forEach((assignment) => {
-      if (assignment.class?.id) {
+      if (assignment.is_class_teacher && assignment.class?.id) {
         allowedIds.add(String(assignment.class.id));
       }
     });
     if (!allowedIds.size) {
-      return classes;
+      return [];
     }
     return classes.filter((schoolClass) =>
       allowedIds.has(String(schoolClass.id)),
@@ -206,6 +209,22 @@ export default function ClassSkillRatingsPage() {
       setSkillSearchTerm(selected.label);
     }
   }, [selectedSkillTypeId, skillTypeOptions]);
+
+  useEffect(() => {
+    if (!selectedSkillTypeId) {
+      return;
+    }
+    const stillExists = skillTypes.some(
+      (type) => String(type.id) === String(selectedSkillTypeId),
+    );
+    if (!stillExists) {
+      setFilters((prev) => ({
+        ...prev,
+        skillTypeId: "",
+      }));
+      setSkillSearchTerm("");
+    }
+  }, [selectedSkillTypeId, skillTypes]);
 
   const visibleSkillTypes = useMemo(() => {
     if (!selectedSkillTypeId) {
@@ -320,8 +339,11 @@ export default function ClassSkillRatingsPage() {
             const dashboard = await fetchTeacherDashboard();
             if (!cancelled) {
               setTeacherDashboard(dashboard);
-              if (!filters.classId && dashboard.assignments.length > 0) {
-                const firstClassId = dashboard.assignments[0].class?.id;
+              const firstClassTeacherAssignment = dashboard.assignments.find(
+                (assignment) => assignment.is_class_teacher && assignment.class?.id,
+              );
+              if (!filters.classId && firstClassTeacherAssignment) {
+                const firstClassId = firstClassTeacherAssignment.class?.id;
                 if (firstClassId) {
                   setFilters((prev) => ({
                     ...prev,
@@ -375,7 +397,7 @@ export default function ClassSkillRatingsPage() {
           } else if (field === "skillTypeId") {
             next.skillTypeId = value;
           } else {
-            (next as any)[field] = value;
+            next[field] = value;
           }
           return next;
         });
@@ -422,7 +444,9 @@ export default function ClassSkillRatingsPage() {
     if (!selectedSession || !selectedTerm || !selectedClass) {
       setFeedbackKind("warning");
       setFeedback(
-        "Select session, term, and class before loading student skill ratings.",
+        isTeacher && !teacherClassOptions.length
+          ? "Only assigned class teachers can view and grade student skills."
+          : "Select session, term, and class before loading student skill ratings.",
       );
       return;
     }
@@ -509,6 +533,8 @@ export default function ClassSkillRatingsPage() {
     selectedSection,
     selectedSession,
     selectedTerm,
+    isTeacher,
+    teacherClassOptions.length,
     skillTypes,
   ]);
 

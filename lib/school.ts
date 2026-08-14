@@ -10,6 +10,8 @@ export interface UpdateSchoolPayload {
   term_school_opened_days?: string | number | null;
   current_session_id?: string | number | null;
   current_term_id?: string | number | null;
+  skill_categories_separate_by_class?: boolean;
+  skill_types_separate_by_class?: boolean;
   logo?: File | null;
   signature?: File | null;
   removeSignature?: boolean;
@@ -59,6 +61,18 @@ export async function updateSchoolProfile(
   }
   if (payload.current_term_id) {
     formData.append("current_term_id", `${payload.current_term_id}`);
+  }
+  if (payload.skill_categories_separate_by_class !== undefined) {
+    formData.append(
+      "skill_categories_separate_by_class",
+      payload.skill_categories_separate_by_class ? "1" : "0",
+    );
+  }
+  if (payload.skill_types_separate_by_class !== undefined) {
+    formData.append(
+      "skill_types_separate_by_class",
+      payload.skill_types_separate_by_class ? "1" : "0",
+    );
   }
   if (payload.logo instanceof File) {
     formData.append("logo", payload.logo);

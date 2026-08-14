@@ -69,7 +69,7 @@ const formatScore = (value: unknown): string => {
   if (Number.isNaN(numeric)) {
     return "";
   }
-  return numeric.toFixed(2);
+  return numeric.toFixed(2).replace(/\.?0+$/, "");
 };
 
 const buildStudentName = (student: StudentDetail): string => {
@@ -323,6 +323,65 @@ export default function StudentResultEntryPage() {
     teacherDashboard,
   ]);
 
+  const editableTeacherSubjectIds = useMemo(() => {
+    const subjectIds = new Set<string>();
+
+    if (!isTeacher || !student?.school_class_id || !teacherDashboard) {
+      return subjectIds;
+    }
+
+    const classId = String(student.school_class_id);
+    const studentArmId =
+      student.class_arm_id != null ? String(student.class_arm_id) : "";
+    const studentSectionId =
+      student.class_section_id != null ? String(student.class_section_id) : "";
+
+    teacherDashboard.assignments.forEach((assignment) => {
+      if (String(assignment.class?.id ?? "") !== classId) {
+        return;
+      }
+
+      const assignmentArmId = assignment.class_arm?.id
+        ? String(assignment.class_arm.id)
+        : "";
+      const assignmentSectionId = assignment.class_section?.id
+        ? String(assignment.class_section.id)
+        : "";
+
+      if (assignmentArmId && assignmentArmId !== studentArmId) {
+        return;
+      }
+      if (assignmentSectionId && assignmentSectionId !== studentSectionId) {
+        return;
+      }
+
+      assignment.subjects.forEach((subject) => {
+        if (subject.is_subject_teacher ?? !assignment.is_class_teacher) {
+          subjectIds.add(String(subject.id));
+        }
+      });
+    });
+
+    return subjectIds;
+  }, [
+    isTeacher,
+    student?.class_arm_id,
+    student?.class_section_id,
+    student?.school_class_id,
+    teacherDashboard,
+  ]);
+
+  const canEditSubject = useCallback(
+    (subjectId: string | number) => {
+      if (!isTeacher) {
+        return true;
+      }
+
+      return editableTeacherSubjectIds.has(String(subjectId));
+    },
+    [editableTeacherSubjectIds, isTeacher],
+  );
+
   const getComponentMaxScore = useCallback(
     (componentId: string) => {
       const dynamicScore = componentMaxScores[String(componentId)];
@@ -352,6 +411,23 @@ export default function StudentResultEntryPage() {
         : maxScore.toFixed(2).replace(/\.?0+$/, "");
     },
     [getComponentMaxScore],
+  );
+
+  const getComponentDisplayLabel = useCallback(
+    (component: AssessmentComponent) => {
+      const baseLabel = String(component.label ?? "").trim();
+      if (!baseLabel) {
+        return component.name;
+      }
+
+      if (baseLabel.includes("%") && !/\d+(?:\.\d+)?\s*%/.test(baseLabel)) {
+        const scorePercentLabel = `${getComponentMaxScoreLabel(String(component.id))}%`;
+        return `${component.name} (${baseLabel.replace(/%/g, scorePercentLabel)})`;
+      }
+
+      return `${component.name} (${baseLabel})`;
+    },
+    [getComponentMaxScoreLabel],
   );
 
   const componentOptions = useMemo(() => {
@@ -848,6 +924,9 @@ export default function StudentResultEntryPage() {
       if (!studentId || !selectedSession || !selectedTerm) {
         return;
       }
+      if (isTeacher && !canEditSubject(subjectId)) {
+        return;
+      }
 
       const trimmedScore = scoreInput.trim();
       if (!trimmedScore) {
@@ -1009,6 +1088,8 @@ export default function StudentResultEntryPage() {
     [
       getComponentMaxScore,
       getComponentMaxScoreLabel,
+      canEditSubject,
+      isTeacher,
       selectedSession,
       selectedTerm,
       studentId,
@@ -1031,6 +1112,9 @@ export default function StudentResultEntryPage() {
       }
 
       const subjectId = String(row.subject.id);
+      if (isTeacher && !canEditSubject(subjectId)) {
+        return;
+      }
       const trimmedScore = nextScore.trim();
       const changed = trimmedScore !== cell.originalScore.trim();
 
@@ -1052,7 +1136,14 @@ export default function StudentResultEntryPage() {
         void autoSaveCell(subjectId, componentId, trimmedScore);
       }, 600);
     },
-    [autoSaveCell, selectedSession, selectedTerm, studentId],
+    [
+      autoSaveCell,
+      canEditSubject,
+      isTeacher,
+      selectedSession,
+      selectedTerm,
+      studentId,
+    ],
   );
 
   useEffect(() => {
@@ -1331,12 +1422,9 @@ export default function StudentResultEntryPage() {
               >
                 <option value="">All components</option>
                 {componentOptions.map((component) => {
-                  const label = component.label
-                    ? `${component.name} (${component.label})`
-                    : component.name;
                   return (
                     <option key={component.id} value={String(component.id)}>
-                      {label}
+                      {getComponentDisplayLabel(component)}
                     </option>
                   );
                 })}
@@ -1374,13 +1462,12 @@ export default function StudentResultEntryPage() {
                   <th>#</th>
                   <th>Subject</th>
                   {visibleComponents.map((component) => {
-                    const label = component.label
-                      ? `${component.name} (${component.label})`
-                      : component.name;
                     const componentId = String(component.id);
                     return (
                       <th key={componentId} style={{ width: "160px" }}>
-                        <div className="text-muted small font-weight-bold">{label}</div>
+                        <div className="text-muted small font-weight-bold">
+                          {getComponentDisplayLabel(component)}
+                        </div>
                         <div className="text-muted small">
                           Max {getComponentMaxScoreLabel(componentId)}
                         </div>
@@ -1436,6 +1523,7 @@ export default function StudentResultEntryPage() {
                     const subjectLabel = row.subject.code
                       ? `${row.subject.name} (${row.subject.code})`
                       : row.subject.name;
+                    const canEditRow = canEditSubject(row.subject.id);
 
                     return (
                       <tr
@@ -1443,7 +1531,14 @@ export default function StudentResultEntryPage() {
                         className={hasError ? "table-danger" : undefined}
                       >
                         <td>{rowIndex + 1}</td>
-                        <td>{subjectLabel}</td>
+                        <td>
+                          {subjectLabel}
+                          {!canEditRow ? (
+                            <div className="text-muted small">
+                              View only
+                            </div>
+                          ) : null}
+                        </td>
                         {visibleComponents.map((component) => {
                           const componentId = String(component.id);
                           const cell = row.cells[componentId];
@@ -1465,7 +1560,11 @@ export default function StudentResultEntryPage() {
                                 max={getComponentMaxScore(componentId)}
                                 step={0.01}
                                 value={cell.score}
+                                disabled={!canEditRow}
                                 onChange={(event) => {
+                                  if (!canEditRow) {
+                                    return;
+                                  }
                                   const nextScore = event.target.value;
                                   updateCell(String(row.subject.id), componentId, nextScore);
                                   scheduleAutoSave(row, componentId, nextScore);

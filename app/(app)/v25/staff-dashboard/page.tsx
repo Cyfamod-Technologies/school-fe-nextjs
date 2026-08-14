@@ -22,7 +22,7 @@ const formatLabel = (label: string | null | undefined): string =>
   label && label.trim().length > 0 ? label : "Not specified";
 
 export default function StaffDashboardPage() {
-  const { user, hasPermission } = useAuth();
+  const { user } = useAuth();
   const [data, setData] = useState<TeacherDashboardResponse | null>(null);
   const [schoolContext, setSchoolContext] = useState<SchoolContext | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,6 +33,9 @@ export default function StaffDashboardPage() {
 
   useEffect(() => {
     if (!canViewDashboard) {
+      // Reset loading state when the reactive dependency (canViewDashboard)
+      // becomes false -- standard effect-driven sync, not a stray setState.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }
@@ -116,7 +119,7 @@ export default function StaffDashboardPage() {
         isText: true,
       },
     ];
-  }, [data]);
+  }, [data, teacherRoleLabel]);
 
   return (
     <>
@@ -302,6 +305,21 @@ function AssignmentCard({
   assignment: TeacherAssignmentSummary;
   iconClass: string;
 }) {
+  const studentsHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (assignment.session?.id) {
+      params.set("current_session_id", String(assignment.session.id));
+    }
+    if (assignment.class?.id) {
+      params.set("school_class_id", String(assignment.class.id));
+    }
+    if (assignment.class_arm?.id) {
+      params.set("class_arm_id", String(assignment.class_arm.id));
+    }
+    const query = params.toString();
+    return query ? `/v14/all-students?${query}` : "/v14/all-students";
+  }, [assignment]);
+
   return (
     <div className="col-md-6 mb-3">
       <div className="card dashboard-card-one">
@@ -341,6 +359,16 @@ function AssignmentCard({
               </ul>
             )}
           </div>
+          {assignment.is_class_teacher ? (
+            <div className="mt-3 pt-3 border-top">
+              <Link
+                href={studentsHref}
+                className="btn btn-sm btn-outline-primary"
+              >
+                View Students
+              </Link>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
