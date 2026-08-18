@@ -193,7 +193,6 @@ export default function StudentDetailsPage() {
   const [removing, setRemoving] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletionDependencies, setDeletionDependencies] = useState<string[]>([]);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [resettingStudentPassword, setResettingStudentPassword] = useState(false);
   const [passwordResetFeedback, setPasswordResetFeedback] = useState<string | null>(null);
   const [passwordResetError, setPasswordResetError] = useState<string | null>(null);
@@ -1714,7 +1713,6 @@ export default function StudentDetailsPage() {
       return;
     }
     setRemoving(true);
-    setDeleteError(null);
     setDeletionDependencies([]);
 
     try {
@@ -1740,13 +1738,11 @@ export default function StudentDetailsPage() {
 
       const errorMessage =
         err instanceof Error ? err.message : "Unable to delete student.";
-      setDeleteError(errorMessage);
       alert(errorMessage);
     }
   };
 
   const handleDeleteClick = () => {
-    setDeleteError(null);
     setDeletionDependencies([]);
     if (
       window.confirm(
@@ -2888,7 +2884,6 @@ export default function StudentDetailsPage() {
           router.push(allStudentsHref);
         }}
         onDeleteError={(errorMsg) => {
-          setDeleteError(errorMsg);
           alert(errorMsg);
         }}
       />

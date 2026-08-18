@@ -153,7 +153,6 @@ export default function ResultsEntryPage() {
   const [componentLoading, setComponentLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const autoSaveTimersRef = useRef<Record<string, number>>({});
   const lastAutoSaveKeyRef = useRef<Record<string, string>>({});
 
@@ -311,13 +310,6 @@ export default function ResultsEntryPage() {
     return armsCache[selectedClass] ?? [];
   }, [selectedClass, armsCache]);
 
-  const sections = useMemo(() => {
-    if (!selectedClass || !selectedArm) {
-      return [];
-    }
-    const key = `${selectedClass}:${selectedArm}`;
-    return sectionsCache[key] ?? [];
-  }, [selectedClass, selectedArm, sectionsCache]);
 
   // Filter subjects based on the selected class
   const filteredSubjects = useMemo(() => {
@@ -871,6 +863,10 @@ export default function ResultsEntryPage() {
     }));
   };
 
+  // The section selector below is commented out per request (UI hidden,
+  // logic preserved for future use), so this handler has no live caller
+  // right now -- kept intentionally, not dead code.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleSectionChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value;
     updateFilters((prev) => ({
@@ -1395,265 +1391,6 @@ export default function ResultsEntryPage() {
     selectedSubject,
   ]);
 
-  const handleSaveResults = useCallback(async () => {
-    resetMessages();
-
-    if (!rows.length) {
-      setFeedback({
-        type: "info",
-        message: "Load students before attempting to save.",
-      });
-      return;
-    }
-
-    if (!selectedSession || !selectedTerm || !selectedSubject) {
-      setFeedback({
-        type: "warning",
-        message: "Select session, term, and subject before saving scores.",
-      });
-      return;
-    }
-
-    if (isTeacher && !canEditSelectedSubject) {
-      setFeedback({
-        type: "warning",
-        message:
-          "You can view this subject because you are a class teacher, but scores can only be entered for subjects assigned to you.",
-      });
-      return;
-    }
-
-    if (!displayComponents.length) {
-      setFeedback({
-        type: "info",
-        message: "No assessment components available to save.",
-      });
-      return;
-    }
-
-    const nextRows = rows.map((row) => ({
-      ...row,
-      cells: { ...row.cells },
-    }));
-    const entriesByComponent: Record<string, Array<{
-      student_id: number | string;
-      subject_id: string;
-      score: number;
-      remarks: string | null;
-    }>> = {};
-    let hasErrors = false;
-
-    nextRows.forEach((row) => {
-      displayComponents.forEach((component) => {
-        const componentId = String(component.id);
-        const cell = row.cells[componentId];
-        if (!cell) {
-          return;
-        }
-        const scoreInput = cell.score.trim();
-        const remarkInput = cell.remark.trim();
-        const originalRemark = cell.originalRemark.trim();
-        const originalScore = cell.originalScore.trim();
-
-        const changed =
-          scoreInput !== originalScore || remarkInput !== originalRemark;
-
-        if (!changed) {
-          row.cells[componentId] = {
-            ...cell,
-            rowError: null,
-            status: cell.hasResult ? "saved" : "none",
-          };
-          return;
-        }
-
-        if (!scoreInput) {
-          row.cells[componentId] = {
-            ...cell,
-            rowError:
-              "Score is required when updating a result or providing a remark.",
-            status: "pending",
-          };
-          hasErrors = true;
-          return;
-        }
-
-        const scoreValue = Number(scoreInput);
-        const maxScore = getComponentMaxScore(componentId);
-        if (
-          Number.isNaN(scoreValue) ||
-          scoreValue < 0 ||
-          scoreValue > maxScore
-        ) {
-          row.cells[componentId] = {
-            ...cell,
-            rowError: `Score must be a number between 0 and ${getComponentMaxScoreLabel(componentId)}.`,
-            status: "pending",
-          };
-          hasErrors = true;
-          return;
-        }
-
-        row.cells[componentId] = {
-          ...cell,
-          rowError: null,
-          status: "pending",
-        };
-
-        if (!entriesByComponent[componentId]) {
-          entriesByComponent[componentId] = [];
-        }
-        entriesByComponent[componentId].push({
-          student_id: row.student.id,
-          subject_id: selectedSubject,
-          score: Number.parseFloat(scoreValue.toFixed(2)),
-          remarks: remarkInput ? remarkInput : null,
-        });
-      });
-    });
-
-    setRows(nextRows);
-
-    if (hasErrors) {
-      setFeedback({
-        type: "danger",
-        message: "Please fix the highlighted rows before saving.",
-      });
-      return;
-    }
-
-    const totalEntries = Object.values(entriesByComponent).reduce(
-      (sum, entries) => sum + entries.length,
-      0,
-    );
-
-    if (!totalEntries) {
-      setFeedback({
-        type: "info",
-        message: "No changes to save.",
-      });
-      return;
-    }
-
-    setSaving(true);
-    setStatusMessage("Saving scores...");
-
-    try {
-      const saveTasks = Object.entries(entriesByComponent).map(
-        ([componentId, entries]) => ({
-          componentId,
-          promise: saveResultsBatch({
-            session_id: selectedSession,
-            term_id: selectedTerm,
-            assessment_component_id: componentId,
-            entries,
-          }),
-        }),
-      );
-
-      const results = await Promise.allSettled(
-        saveTasks.map((task) => task.promise),
-      );
-
-      const updatedMap = new Map<string, ResultRecord>();
-      const failedComponentIds = new Set<string>();
-      let savedCount = 0;
-
-      results.forEach((result, index) => {
-        const componentId = saveTasks[index].componentId;
-        if (result.status === "fulfilled") {
-          result.value.results.forEach((item) => {
-            const key = `${item.student_id}-${String(item.assessment_component_id ?? componentId)}`;
-            updatedMap.set(key, item);
-          });
-          savedCount += result.value.results.length;
-        } else {
-          failedComponentIds.add(componentId);
-        }
-      });
-
-      setRows((prev) =>
-        prev.map((row) => {
-          const nextCells = { ...row.cells };
-          displayComponents.forEach((component) => {
-            const componentId = String(component.id);
-            if (failedComponentIds.has(componentId)) {
-              return;
-            }
-            const saved = updatedMap.get(
-              `${row.student.id}-${componentId}`,
-            );
-            const cell = nextCells[componentId];
-            if (!cell) {
-              return;
-            }
-            if (!saved) {
-              nextCells[componentId] = {
-                ...cell,
-                rowError: null,
-                status: cell.hasResult ? "saved" : "none",
-              };
-              return;
-            }
-            const savedScore = formatScore(saved.total_score);
-            const savedRemark = (saved.remarks ?? "").trim();
-            nextCells[componentId] = {
-              ...cell,
-              score: savedScore,
-              remark: saved.remarks ?? "",
-              originalScore: savedScore,
-              originalRemark: savedRemark,
-              hasResult: true,
-              status: "saved",
-              rowError: null,
-            };
-          });
-          return {
-            ...row,
-            cells: nextCells,
-          };
-        }),
-      );
-
-      if (failedComponentIds.size) {
-        setFeedback({
-          type: "danger",
-          message: `Scores saved for ${savedCount} entries, but ${failedComponentIds.size} component batch${failedComponentIds.size === 1 ? "" : "es"} failed.`,
-        });
-      } else {
-        setFeedback({
-          type: "success",
-          message: "Scores saved successfully.",
-        });
-      }
-
-      setStatusMessage(`Saved ${savedCount} entries.`);
-    } catch (error) {
-      console.error("Unable to save scores", error);
-      setFeedback({
-        type: "danger",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Unable to save scores at this time.",
-      });
-      setStatusMessage("");
-    } finally {
-      setSaving(false);
-    }
-  }, [
-    displayComponents,
-    canEditSelectedSubject,
-    isTeacher,
-    getComponentMaxScore,
-    getComponentMaxScoreLabel,
-    resetMessages,
-    rows,
-    selectedSession,
-    selectedTerm,
-    selectedSubject,
-  ]);
-
   return (
     <>
       <div className="breadcrumbs-area">
@@ -1828,7 +1565,7 @@ export default function ResultsEntryPage() {
                 onClick={() => {
                   void handleLoadStudents();
                 }}
-                disabled={tableLoading || saving || initializing}
+                disabled={tableLoading || initializing}
               >
                 {tableLoading ? "Loading…" : "Load Students"}
               </button>
