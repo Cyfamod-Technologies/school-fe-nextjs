@@ -8,7 +8,6 @@ import {
   type Session,
 } from "@/lib/sessions";
 import { useAuth } from "@/contexts/AuthContext";
-import { PermissionGate } from "@/components/PermissionGate";
 import { PERMISSIONS } from "@/lib/permissionKeys";
 
 function formatDate(value?: string | null) {

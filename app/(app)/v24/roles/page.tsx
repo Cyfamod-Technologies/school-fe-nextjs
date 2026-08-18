@@ -6,7 +6,6 @@ import {
   useEffect,
   useMemo,
   useState,
-  type ReactNode,
 } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { PERMISSION_ACTIONS } from "@/lib/permissionCatalog";
@@ -365,36 +364,6 @@ const collectPermissionGroups = (
   return groups;
 };
 
-const summarizeRolePermissions = (role: Role): ReactNode => {
-  const permissions = Array.isArray(role.permissions)
-    ? role.permissions
-    : [];
-  if (permissions.length === 0) {
-    return <span className="badge badge-secondary">None</span>;
-  }
-
-  const names = permissions
-    .map((permission) =>
-      typeof permission?.name === "string" ? permission.name : "",
-    )
-    .filter((value) => value.trim().length > 0);
-
-  if (!names.length) {
-    return <span className="badge badge-secondary">None</span>;
-  }
-
-  const preview = names.slice(0, 3).join(", ");
-  const remaining = names.length - 3;
-
-  return (
-    <>
-      {preview}
-      {remaining > 0 ? (
-        <span className="text-muted"> (+{remaining} more)</span>
-      ) : null}
-    </>
-  );
-};
 
 const containsManageTerm = (...values: Array<string | null | undefined>): boolean => {
   const text = values

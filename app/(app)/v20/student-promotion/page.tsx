@@ -186,28 +186,12 @@ export default function StudentPromotionPage() {
     return armsCache[filters.school_class_id] ?? [];
   }, [filters.school_class_id, armsCache]);
 
-  const sectionsForFilter = useMemo(() => {
-    if (!filters.school_class_id || !filters.class_arm_id) {
-      return [];
-    }
-    const key = `${filters.school_class_id}:${filters.class_arm_id}`;
-    return sectionsCache[key] ?? [];
-  }, [filters.school_class_id, filters.class_arm_id, sectionsCache]);
-
   const targetArms = useMemo(() => {
     if (!target.school_class_id) {
       return [];
     }
     return armsCache[target.school_class_id] ?? [];
   }, [target.school_class_id, armsCache]);
-
-  const targetSections = useMemo(() => {
-    if (!target.school_class_id || !target.class_arm_id) {
-      return [];
-    }
-    const key = `${target.school_class_id}:${target.class_arm_id}`;
-    return sectionsCache[key] ?? [];
-  }, [target.school_class_id, target.class_arm_id, sectionsCache]);
 
   const toggleStudentSelection = (studentId: number, checked: boolean) => {
     setSelectedIds((prev) => {

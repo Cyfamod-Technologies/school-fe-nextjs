@@ -1,11 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-  deleteStudent,
-  deleteDependentRecords,
-  StudentDelectionWithDependenciesError,
-} from "@/lib/students";
+import { deleteStudent, deleteDependentRecords } from "@/lib/students";
 
 interface DeleteStudentModalProps {
   isOpen: boolean;
@@ -24,10 +20,16 @@ export default function DeleteStudentModal({
   dependencies = [],
   onClose,
   onDeleteSuccess,
+  // Never actually called below -- this modal shows its own inline error
+  // UI (see the `error` state) instead of delegating to the caller. Kept
+  // in the props contract since callers (e.g. student-details/page.tsx)
+  // already pass a real handler for it; worth deciding deliberately
+  // whether errors should also bubble up through this callback, rather
+  // than silently dropping it here.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onDeleteError,
 }: DeleteStudentModalProps) {
   const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteWithRecords, setDeleteWithRecords] = useState(false);
   const [deletingStatus, setDeletingStatus] = useState<string>("");
   const [error, setError] = useState<string>("");
 
@@ -35,7 +37,6 @@ export default function DeleteStudentModal({
     if (!studentId) return;
 
     setIsDeleting(true);
-    setDeleteWithRecords(true);
     setError("");
     setDeletingStatus("Deleting dependent records...");
 
@@ -64,7 +65,6 @@ export default function DeleteStudentModal({
     if (!studentId) return;
 
     setIsDeleting(true);
-    setDeleteWithRecords(false);
     setError("");
     setDeletingStatus("Deleting student record...");
 
