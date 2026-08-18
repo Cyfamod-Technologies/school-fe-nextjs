@@ -1130,7 +1130,7 @@ export default function AssignTeachersPage() {
               </div>
               {groupEditor.existing ? (
                 <small className="text-muted d-block mt-2">
-                  Existing rows are never removed by bulk save. Use the row's Delete button in the list when removal is intended.
+                  Existing rows are never removed by bulk save. Use the row&apos;s Delete button in the list when removal is intended.
                 </small>
               ) : null}
             </form>
