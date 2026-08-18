@@ -3,8 +3,12 @@
 import { useStudentAuth } from "@/contexts/StudentAuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { FormEvent, useMemo, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { changeStudentPassword } from "@/lib/studentAuth";
+import {
+  getStudentAttendance,
+  type StudentAttendanceSummary,
+} from "@/lib/studentAttendance";
 
 const styles = `
 .student-dashboard-container {
@@ -386,12 +390,44 @@ export default function StudentDashboardHome() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordFeedback, setPasswordFeedback] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [attendanceSummary, setAttendanceSummary] =
+    useState<StudentAttendanceSummary | null>(null);
 
   useEffect(() => {
     if (!loading && !student) {
       router.push("/student-login");
     }
   }, [loading, student, router]);
+
+  // New in the attendance feature: fetch this term's attendance summary once
+  // we know which session/term the student is in. Placed alongside the
+  // other hooks, before the early return below -- hooks must run in the
+  // same order on every render.
+  useEffect(() => {
+    const sessionId = student?.current_session?.id;
+    const termId = student?.current_term?.id;
+    if (!sessionId || !termId) return;
+
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    let cancelled = false;
+
+    void getStudentAttendance({
+      sessionId: String(sessionId),
+      termId: String(termId),
+      month,
+    })
+      .then((response) => {
+        if (!cancelled) setAttendanceSummary(response.summary);
+      })
+      .catch((attendanceError) => {
+        console.error("Unable to load dashboard attendance summary", attendanceError);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [student?.current_session?.id, student?.current_term?.id]);
 
   // Get unique subjects to avoid duplicates. Guards on `student` being null
   // internally rather than skipping the hook via an early return above --
@@ -603,6 +639,34 @@ export default function StudentDashboardHome() {
             </div>
           </div>
 
+          <div className="quick-actions-section">
+            <div className="quick-actions-header">
+              <h4 style={{ margin: 0 }}>Current Term Attendance</h4>
+            </div>
+            <div className="quick-actions-body">
+              <div className="quick-actions-text">
+                <h4>
+                  {attendanceSummary
+                    ? `${attendanceSummary.percentage}% attendance`
+                    : "No attendance recorded yet"}
+                </h4>
+                <p>
+                  {attendanceSummary
+                    ? `${attendanceSummary.present} present · ${attendanceSummary.absent} absent · ${attendanceSummary.recorded_days} recorded days`
+                    : "Your daily attendance summary will appear here once your class teacher begins marking it."}
+                </p>
+              </div>
+              <div className="action-buttons">
+                <Link
+                  href="/v26/student-dashboard/attendance"
+                  className="btn-action btn-action-primary"
+                >
+                  Open Attendance Calendar
+                </Link>
+              </div>
+            </div>
+          </div>
+
           {/* Quick Actions */}
           <div className="quick-actions-section">
             <div className="quick-actions-header">
@@ -631,6 +695,12 @@ export default function StudentDashboardHome() {
                   className="btn-action btn-action-secondary"
                 >
                   Result PINs
+                </Link>
+                <Link
+                  href="/v26/student-dashboard/attendance"
+                  className="btn-action btn-action-secondary"
+                >
+                  View Attendance
                 </Link>
               </div>
             </div>

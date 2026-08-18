@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import Image, { type ImageLoader } from "next/image";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { resolveBackendUrl } from "@/lib/config";
 import { isTeacherUser } from "@/lib/roleChecks";
+import { fetchTeacherDashboard } from "@/lib/staff";
 
 const DEFAULT_LOGO = "/assets/img/logo1.png";
 const passthroughLoader: ImageLoader = ({ src }) => src;
@@ -63,6 +64,7 @@ export const sidebarQuickLinks: SidebarQuickLink[] = [
 export function getMenuSections(
   enableSessionResultPrint = false,
   preserveTeacherStudentMenu = false,
+  showTeacherAttendance = false,
 ): MenuSection[] {
   const studentResultPrintLinks: MenuLink[] = [
     {
@@ -142,6 +144,9 @@ export function getMenuSections(
   const teacherStudentLinks: MenuLink[] = [
     { label: "View Student", href: "/v14/all-students", requiredPermissions: "students.view" },
     { label: "Add Student", href: "/v14/add-student", requiredPermissions: "students.create" },
+    ...(showTeacherAttendance
+      ? [{ label: "Attendance", href: "/v25/attendance" } satisfies MenuLink]
+      : []),
     ...studentResultPrintLinks,
     ...earlyYearsLinks,
     ...studentResultEntryLinks,
@@ -292,6 +297,34 @@ export function Sidebar() {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const isTeacher = isTeacherUser(user);
+  const [isClassTeacher, setIsClassTeacher] = useState(false);
+
+  useEffect(() => {
+    if (!isTeacher) {
+      setIsClassTeacher(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    void fetchTeacherDashboard()
+      .then((dashboard) => {
+        if (isMounted) {
+          setIsClassTeacher(
+            dashboard.assignments.some((assignment) => assignment.is_class_teacher),
+          );
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setIsClassTeacher(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isTeacher]);
 
   const logoSrc = useMemo(() => {
     const customLogo = schoolContext.school?.logo_url;
@@ -407,6 +440,7 @@ export function Sidebar() {
     return getMenuSections(
       Boolean(schoolContext.school?.result_enable_session_print),
       isTeacher,
+      isClassTeacher,
     )
       .filter((section) => {
         if (isAdminRole && section.label === "Student") {
@@ -422,7 +456,7 @@ export function Sidebar() {
         links: filterLinks(section.links),
       }))
       .filter((section) => section.links.length > 0);
-  }, [filterLinks, isTeacher, isAdminRole, schoolContext.school?.result_enable_session_print]);
+  }, [filterLinks, isTeacher, isClassTeacher, isAdminRole, schoolContext.school?.result_enable_session_print]);
 
   const isMenuLinkActive = useCallback(
     function isMenuLinkActiveRecursively(link: MenuLink): boolean {

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, startTransition, useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { listAllSubjects, type Subject } from "@/lib/subjects";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import { listClassArms, type ClassArm } from "@/lib/classArms";
@@ -33,6 +34,7 @@ const initialForm: AssignmentForm = {
 };
 
 interface AssignmentFilters {
+  session_id: string;
   search: string;
   school_class_id: string;
   class_arm_id: string;
@@ -40,6 +42,7 @@ interface AssignmentFilters {
 }
 
 const initialFilters: AssignmentFilters = {
+  session_id: "",
   search: "",
   school_class_id: "",
   class_arm_id: "",
@@ -56,6 +59,10 @@ interface FormFeedbackState {
 }
 
 export default function AssignSubjectsPage() {
+  const { schoolContext } = useAuth();
+  const currentSessionId = schoolContext.current_session_id
+    ? String(schoolContext.current_session_id)
+    : "";
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [armsCache, setArmsCache] = useState<ArmsCache>({});
@@ -216,6 +223,15 @@ export default function AssignSubjectsPage() {
   }, []);
 
   useEffect(() => {
+    if (!currentSessionId) return;
+    setFilters((previous) =>
+      previous.session_id === currentSessionId
+        ? previous
+        : { ...previous, session_id: currentSessionId },
+    );
+  }, [currentSessionId]);
+
+  useEffect(() => {
     if (form.school_class_id) {
       ensureArmsLoaded(form.school_class_id).catch((err) =>
         console.error(err),
@@ -251,6 +267,7 @@ export default function AssignSubjectsPage() {
     setLoadingList(true);
     try {
       const response = await listSubjectAssignments({
+        session_id: currentSessionId || undefined,
         page,
         per_page: perPage,
         search: filters.search || undefined,
@@ -271,7 +288,7 @@ export default function AssignSubjectsPage() {
     } finally {
       setLoadingList(false);
     }
-  }, [filters, page, perPage]);
+  }, [currentSessionId, filters, page, perPage]);
 
   useEffect(() => {
     fetchAssignments().catch((err) => console.error(err));
@@ -285,6 +302,14 @@ export default function AssignSubjectsPage() {
       setFormFeedback({
         type: "danger",
         message: "Class is required.",
+      });
+      return;
+    }
+
+    if (!currentSessionId) {
+      setFormFeedback({
+        type: "danger",
+        message: "Set the school's current session before assigning subjects.",
       });
       return;
     }
@@ -330,6 +355,7 @@ export default function AssignSubjectsPage() {
       }
 
       const response = await createSubjectAssignment({
+        session_id: currentSessionId,
         subject_ids: form.subjectIds,
         school_class_id: form.school_class_id,
         class_arm_id: form.class_arm_id || null,
@@ -393,6 +419,13 @@ export default function AssignSubjectsPage() {
   };
 
   const handleEdit = async (assignment: SubjectAssignment) => {
+    if (String(assignment.session_id) !== currentSessionId) {
+      setFormFeedback({
+        type: "warning",
+        message: "Historical subject assignments are read-only.",
+      });
+      return;
+    }
     setEditingId(`${assignment.id}`);
     setFormFeedback(null);
 
@@ -422,6 +455,13 @@ export default function AssignSubjectsPage() {
   };
 
   const handleDelete = async (assignment: SubjectAssignment) => {
+    if (String(assignment.session_id) !== currentSessionId) {
+      setFormFeedback({
+        type: "warning",
+        message: "Historical subject assignments are read-only.",
+      });
+      return;
+    }
     if (
       !window.confirm(
         `Remove subject assignment for "${assignment.subject?.name ?? "Subject"}"?`,
@@ -475,6 +515,17 @@ export default function AssignSubjectsPage() {
 
               <form onSubmit={handleFormSubmit}>
                 <div className="row">
+                  <div className="col-12 form-group">
+                    <label>Session *</label>
+                    <input
+                      className="form-control"
+                      value={schoolContext.current_session?.name ?? "Not set"}
+                      readOnly
+                    />
+                    <small className="form-text text-muted">
+                      New assignments are locked to the school&apos;s current session.
+                    </small>
+                  </div>
                   <div className="col-12 form-group">
                     <label>Subjects *</label>
                     {!editingId ? (
@@ -658,6 +709,18 @@ export default function AssignSubjectsPage() {
               </div>
 
               <div className="row gutters-8 align-items-end mb-3">
+                <div className="col-md-3 col-12 form-group">
+                  <label htmlFor="filter-session">Session</label>
+                  <input
+                    id="filter-session"
+                    className="form-control"
+                    value={schoolContext.current_session?.name ?? "Not set"}
+                    readOnly
+                  />
+                  <small className="form-text text-muted">
+                    The assignment list is locked to the current session.
+                  </small>
+                </div>
                 <div className="col-md-4 col-12 form-group">
                   <label htmlFor="filter-search">Search</label>
                   <input
@@ -761,7 +824,7 @@ export default function AssignSubjectsPage() {
                     className="btn btn-outline-secondary mr-2"
                     type="button"
                     onClick={() => {
-                      setFilters(initialFilters);
+                      setFilters({ ...initialFilters, session_id: currentSessionId });
                       setPage(1);
                       fetchAssignments().catch(() => undefined);
                     }}
@@ -792,6 +855,7 @@ export default function AssignSubjectsPage() {
                   <thead>
                     <tr>
                       <th>Subject</th>
+                      <th>Session</th>
                       <th>Class</th>
                       <th>Arm</th>
                       {/* <th>Section</th> */}
@@ -802,13 +866,13 @@ export default function AssignSubjectsPage() {
                   <tbody>
                     {loadingList ? (
                       <tr>
-                        <td colSpan={5} className="text-center">
+                        <td colSpan={6} className="text-center">
                           Loading assignments…
                         </td>
                       </tr>
                     ) : assignments.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="text-center">
+                        <td colSpan={6} className="text-center">
                           No assignments found.
                         </td>
                       </tr>
@@ -821,6 +885,7 @@ export default function AssignSubjectsPage() {
                               ? ` (${assignment.subject.code})`
                               : ""}
                           </td>
+                          <td>{assignment.session?.name ?? "N/A"}</td>
                           <td>{assignment.school_class?.name ?? "N/A"}</td>
                           <td>{assignment.class_arm?.name ?? "N/A"}</td>
                           {/* <td>{assignment.class_section?.name ?? "All"}</td> */}
@@ -835,6 +900,8 @@ export default function AssignSubjectsPage() {
                                 type="button"
                                 className="btn btn-sm btn-outline-primary mr-2"
                                 onClick={() => handleEdit(assignment)}
+                                disabled={String(assignment.session_id) !== currentSessionId}
+                                title={String(assignment.session_id) !== currentSessionId ? "Historical assignments are read-only" : "Edit assignment"}
                               >
                                 Edit
                               </button>
@@ -842,6 +909,8 @@ export default function AssignSubjectsPage() {
                                 type="button"
                                 className="btn btn-sm btn-outline-danger"
                                 onClick={() => handleDelete(assignment)}
+                                disabled={String(assignment.session_id) !== currentSessionId}
+                                title={String(assignment.session_id) !== currentSessionId ? "Historical assignments are read-only" : "Delete assignment"}
                               >
                                 Delete
                               </button>

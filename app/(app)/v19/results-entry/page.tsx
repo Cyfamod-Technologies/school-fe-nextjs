@@ -726,7 +726,7 @@ export default function ResultsEntryPage() {
     let cancelled = false;
 
     apiFetch<{ data: Array<{subject_id: string}> }>(
-      `${API_ROUTES.subjectAssignments}?school_class_id=${selectedClass}&per_page=500`
+      `${API_ROUTES.subjectAssignments}?school_class_id=${selectedClass}&session_id=${selectedSession}&per_page=500`
     )
       .then((response) => {
         if (cancelled) return;
@@ -742,7 +742,7 @@ export default function ResultsEntryPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedClass, isTeacher]);
+  }, [selectedClass, selectedSession, isTeacher]);
 
   useEffect(() => {
     if (!selectedSession || !selectedTerm || !selectedSubject) {

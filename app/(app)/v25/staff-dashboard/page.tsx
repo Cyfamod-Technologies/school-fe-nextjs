@@ -23,12 +23,12 @@ const formatLabel = (label: string | null | undefined): string =>
 
 export default function StaffDashboardPage() {
   const { user } = useAuth();
+  const isTeacher = isTeacherUser(user);
   const [data, setData] = useState<TeacherDashboardResponse | null>(null);
   const [schoolContext, setSchoolContext] = useState<SchoolContext | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(isTeacher);
   const [error, setError] = useState<string | null>(null);
 
-  const isTeacher = isTeacherUser(user);
   const canViewDashboard = isTeacher;
 
   useEffect(() => {
@@ -41,8 +41,6 @@ export default function StaffDashboardPage() {
     }
 
     let isMounted = true;
-    setLoading(true);
-    setError(null);
 
     void Promise.all([fetchTeacherDashboard(), fetchSchoolContext()])
       .then(([dashboard, context]) => {
@@ -77,6 +75,10 @@ export default function StaffDashboardPage() {
   }, [canViewDashboard]);
 
   const assignments = data?.assignments ?? [];
+  const classTeacherAssignments = assignments.filter(
+    (assignment) => assignment.is_class_teacher,
+  );
+  const dashboardLoading = loading || (canViewDashboard && !data && !error);
 
   const teacherRoleLabel = useMemo(() => {
     if (!data) {
@@ -146,7 +148,7 @@ export default function StaffDashboardPage() {
         </div>
       ) : null}
 
-      {loading ? (
+      {dashboardLoading ? (
         <div className="card">
           <div className="card-body text-center">
             <div className="spinner-border text-primary mb-3" role="status" aria-hidden="true" />
@@ -155,7 +157,7 @@ export default function StaffDashboardPage() {
         </div>
       ) : null}
 
-      {!loading && data ? (
+      {!dashboardLoading && data ? (
         <>
           {schoolContext ? (
             <div className="row mb-3">
@@ -174,7 +176,7 @@ export default function StaffDashboardPage() {
           ) : null}
 
           <div className="row">
-            {summaryCards.map((card, index) => (
+            {summaryCards.map((card) => (
               <div className="col-lg-4 col-md-6 col-12" key={card.label}>
                 <div className={`dashboard-summery-one ${card.accent}`}>
                   <div className="row align-items-center">
@@ -202,6 +204,24 @@ export default function StaffDashboardPage() {
           </div>
 
           <div className="row mt-4">
+            {classTeacherAssignments.length > 0 ? (
+              <div className="col-12 mb-4">
+                <div className="card height-auto border-left border-success">
+                  <div className="card-body d-flex flex-wrap justify-content-between align-items-center">
+                    <div className="mr-3">
+                      <h3 className="mb-1">Daily Student Attendance</h3>
+                      <p className="text-muted mb-0">
+                        Mark Present or Absent for students in your assigned class.
+                        Each selection saves immediately.
+                      </p>
+                    </div>
+                    <Link href="/v25/attendance" className="btn btn-success mt-3 mt-md-0">
+                      Take Attendance
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="col-xl-4 col-lg-5 col-12">
               <div className="card height-auto">
                 <div className="card-body">

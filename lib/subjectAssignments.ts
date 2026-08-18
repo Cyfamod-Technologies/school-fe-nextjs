@@ -4,16 +4,19 @@ import type { Subject } from "@/lib/subjects";
 import type { SchoolClass } from "@/lib/classes";
 import type { ClassArm } from "@/lib/classArms";
 import type { ClassArmSection } from "@/lib/classArmSections";
+import type { Session } from "@/lib/sessions";
 
 export interface SubjectAssignment {
   id: string;
   subject_id: string;
+  session_id: string;
   school_class_id: string;
   class_arm_id?: string | null;
   class_section_id?: string | null;
   created_at?: string;
   updated_at?: string;
   subject?: Subject | null;
+  session?: Session | null;
   school_class?: SchoolClass | null;
   class_arm?: ClassArm | null;
   class_section?: ClassArmSection | null;
@@ -46,6 +49,7 @@ export interface SubjectAssignmentFilters {
   school_class_id?: string;
   class_arm_id?: string;
   class_section_id?: string;
+  session_id?: string;
 }
 
 function buildQuery(params: Record<string, string | number | undefined>): string {
@@ -66,6 +70,7 @@ export async function listSubjectAssignments(
     page: filters.page,
     per_page: filters.per_page,
     search: filters.search,
+    session_id: filters.session_id,
     school_class_id: filters.school_class_id,
     class_arm_id: filters.class_arm_id,
   });
@@ -89,6 +94,7 @@ export async function createSubjectAssignment(
     subject_id?: string | number;
     subject_ids?: Array<string | number>;
     school_class_id: string | number;
+    session_id?: string | number;
     class_arm_id?: string | number | null;
     class_section_id?: string | number | null;
   },
