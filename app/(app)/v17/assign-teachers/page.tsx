@@ -201,13 +201,14 @@ export default function AssignTeachersPage() {
       if (!classId) {
         return;
       }
-      const key = `${classId}:${armId || "all"}`;
+      const key = `${currentSessionId}:${classId}:${armId || "all"}`;
       if (classSubjectsByKey[key]) {
         return;
       }
       setClassSubjectsLoading(true);
       try {
         const response = await listSubjectAssignments({
+          session_id: currentSessionId,
           school_class_id: classId,
           class_arm_id: armId || undefined,
           per_page: 500,
@@ -233,7 +234,7 @@ export default function AssignTeachersPage() {
         setClassSubjectsLoading(false);
       }
     },
-    [classSubjectsByKey],
+    [classSubjectsByKey, currentSessionId],
   );
 
   const fetchStudentsForClass = useCallback(
@@ -321,7 +322,7 @@ export default function AssignTeachersPage() {
 
     const subjectMap = new Map<string, Subject>();
     selectedContexts.forEach((context) => {
-      const key = `${context.school_class_id}:${context.class_arm_id || "all"}`;
+      const key = `${currentSessionId}:${context.school_class_id}:${context.class_arm_id || "all"}`;
       (classSubjectsByKey[key] ?? []).forEach((subject) => {
         if (subject?.id) {
           subjectMap.set(String(subject.id), subject);
@@ -330,7 +331,7 @@ export default function AssignTeachersPage() {
     });
 
     return Array.from(subjectMap.values());
-  }, [classSubjectsByKey, selectedContexts]);
+  }, [classSubjectsByKey, currentSessionId, selectedContexts]);
 
   const filteredStudents = useMemo(() => {
     const term = studentSearch.trim().toLowerCase();
@@ -1037,7 +1038,7 @@ export default function AssignTeachersPage() {
                   <tbody>
                     {groupEditor.rows.map((row) => {
                       const assignedRowSubjects = classSubjectsByKey[
-                        `${row.school_class_id}:${row.class_arm_id || "all"}`
+                        `${currentSessionId}:${row.school_class_id}:${row.class_arm_id || "all"}`
                       ] ?? [];
                       const currentSubject = subjects.find((subject) => String(subject.id) === row.subject_id);
                       const rowSubjects = currentSubject && !assignedRowSubjects.some(

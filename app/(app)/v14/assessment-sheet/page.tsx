@@ -134,6 +134,7 @@ export default function AssessmentSheetPage() {
 
     setSubjectsLoading(true);
     listSubjectAssignments({
+      session_id: filters.sessionId,
       school_class_id: filters.classId,
       per_page: 500,
     })
@@ -182,7 +183,7 @@ export default function AssessmentSheetPage() {
     return () => {
       active = false;
     };
-  }, [filters.armId, filters.classId]);
+  }, [filters.armId, filters.classId, filters.sessionId]);
 
   const selectedSession = sessions.find((item) => String(item.id) === filters.sessionId);
   const selectedTerm = terms.find((item) => String(item.id) === filters.termId);

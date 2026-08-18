@@ -255,6 +255,29 @@ export async function saveStudentAttendance(
   return extractMutationResponse<StudentAttendanceRecord>(response);
 }
 
+export type AttendanceEntryMode = "daily" | "manual";
+
+export interface AttendanceModeResponse {
+  session_id: string;
+  term_id: string;
+  attendance_entry_mode: AttendanceEntryMode;
+}
+
+export async function updateAttendanceEntryMode(payload: {
+  session_id: string | number;
+  term_id: string | number;
+  attendance_entry_mode: AttendanceEntryMode;
+}): Promise<AttendanceModeResponse> {
+  const response = await apiFetch<{ data: AttendanceModeResponse }>(
+    `${API_ROUTES.studentAttendance.replace(/\/students$/, "")}/mode`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    },
+  );
+  return response.data;
+}
+
 export async function deleteStudentAttendance(
   attendanceId: number | string,
 ): Promise<void> {

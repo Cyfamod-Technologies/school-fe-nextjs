@@ -576,6 +576,7 @@ export default function StudentResultEntryPage() {
     let cancelled = false;
 
     listSubjectAssignments({
+      session_id: selectedSession,
       per_page: 500,
       school_class_id: String(student.school_class_id),
       class_arm_id:
@@ -610,6 +611,7 @@ export default function StudentResultEntryPage() {
     };
   }, [
     isTeacher,
+    selectedSession,
     student?.school_class_id,
     student?.class_arm_id,
     student?.class_section_id,
