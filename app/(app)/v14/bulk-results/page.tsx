@@ -6,10 +6,6 @@ import { listSessions, type Session } from "@/lib/sessions";
 import { listTermsBySession, type Term } from "@/lib/terms";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import { listClassArms, type ClassArm } from "@/lib/classArms";
-import {
-  listClassArmSections,
-  type ClassArmSection,
-} from "@/lib/classArmSections";
 import { resolveBackendUrl } from "@/lib/config";
 import { getCookie } from "@/lib/cookies";
 
@@ -50,7 +46,6 @@ export default function BulkResultsPage() {
   const [termsCache, setTermsCache] = useState<Record<string, Term[]>>({});
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [classArms, setClassArms] = useState<ClassArm[]>([]);
-  const [classSections, setClassSections] = useState<ClassArmSection[]>([]);
   const [status, setStatus] = useState<string>("");
   const [processing, setProcessing] = useState(false);
 
@@ -93,7 +88,6 @@ export default function BulkResultsPage() {
         setClassArms(arms);
         if (!arms.find((arm) => `${arm.id}` === filters.classArmId)) {
           setFilters((prev) => ({ ...prev, classArmId: "", classSectionId: "" }));
-          setClassSections([]);
         }
       })
       .catch((error) => {
@@ -291,7 +285,6 @@ export default function BulkResultsPage() {
                     classSectionId: "",
                   }));
                   setClassArms([]);
-                  setClassSections([]);
                 }}
               >
                 <option value="">Select class</option>
@@ -315,9 +308,6 @@ export default function BulkResultsPage() {
                     classArmId: nextArmId,
                     classSectionId: "",
                   }));
-                  if (!nextArmId) {
-                    setClassSections([]);
-                  }
                 }}
                 disabled={!filters.classId || classArms.length === 0}
               >

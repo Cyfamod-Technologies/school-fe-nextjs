@@ -54,7 +54,7 @@ export default function AppLayout({
       preloader.remove();
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [loading, user]);
+  }, [loading, user, isCbtStudentRoute]);
 
   if (!user && !isCbtStudentRoute) {
     return loading ? (

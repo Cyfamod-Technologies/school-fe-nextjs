@@ -578,6 +578,11 @@ export default function StudentDashboardHome() {
                   {/* Profile Avatar */}
                   <div className="profile-avatar-wrapper">
                     {student.photo_url ? (
+                      // Student profile photo: arbitrary source URL,
+                      // unknown dimensions, sized purely by the
+                      // .profile-avatar CSS class -- not safe to guess a
+                      // fixed size for next/image without visual QA.
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={student.photo_url}
                         alt={`${student.first_name}'s photo`}

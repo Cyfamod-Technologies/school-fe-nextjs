@@ -34,7 +34,7 @@ export default function HistoryPage() {
     }
 
     loadHistory();
-  }, [user]);
+  }, [user, router]);
 
   const loadHistory = async () => {
     try {

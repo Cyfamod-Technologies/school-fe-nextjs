@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useStudentAuth } from "@/contexts/StudentAuthContext";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { updateStudentProfile } from "@/lib/studentAuth";
 import { upsertStudentParent } from "@/lib/studentParents";
 import { listCountries, listStates, listLgas, listBloodGroups } from "@/lib/locations";
@@ -873,6 +873,11 @@ export default function StudentBioDataPage() {
                       />
                       {passportPreview && typeof passportPreview === "string" && (passportPreview.startsWith("data:") || passportPreview.startsWith("http://") || passportPreview.startsWith("https://") || passportPreview.startsWith("/")) ? (
                         <>
+                          {/* User-uploaded passport preview: source can be
+                              a data: URI or an arbitrary remote URL with
+                              unknown dimensions -- not safe to guess a
+                              fixed size for next/image without visual QA. */}
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={passportPreview}
                             alt="Passport preview"
