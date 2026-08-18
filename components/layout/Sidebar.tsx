@@ -268,11 +268,23 @@ export function getMenuSections(
       icon: "flaticon-settings",
       links: [
         { label: "School Settings", href: "/v10/profile", requiredRoles: ["admin"] },
+        { label: "Payment", href: "/settings/payment", requiredRoles: ["admin"] },
         {
           label: "Website Management",
           href: "/v28/website-management",
           requiredRoles: ["admin"],
           requiredPermissions: "settings.school.view",
+        },
+      ],
+    },
+    {
+      label: "Partner Program",
+      icon: "flaticon-planet-earth",
+      links: [
+        {
+          label: "Agents",
+          href: "/admin/agents",
+          requiredRoles: ["super_admin"],
         },
       ],
     },
