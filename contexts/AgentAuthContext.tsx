@@ -21,7 +21,7 @@ interface AgentContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  register: (data: any) => Promise<void>;
+  register: (data: Record<string, unknown>) => Promise<void>;
   fetchAgent: () => Promise<void>;
 }
 
@@ -103,7 +103,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const register = async (data: any) => {
+  const register = async (data: Record<string, unknown>) => {
     setLoading(true);
     try {
       const response = await apiClient.post('/api/v1/agents/register', data);
