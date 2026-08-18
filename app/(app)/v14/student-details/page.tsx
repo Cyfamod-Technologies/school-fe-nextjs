@@ -524,6 +524,14 @@ export default function StudentDetailsPage() {
     }
     return termsCache[selectedSession] ?? [];
   }, [selectedSession, termsCache]);
+  const selectedAttendanceTerm = useMemo(
+    () => terms.find((term) => String(term.id) === selectedTerm) ?? null,
+    [selectedTerm, terms],
+  );
+  const attendanceEntryMode =
+    selectedAttendanceTerm?.attendance_entry_mode ??
+    termSummary.attendance_entry_mode ??
+    "daily";
   const preferredSelectedTerm = useMemo(() => {
     if (!selectedSession) {
       return "";
@@ -727,6 +735,7 @@ export default function StudentDetailsPage() {
           summary.principal_comment?.trim() || defaultPrincipalComment,
         days_present: summary.days_present ?? null,
         days_absent: summary.days_absent ?? null,
+        attendance_entry_mode: summary.attendance_entry_mode ?? "daily",
       });
       setTeacherCommentOptions(
         Array.isArray(summary.class_teacher_comment_options)
@@ -1188,8 +1197,8 @@ export default function StudentDetailsPage() {
       });
       setPinFeedback(
         regenerate
-          ? "Result PIN regenerated successfully."
-          : "Result PIN generated successfully.",
+          ? "Result PIN regenerated successfully. Use Send to release it."
+          : "Result PIN generated successfully. Use Send to release it.",
       );
       setPinFeedbackType("success");
       await loadResultPins();
@@ -2162,6 +2171,7 @@ export default function StudentDetailsPage() {
         </div>
       ) : null}
 
+      {attendanceEntryMode === "manual" ? (
       <div className="card height-auto mt-4">
         <div className="card-body">
           <div className="heading-layout1">
@@ -2297,6 +2307,7 @@ export default function StudentDetailsPage() {
           </div>
         </div>
       </div>
+      ) : null}
 
       <div className="card height-auto mt-4">
         <div className="card-body">
