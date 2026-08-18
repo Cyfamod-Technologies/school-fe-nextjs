@@ -102,7 +102,6 @@ export default function ClassSkillRatingsPage() {
 
   const [loadingFilters, setLoadingFilters] = useState(false);
   const [loadingGrid, setLoadingGrid] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [feedbackKind, setFeedbackKind] = useState<"success" | "info" | "warning" | "danger">("info");
   const [error, setError] = useState<string | null>(null);
@@ -180,14 +179,6 @@ export default function ClassSkillRatingsPage() {
       allowedIds.has(String(schoolClass.id)),
     );
   }, [classes, isTeacher, teacherDashboard]);
-
-  const sections = useMemo(() => {
-    if (!selectedClass || !selectedArm) {
-      return [];
-    }
-    const key = `${selectedClass}:${selectedArm}`;
-    return sectionsCache[key] ?? [];
-  }, [selectedClass, selectedArm, sectionsCache]);
 
   const skillTypeOptions = useMemo(() => {
     return skillTypes
@@ -702,91 +693,6 @@ export default function ClassSkillRatingsPage() {
       },
     [scheduleAutoSave],
   );
-
-  const handleSaveAll = useCallback(async () => {
-    setFeedback(null);
-    setError(null);
-
-    if (!selectedSession || !selectedTerm) {
-      setFeedbackKind("warning");
-      setFeedback("Select session and term before saving ratings.");
-      return;
-    }
-
-    if (!students.length || !visibleSkillTypes.length) {
-      setFeedbackKind("info");
-      setFeedback("Load students and select a skill before saving.");
-      return;
-    }
-
-    const tasks: Array<Promise<unknown>> = [];
-
-    students.forEach((student) => {
-      const studentRow = ratingsGrid[String(student.id)] ?? {};
-      visibleSkillTypes.forEach((type) => {
-        const cell = studentRow[String(type.id)];
-        const value = cell?.value?.trim() ?? "";
-        if (!value) {
-          return;
-        }
-        const ratingValue = Number(value);
-        if (!Number.isFinite(ratingValue) || ratingValue < 0 || ratingValue > 5) {
-          return;
-        }
-
-        if (cell.ratingId) {
-          tasks.push(
-            updateStudentSkillRating(student.id, cell.ratingId, {
-              session_id: selectedSession,
-              term_id: selectedTerm,
-              skill_type_id: String(type.id),
-              rating_value: ratingValue,
-            }),
-          );
-        } else {
-          tasks.push(
-            createStudentSkillRating(student.id, {
-              session_id: selectedSession,
-              term_id: selectedTerm,
-              skill_type_id: String(type.id),
-              rating_value: ratingValue,
-            }),
-          );
-        }
-      });
-    });
-
-    if (!tasks.length) {
-      setFeedbackKind("info");
-      setFeedback("No ratings to save for the selected skill.");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await Promise.all(tasks);
-      await handleLoadGrid();
-      setFeedbackKind("success");
-      setFeedback("Skill ratings saved successfully for the class.");
-    } catch (err) {
-      console.error("Unable to save class skill ratings", err);
-      setFeedbackKind("danger");
-      setFeedback(
-        err instanceof Error
-          ? err.message
-          : "Unable to save skill ratings at this time.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }, [
-    handleLoadGrid,
-    ratingsGrid,
-    selectedSession,
-    selectedTerm,
-    skillTypes,
-    students,
-  ]);
 
   return (
     <>

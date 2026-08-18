@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { apiFetch } from '@/lib/apiClient';
 import { getErrorMessage } from "@/lib/errors";
@@ -32,11 +32,6 @@ interface SchoolClass {
   name: string;
 }
 
-interface SessionTerm {
-  id: string;
-  name: string;
-}
-
 const statusBadgeClass = (isActive: boolean): string => {
   return isActive ? 'badge badge-success' : 'badge badge-secondary';
 };
@@ -48,7 +43,6 @@ export default function AssessmentComponentStructures() {
   const [component, setComponent] = useState<AssessmentComponent | null>(null);
   const [structures, setStructures] = useState<Structure[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
-  const [terms, setTerms] = useState<SessionTerm[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -80,36 +74,33 @@ export default function AssessmentComponentStructures() {
     is_active: true,
   });
 
-  useEffect(() => {
-    loadData();
-  }, [componentId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
 
-      const [structuresRes, classesRes, termsRes] = (await Promise.all([
+      const [structuresRes, classesRes] = (await Promise.all([
         apiFetch(`/api/v1/settings/assessment-component-structures/component/${componentId}`),
         apiFetch('/api/v1/classes'),
-        apiFetch('/api/v1/terms'),
       ])) as [
         { component?: AssessmentComponent; structures?: Structure[] },
         SchoolClass[] | { data?: SchoolClass[] },
-        SessionTerm[] | { data?: SessionTerm[] },
       ];
 
       setComponent(structuresRes?.component ?? null);
       setStructures(structuresRes?.structures || []);
       setClasses(Array.isArray(classesRes) ? classesRes : classesRes?.data || []);
-      setTerms(Array.isArray(termsRes) ? termsRes : termsRes?.data || []);
     } catch (err) {
       console.error('Error loading data:', err);
       setError('Failed to load data');
     } finally {
       setLoading(false);
     }
-  };
+  }, [componentId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
