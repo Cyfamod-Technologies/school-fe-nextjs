@@ -85,7 +85,7 @@ export default function StudentAttendancePage() {
 
   const lockSessionAndTerm = isTeacher;
 
-  const [date, setDate] = useState<string>(todayIso);
+  const [date] = useState<string>(todayIso);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [termsCache, setTermsCache] = useState<Record<string, Term[]>>({});
   const [classes, setClasses] = useState<SchoolClass[]>([]);

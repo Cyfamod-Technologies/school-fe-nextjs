@@ -190,28 +190,12 @@ export default function AssignSubjectsPage() {
     return armsCache[form.school_class_id] ?? [];
   }, [armsCache, form.school_class_id]);
 
-  const sectionsForSelection = useMemo(() => {
-    if (!form.school_class_id || !form.class_arm_id) {
-      return [];
-    }
-    const key = `${form.school_class_id}:${form.class_arm_id}`;
-    return sectionsCache[key] ?? [];
-  }, [sectionsCache, form.school_class_id, form.class_arm_id]);
-
   const filterArms = useMemo(() => {
     if (!filters.school_class_id) {
       return [];
     }
     return armsCache[filters.school_class_id] ?? [];
   }, [armsCache, filters.school_class_id]);
-
-  const filterSections = useMemo(() => {
-    if (!filters.school_class_id || !filters.class_arm_id) {
-      return [];
-    }
-    const key = `${filters.school_class_id}:${filters.class_arm_id}`;
-    return sectionsCache[key] ?? [];
-  }, [sectionsCache, filters.school_class_id, filters.class_arm_id]);
 
   useEffect(() => {
     listAllSubjects()

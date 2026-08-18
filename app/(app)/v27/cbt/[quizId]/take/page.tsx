@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { StudentAuthProvider, useStudentAuth } from '@/contexts/StudentAuthContext';
 import { apiFetch } from '@/lib/apiClient';
@@ -109,56 +109,7 @@ function TakeQuizPageInner() {
     }
   }, [authLoading, student, quizId, router]);
 
-  // Timer effect
-  useEffect(() => {
-    if (timeRemaining <= 0 || !attemptId) return;
-
-    const timer = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          // Auto-submit quiz when time expires
-          submitQuiz();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [timeRemaining, attemptId]);
-
-  const formatTime = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m ${secs}s`;
-    }
-    return `${minutes}m ${secs}s`;
-  };
-
-  const handleAnswerChange = (answer: QuizAnswer) => {
-    setAnswers(new Map(answers.set(answer.questionId, answer)));
-  };
-
-  const handleNext = () => {
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-    }
-  };
-
-  const handlePrevious = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(currentQuestionIndex - 1);
-    }
-  };
-
-  const handleGoToQuestion = (index: number) => {
-    setCurrentQuestionIndex(index);
-  };
-
-  const submitQuiz = async () => {
+  const submitQuiz = useCallback(async () => {
     if (!attemptId) return;
 
     try {
@@ -206,7 +157,57 @@ function TakeQuizPageInner() {
       setError(getErrorMessage(err, 'Failed to submit quiz'));
       console.error('Error submitting quiz:', err);
     }
+  }, [attemptId, answers, questions, router]);
+
+  // Timer effect
+  useEffect(() => {
+    if (timeRemaining <= 0 || !attemptId) return;
+
+    const timer = setInterval(() => {
+      setTimeRemaining((prev) => {
+        if (prev <= 1) {
+          // Auto-submit quiz when time expires
+          submitQuiz();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [timeRemaining, attemptId, submitQuiz]);
+
+  const formatTime = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${secs}s`;
+    }
+    return `${minutes}m ${secs}s`;
   };
+
+  const handleAnswerChange = (answer: QuizAnswer) => {
+    setAnswers(new Map(answers.set(answer.questionId, answer)));
+  };
+
+  const handleNext = () => {
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(currentQuestionIndex - 1);
+    }
+  };
+
+  const handleGoToQuestion = (index: number) => {
+    setCurrentQuestionIndex(index);
+  };
+
 
   if (authLoading || loading) {
     return (
@@ -741,6 +742,12 @@ function TakeQuizPageInner() {
             </div>
 
             {currentQuestion.image_url && (
+              // Admin-uploaded question images: unknown intrinsic
+              // dimensions, arbitrary source hosts. next/image needs
+              // real width/height (or `fill` + a sized parent) -- not
+              // safe to guess without visually checking every existing
+              // question image.
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={currentQuestion.image_url}
                 alt="Question"

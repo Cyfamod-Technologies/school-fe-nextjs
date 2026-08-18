@@ -9,7 +9,6 @@ import {
   type StaffListResponse,
 } from "@/lib/staff";
 import { useAuth } from "@/contexts/AuthContext";
-import { PermissionGate } from "@/components/PermissionGate";
 import { PERMISSIONS } from "@/lib/permissionKeys";
 
 interface FilterState {

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FormEvent, Suspense, useState } from 'react';
@@ -122,9 +123,11 @@ function CBTStudentLoginPageInner() {
         <div className="login-box">
           <div className="item-logo mb-4">
             <Link href="/" className="d-inline-flex align-items-center">
-              <img
+              <Image
                 src="/assets/img/logo2.png"
                 alt="Quiz Portal Logo"
+                width={210}
+                height={50}
                 style={{ maxWidth: '160px', height: 'auto' }}
               />
             </Link>

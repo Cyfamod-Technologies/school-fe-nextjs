@@ -265,21 +265,6 @@ export default function AssignTeachersPage() {
     [],
   );
 
-  const classArmsForForm = useMemo(() => {
-    if (!form.school_class_id) {
-      return [];
-    }
-    return classArmsByClass[form.school_class_id] ?? [];
-  }, [classArmsByClass, form.school_class_id]);
-
-  const classSectionsForForm = useMemo(() => {
-    if (!form.school_class_id || !form.class_arm_id) {
-      return [];
-    }
-    const key = `${form.school_class_id}:${form.class_arm_id}`;
-    return classSectionsByKey[key] ?? [];
-  }, [classSectionsByKey, form.school_class_id, form.class_arm_id]);
-
   const selectedContexts = useMemo<SubjectTeacherAssignmentContext[]>(() => {
     if (editingId) {
       if (!form.school_class_id) {
@@ -358,14 +343,6 @@ export default function AssignTeachersPage() {
     }
     return classArmsByClass[filters.school_class_id] ?? [];
   }, [classArmsByClass, filters.school_class_id]);
-
-  const classSectionsForFilter = useMemo(() => {
-    if (!filters.school_class_id || !filters.class_arm_id) {
-      return [];
-    }
-    const key = `${filters.school_class_id}:${filters.class_arm_id}`;
-    return classSectionsByKey[key] ?? [];
-  }, [classSectionsByKey, filters.school_class_id, filters.class_arm_id]);
 
   const selectedStudentCount = useMemo(() => {
     return Object.values(selectedStudentIds).filter(Boolean).length;
