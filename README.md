@@ -115,3 +115,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Support
 - 📫 [Open an Issue](https://github.com/Cyfamod-Technologies/school-fe-nextjs/issues)
 - 💡 [Discussions](https://github.com/Cyfamod-Technologies/school-fe-nextjs/discussions)
+
+
+<!-- Security scan triggered at 2026-08-31 18:23:07 -->
