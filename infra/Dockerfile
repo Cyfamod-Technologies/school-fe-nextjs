@@ -11,12 +11,11 @@ RUN npm ci
 # Copy source and build
 COPY . .
 ARG NEXT_PUBLIC_BACKEND_URL
-# Build with an explicitly provided backend URL or fall back to values in .env/.env.production
-RUN if [ -n "$NEXT_PUBLIC_BACKEND_URL" ]; then \
-      NEXT_PUBLIC_BACKEND_URL="$NEXT_PUBLIC_BACKEND_URL" npm run build; \
-    else \
-      npm run build; \
-    fi
+ARG NEXT_PUBLIC_DEMO_MODE=off
+# Build with explicitly provided backend URL and demo mode or fall back to values in .env/.env.production
+RUN NEXT_PUBLIC_BACKEND_URL="${NEXT_PUBLIC_BACKEND_URL:-}" \
+    NEXT_PUBLIC_DEMO_MODE="${NEXT_PUBLIC_DEMO_MODE:-off}" \
+    npm run build
 
 EXPOSE 3000
 CMD ["npm", "run", "start"]
