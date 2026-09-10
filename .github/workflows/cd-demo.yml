@@ -18,7 +18,7 @@ env:
   DOCKERFILE_PATH: ${{ vars.DOCKERFILE_PATH || 'infra/Dockerfile' }}
   BUILD_CONTEXT: ${{ vars.BUILD_CONTEXT || '.' }}
 
-  DOKPLOY_APPLICATION_ID: ${{ secrets.DOKPLOY_DEMO_APPLICATION_ID }}
+  DOKPLOY_APPLICATION_ID: ${{ secrets.DOKPLOY_DEMO_FE_APPLICATION_ID }}
 
   DOKPLOY_API_BASE_URL: http://127.0.0.1:3000/api
 
@@ -59,7 +59,7 @@ jobs:
           : "${SSH_PRIVATE_KEY:?Repository secret SSH_PRIVATE_KEY is missing}"
           : "${SSH_KNOWN_HOSTS:?Repository secret SSH_KNOWN_HOSTS is missing}"
           : "${DOKPLOY_API_KEY:?Repository secret DOKPLOY_API_KEY is missing}"
-          : "${DOKPLOY_APPLICATION_ID:?Repository secret DOKPLOY_DEMO_APPLICATION_ID is missing}"
+          : "${DOKPLOY_APPLICATION_ID:?Repository secret DOKPLOY_DEMO_FE_APPLICATION_ID is missing}"
 
           RAW_IMAGE_NAME="${IMAGE_NAME:-${GITHUB_REPOSITORY##*/}}"
 
