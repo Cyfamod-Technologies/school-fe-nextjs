@@ -227,6 +227,21 @@ export function getMenuSections(
       ],
     },
     {
+      // The v23 fee pages existed with no way to reach them -- there was no
+      // Finance section in this menu at all.
+      label: "Finance",
+      icon: "flaticon-diagram",
+      links: [
+        { label: "Overview", href: "/v23/finance-overview", requiredPermissions: "finance.dashboard.view" },
+        { label: "Fee Items & Structure", href: "/v23/fee-structure", requiredPermissions: "finance.fee-structures.view" },
+        { label: "Fee Assignments", href: "/v23/fee-assignments", requiredPermissions: "finance.assignments.view" },
+        { label: "Student Bills", href: "/v23/student-bills", requiredPermissions: "finance.bills.view" },
+        { label: "Payment Submissions", href: "/v23/payment-submissions", requiredPermissions: "finance.payments.view" },
+        { label: "Bank Details", href: "/v23/bank-details", requiredPermissions: "finance.bank.view" },
+        { label: "Audit Trail", href: "/v23/audit-log", requiredPermissions: "finance.audit.view" },
+      ],
+    },
+    {
       label: "CBT",
       icon: "flaticon-checklist",
       links: [

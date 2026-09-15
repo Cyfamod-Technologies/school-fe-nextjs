@@ -215,6 +215,30 @@ export const PERMISSION_ACTIONS: PermissionActionEntry[] = [
   { function: "Delete Fee Structure", description: "Remove structure", permission: "finance.fee-structures.delete" },
   { function: "Copy Fee Structure", description: "Duplicate structure", permission: "finance.fee-structures.copy" },
   
+  // Finance - Fee Assignments
+  { function: "View Fee Assignments", description: "List fee assignments", permission: "finance.assignments.view" },
+  { function: "Assign Fee", description: "Assign a fee to a school, class, arm or students", permission: "finance.assignments.create" },
+  { function: "Edit Fee Assignment", description: "Modify a fee assignment", permission: "finance.assignments.update" },
+  { function: "Remove Fee Assignment", description: "Remove a fee assignment", permission: "finance.assignments.delete" },
+  
+  // Finance - Student Bills
+  { function: "View Student Bills", description: "View bills and outstanding balances", permission: "finance.bills.view" },
+  { function: "Generate Bills", description: "Generate or refresh student bills", permission: "finance.bills.generate" },
+  { function: "Adjust Bill", description: "Apply discounts, surcharges or waivers", permission: "finance.bill-items.adjust" },
+  
+  // Finance - Payments
+  { function: "View Payments", description: "View submissions and verified payments", permission: "finance.payments.view" },
+  { function: "Record Payment", description: "Record a payment for a student", permission: "finance.payments.record" },
+  { function: "Verify Payment", description: "Approve a submitted payment", permission: "finance.payments.verify" },
+  { function: "Reject Payment", description: "Reject a submitted payment", permission: "finance.payments.reject" },
+  { function: "Reverse Payment", description: "Reverse a verified payment", permission: "finance.payments.reverse" },
+  { function: "Allocate Payment", description: "Apply a payment across specific fees", permission: "finance.payments.allocate" },
+  
+  // Finance - Reporting
+  { function: "Finance Dashboard", description: "View the finance dashboard", permission: "finance.dashboard.view" },
+  { function: "Finance Reports", description: "View finance reports and exports", permission: "finance.reports.view" },
+  { function: "Finance Audit Trail", description: "View the finance audit trail", permission: "finance.audit.view" },
+  
   // RBAC - Roles
   { function: "View Roles", description: "List all roles", permission: "roles.view" },
   { function: "Create Role", description: "Create new role", permission: "roles.create" },
