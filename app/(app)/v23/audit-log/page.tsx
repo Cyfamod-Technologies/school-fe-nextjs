@@ -17,10 +17,6 @@ const ACTION_LABELS: Record<string, string> = {
   "payment.allocated": "Payment allocated",
   "fee_adjustment.applied": "Fee adjustment applied",
   "fee_adjustment.reversed": "Fee adjustment reversed",
-  "bank_detail.created": "Bank account added",
-  "bank_detail.updated": "Bank account updated",
-  "bank_detail.deleted": "Bank account removed",
-  "bank_detail.set_default": "Default bank account changed",
 };
 
 export default function FinanceAuditLogPage() {
