@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { listClassArms, type ClassArm } from "@/lib/classArms";
 import { listClasses, type SchoolClass } from "@/lib/classes";
 import { listFeeItems, type FeeItem } from "@/lib/fees";
-import { getFinanceOverview, type FinanceOverview } from "@/lib/financeReports";
+import { getCollectionsByClass, type ClassCollection } from "@/lib/financeReports";
 import { listSessions, type Session } from "@/lib/sessions";
 import { formatNaira } from "@/lib/studentBills";
 import { listTermsBySession, type Term } from "@/lib/terms";
@@ -26,7 +26,7 @@ interface FeedbackState {
   message: string;
 }
 
-export default function FinanceOverviewPage() {
+export default function FinanceReportsPage() {
   const { schoolContext } = useAuth();
   const [filters, setFilters] = useState<Filters>({
     sessionId: "",
@@ -42,7 +42,7 @@ export default function FinanceOverviewPage() {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [arms, setArms] = useState<ClassArm[]>([]);
   const [feeItems, setFeeItems] = useState<FeeItem[]>([]);
-  const [overview, setOverview] = useState<FinanceOverview | null>(null);
+  const [collections, setCollections] = useState<ClassCollection[]>([]);
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
 
@@ -113,15 +113,15 @@ export default function FinanceOverviewPage() {
     void loadArms(filters.schoolClassId);
   }, [filters.schoolClassId, loadArms]);
 
-  const loadOverview = useCallback(
+  const loadCollections = useCallback(
     async (current: Filters) => {
       if (!current.sessionId || !current.termId) {
         return;
       }
       setLoading(true);
       try {
-        setOverview(
-          await getFinanceOverview({
+        setCollections(
+          await getCollectionsByClass({
             session_id: current.sessionId,
             term_id: current.termId,
             school_class_id: current.schoolClassId || undefined,
@@ -132,7 +132,7 @@ export default function FinanceOverviewPage() {
           }),
         );
       } catch (error) {
-        fail(error, "Unable to load finance data.");
+        fail(error, "Unable to load collections.");
       } finally {
         setLoading(false);
       }
@@ -141,19 +141,19 @@ export default function FinanceOverviewPage() {
   );
 
   useEffect(() => {
-    void loadOverview(filters);
-  }, [filters, loadOverview]);
+    void loadCollections(filters);
+  }, [filters, loadCollections]);
 
   return (
     <>
       <div className="breadcrumbs-area">
-        <h3>Finance Overview</h3>
+        <h3>Reports</h3>
         <ul>
           <li>
             <Link href="/v10/dashboard">Home</Link>
           </li>
           <li>Finance</li>
-          <li>Overview</li>
+          <li>Reports</li>
         </ul>
       </div>
 
@@ -163,13 +163,31 @@ export default function FinanceOverviewPage() {
         </div>
       ) : null}
 
+      <div className="row mb-4">
+        <div className="col-md-4">
+          <Link href="/v23/finance-overview" className="btn btn-outline-secondary btn-block">
+            Finance Overview
+          </Link>
+        </div>
+        <div className="col-md-4">
+          <Link href="/v23/outstanding-fees" className="btn btn-outline-secondary btn-block">
+            Outstanding Fees
+          </Link>
+        </div>
+        <div className="col-md-4">
+          <Link href="/v23/audit-log" className="btn btn-outline-secondary btn-block">
+            Audit Trail
+          </Link>
+        </div>
+      </div>
+
       <div className="card height-auto mb-4">
         <div className="card-body">
           <div className="form-row">
             <div className="col-md-3 form-group">
-              <label htmlFor="fo-session">Session</label>
+              <label htmlFor="fr-session">Session</label>
               <select
-                id="fo-session"
+                id="fr-session"
                 className="form-control"
                 value={filters.sessionId}
                 onChange={(event) =>
@@ -185,9 +203,9 @@ export default function FinanceOverviewPage() {
               </select>
             </div>
             <div className="col-md-3 form-group">
-              <label htmlFor="fo-term">Term</label>
+              <label htmlFor="fr-term">Term</label>
               <select
-                id="fo-term"
+                id="fr-term"
                 className="form-control"
                 value={filters.termId}
                 onChange={(event) => setFilters((prev) => ({ ...prev, termId: event.target.value }))}
@@ -201,17 +219,13 @@ export default function FinanceOverviewPage() {
               </select>
             </div>
             <div className="col-md-3 form-group">
-              <label htmlFor="fo-class">Class</label>
+              <label htmlFor="fr-class">Class</label>
               <select
-                id="fo-class"
+                id="fr-class"
                 className="form-control"
                 value={filters.schoolClassId}
                 onChange={(event) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    schoolClassId: event.target.value,
-                    classArmId: "",
-                  }))
+                  setFilters((prev) => ({ ...prev, schoolClassId: event.target.value, classArmId: "" }))
                 }
               >
                 <option value="">All classes</option>
@@ -223,9 +237,9 @@ export default function FinanceOverviewPage() {
               </select>
             </div>
             <div className="col-md-3 form-group">
-              <label htmlFor="fo-arm">Class Arm</label>
+              <label htmlFor="fr-arm">Class Arm</label>
               <select
-                id="fo-arm"
+                id="fr-arm"
                 className="form-control"
                 value={filters.classArmId}
                 onChange={(event) => setFilters((prev) => ({ ...prev, classArmId: event.target.value }))}
@@ -240,12 +254,11 @@ export default function FinanceOverviewPage() {
               </select>
             </div>
           </div>
-
           <div className="form-row">
             <div className="col-md-4 form-group">
-              <label htmlFor="fo-fee-item">Fee Type</label>
+              <label htmlFor="fr-fee-item">Fee Type</label>
               <select
-                id="fo-fee-item"
+                id="fr-fee-item"
                 className="form-control"
                 value={filters.feeItemId}
                 onChange={(event) => setFilters((prev) => ({ ...prev, feeItemId: event.target.value }))}
@@ -259,9 +272,9 @@ export default function FinanceOverviewPage() {
               </select>
             </div>
             <div className="col-md-4 form-group">
-              <label htmlFor="fo-from">Paid From</label>
+              <label htmlFor="fr-from">Paid From</label>
               <input
-                id="fo-from"
+                id="fr-from"
                 type="date"
                 className="form-control"
                 value={filters.from}
@@ -269,9 +282,9 @@ export default function FinanceOverviewPage() {
               />
             </div>
             <div className="col-md-4 form-group">
-              <label htmlFor="fo-to">Paid To</label>
+              <label htmlFor="fr-to">Paid To</label>
               <input
-                id="fo-to"
+                id="fr-to"
                 type="date"
                 className="form-control"
                 value={filters.to}
@@ -282,49 +295,55 @@ export default function FinanceOverviewPage() {
         </div>
       </div>
 
-      {loading ? (
-        <div className="card height-auto">
-          <div className="card-body">Loading...</div>
-        </div>
-      ) : (
-        <div className="row">
-          <div className="col-md-3">
-            <div className="border rounded p-3 mb-3">
-              <div className="text-muted small">Total Expected Fees</div>
-              <h3 className="mb-0">{formatNaira(overview?.expected)}</h3>
+      <div className="card height-auto">
+        <div className="card-body">
+          <div className="heading-layout1">
+            <div className="item-title">
+              <h3>Collections by Class</h3>
             </div>
           </div>
-          <div className="col-md-3">
-            <div className="border rounded p-3 mb-3">
-              <div className="text-muted small">Total Verified Payments</div>
-              <h3 className="mb-0 text-success">{formatNaira(overview?.verified)}</h3>
-            </div>
-          </div>
-          <div className="col-md-3">
-            <div className="border rounded p-3 mb-3">
-              <div className="text-muted small">Pending Verification</div>
-              <h3 className="mb-0 text-warning">{formatNaira(overview?.pending)}</h3>
-            </div>
-          </div>
-          <div className="col-md-3">
-            <div className="border rounded p-3 mb-3">
-              <div className="text-muted small">Outstanding</div>
-              <h3 className="mb-0 text-danger">{formatNaira(overview?.outstanding)}</h3>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="row mt-2">
-        <div className="col-md-6">
-          <Link href="/v23/outstanding-fees" className="btn btn-outline-secondary btn-block">
-            View Outstanding Fees
-          </Link>
-        </div>
-        <div className="col-md-6">
-          <Link href="/v23/reports" className="btn btn-outline-secondary btn-block">
-            View Reports
-          </Link>
+          <table className="table table-bordered">
+            <thead>
+              <tr>
+                <th>Class</th>
+                <th>Students</th>
+                <th>Expected</th>
+                <th>Verified</th>
+                <th>% Collected</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="text-center">
+                    Loading...
+                  </td>
+                </tr>
+              ) : collections.length ? (
+                collections.map((row) => {
+                  const pct =
+                    Number(row.expected) > 0
+                      ? Math.round((Number(row.verified) / Number(row.expected)) * 100)
+                      : 0;
+                  return (
+                    <tr key={row.school_class_id ?? row.class_name}>
+                      <td>{row.class_name}</td>
+                      <td>{row.students}</td>
+                      <td>{formatNaira(row.expected)}</td>
+                      <td>{formatNaira(row.verified)}</td>
+                      <td>{pct}%</td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={5} className="text-center">
+                    No data for these filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </>

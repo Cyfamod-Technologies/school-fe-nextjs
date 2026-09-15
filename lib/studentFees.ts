@@ -15,21 +15,6 @@ export interface CurrentBillResponse {
   totals?: BillTotals;
 }
 
-export interface PaymentAccount {
-  id: string;
-  bank_name: string;
-  account_name: string;
-  account_number: string;
-  branch: string | null;
-  is_default: boolean;
-}
-
-export interface PaymentAccountsResponse {
-  data: PaymentAccount[];
-  /** What the school asks payers to put in the transfer narration. */
-  payment_reference: string;
-}
-
 export async function getCurrentBill(params?: {
   sessionId?: string;
   termId?: string;
@@ -69,11 +54,15 @@ export async function listStudentPayments(): Promise<Payment[]> {
   return Array.isArray(payload?.data) ? payload.data : [];
 }
 
-export async function getPaymentAccounts(): Promise<PaymentAccountsResponse> {
-  return apiFetch<PaymentAccountsResponse>(
-    API_ROUTES.studentFeesPaymentAccounts,
+/** The "Payment Details" drill-in (spec §2/§5): evidence and which fees a
+ * payment was applied to, alongside the figures Payment History already
+ * lists inline. */
+export async function getStudentPayment(paymentId: string): Promise<Payment> {
+  const payload = await apiFetch<{ data: Payment }>(
+    `${API_ROUTES.studentFeesPayments}/${paymentId}`,
     { authScope: "student", treatForbiddenAsEmpty: false },
   );
+  return payload.data;
 }
 
 export interface SubmitPaymentPayload {
@@ -83,7 +72,6 @@ export interface SubmitPaymentPayload {
   session_id: string;
   term_id: string;
   payer_reference?: string;
-  bank_detail_id?: string;
   note?: string;
   evidence: File[];
 }
@@ -103,9 +91,6 @@ export async function submitPayment(
   form.append("term_id", payload.term_id);
   if (payload.payer_reference) {
     form.append("payer_reference", payload.payer_reference);
-  }
-  if (payload.bank_detail_id) {
-    form.append("bank_detail_id", payload.bank_detail_id);
   }
   if (payload.note) {
     form.append("note", payload.note);

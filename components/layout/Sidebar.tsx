@@ -237,7 +237,12 @@ export function getMenuSections(
         { label: "Fee Assignments", href: "/v23/fee-assignments", requiredPermissions: "finance.assignments.view" },
         { label: "Student Bills", href: "/v23/student-bills", requiredPermissions: "finance.bills.view" },
         { label: "Payment Submissions", href: "/v23/payment-submissions", requiredPermissions: "finance.payments.view" },
-        { label: "Bank Details", href: "/v23/bank-details", requiredPermissions: "finance.bank.view" },
+        // Deep-links into the same page with its Verified tab pre-selected,
+        // rather than a second copy of the page — see payment-submissions'
+        // own useSearchParams handling.
+        { label: "Verified Payments", href: "/v23/payment-submissions?status=verified", requiredPermissions: "finance.payments.view" },
+        { label: "Outstanding Fees", href: "/v23/outstanding-fees", requiredPermissions: "finance.reports.view" },
+        { label: "Reports", href: "/v23/reports", requiredPermissions: "finance.reports.view" },
         { label: "Audit Trail", href: "/v23/audit-log", requiredPermissions: "finance.audit.view" },
       ],
     },

@@ -3,11 +3,10 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   getCurrentBill,
-  getPaymentAccounts,
+  getStudentPayment,
   listBillHistory,
   listStudentPayments,
   submitPayment,
-  type PaymentAccount,
 } from "@/lib/studentFees";
 import {
   PAYMENT_METHOD_LABELS,
@@ -25,14 +24,13 @@ import {
 } from "@/lib/studentBills";
 import { downloadReceipt } from "@/lib/financeReports";
 
-type Tab = "current" | "history" | "payments" | "submit" | "accounts";
+type Tab = "current" | "history" | "payments" | "submit";
 
 const TABS: { value: Tab; label: string }[] = [
   { value: "current", label: "Current Bill" },
   { value: "history", label: "Bill History" },
   { value: "payments", label: "Payment History" },
   { value: "submit", label: "Submit Payment" },
-  { value: "accounts", label: "Where To Pay" },
 ];
 
 const METHODS: PaymentMethod[] = ["bank_transfer", "cash", "pos", "cheque", "other"];
@@ -56,13 +54,14 @@ export default function StudentFeesPage() {
   const [emptyTotals, setEmptyTotals] = useState<BillTotals | null>(null);
   const [history, setHistory] = useState<StudentBill[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
-  const [paymentReference, setPaymentReference] = useState("");
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [expandedBillId, setExpandedBillId] = useState<string | null>(null);
   const [downloadingReceiptId, setDownloadingReceiptId] = useState<string | null>(null);
+  const [detailPaymentId, setDetailPaymentId] = useState<string | null>(null);
+  const [detailPayment, setDetailPayment] = useState<Payment | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<PaymentMethod>("bank_transfer");
@@ -81,18 +80,15 @@ export default function StudentFeesPage() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [current, bills, paymentList, paymentAccounts] = await Promise.all([
+      const [current, bills, paymentList] = await Promise.all([
         getCurrentBill(),
         listBillHistory(),
         listStudentPayments(),
-        getPaymentAccounts(),
       ]);
       setBill(current.data);
       setEmptyTotals(current.totals ?? null);
       setHistory(bills);
       setPayments(paymentList);
-      setAccounts(paymentAccounts.data);
-      setPaymentReference(paymentAccounts.payment_reference);
     } catch (error) {
       fail(error, "Unable to load your fees.");
     } finally {
@@ -166,15 +162,20 @@ export default function StudentFeesPage() {
     }
   };
 
-  const copyAccountNumber = async (accountNumber: string) => {
+  const handleToggleDetail = async (payment: Payment) => {
+    if (detailPaymentId === payment.id) {
+      setDetailPaymentId(null);
+      setDetailPayment(null);
+      return;
+    }
+    setDetailPaymentId(payment.id);
+    setLoadingDetail(true);
     try {
-      await navigator.clipboard.writeText(accountNumber);
-      setFeedback({ type: "success", message: "Account number copied." });
-    } catch {
-      setFeedback({
-        type: "warning",
-        message: `Copy it manually: ${accountNumber}`,
-      });
+      setDetailPayment(await getStudentPayment(payment.id));
+    } catch (error) {
+      fail(error, "Unable to load this payment's details.");
+    } finally {
+      setLoadingDetail(false);
     }
   };
 
@@ -392,42 +393,120 @@ export default function StudentFeesPage() {
               <tbody>
                 {payments.length ? (
                   payments.map((payment) => (
-                    <tr key={payment.id}>
-                      <td>{payment.paid_at ?? "—"}</td>
-                      <td>{formatNaira(payment.amount)}</td>
-                      <td>{PAYMENT_METHOD_LABELS[payment.method] ?? payment.method}</td>
-                      <td>
-                        <div>{payment.reference}</div>
-                        {payment.receipt_number ? (
-                          <div className="text-muted small">
-                            Receipt: {payment.receipt_number}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td>
-                        <span className={`badge badge-${PAYMENT_STATUS_BADGES[payment.status]}`}>
-                          {PAYMENT_STATUS_LABELS[payment.status]}
-                        </span>
-                        {payment.rejection_reason ? (
-                          <div className="text-danger small">{payment.rejection_reason}</div>
-                        ) : null}
-                        {payment.reversal_reason ? (
-                          <div className="text-muted small">{payment.reversal_reason}</div>
-                        ) : null}
-                      </td>
-                      <td>
-                        {payment.status === "verified" ? (
+                    <>
+                      <tr key={payment.id}>
+                        <td>{payment.paid_at ?? "—"}</td>
+                        <td>{formatNaira(payment.amount)}</td>
+                        <td>{PAYMENT_METHOD_LABELS[payment.method] ?? payment.method}</td>
+                        <td>
+                          <div>{payment.reference}</div>
+                          {payment.receipt_number ? (
+                            <div className="text-muted small">
+                              Receipt: {payment.receipt_number}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td>
+                          <span className={`badge badge-${PAYMENT_STATUS_BADGES[payment.status]}`}>
+                            {PAYMENT_STATUS_LABELS[payment.status]}
+                          </span>
+                          {payment.rejection_reason ? (
+                            <div className="text-danger small">{payment.rejection_reason}</div>
+                          ) : null}
+                          {payment.reversal_reason ? (
+                            <div className="text-muted small">{payment.reversal_reason}</div>
+                          ) : null}
+                        </td>
+                        <td>
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-primary"
-                            onClick={() => handleDownloadReceipt(payment)}
-                            disabled={downloadingReceiptId === payment.id}
+                            className="btn btn-sm btn-outline-secondary mr-2"
+                            onClick={() => handleToggleDetail(payment)}
                           >
-                            {downloadingReceiptId === payment.id ? "..." : "Receipt"}
+                            {detailPaymentId === payment.id ? "Hide" : "Details"}
                           </button>
-                        ) : null}
-                      </td>
-                    </tr>
+                          {payment.status === "verified" ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-primary"
+                              onClick={() => handleDownloadReceipt(payment)}
+                              disabled={downloadingReceiptId === payment.id}
+                            >
+                              {downloadingReceiptId === payment.id ? "..." : "Receipt"}
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                      {detailPaymentId === payment.id ? (
+                        <tr key={`${payment.id}-detail`}>
+                          <td colSpan={6} className="bg-light">
+                            {loadingDetail || !detailPayment ? (
+                              <span className="text-muted">Loading...</span>
+                            ) : (
+                              <div className="row">
+                                <div className="col-md-6">
+                                  {detailPayment.payer_reference ? (
+                                    <div className="mb-2">
+                                      <strong className="small d-block">
+                                        Transaction / Reference Number
+                                      </strong>
+                                      {detailPayment.payer_reference}
+                                    </div>
+                                  ) : null}
+                                  {detailPayment.note ? (
+                                    <div className="mb-2">
+                                      <strong className="small d-block">Notes</strong>
+                                      {detailPayment.note}
+                                    </div>
+                                  ) : null}
+                                  <div className="mb-2">
+                                    <strong className="small d-block">Evidence</strong>
+                                    {(detailPayment.evidence ?? []).length ? (
+                                      (detailPayment.evidence ?? []).map((file) => (
+                                        <div key={file.id}>{file.original_name}</div>
+                                      ))
+                                    ) : (
+                                      <span className="text-muted">None attached.</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="col-md-6">
+                                  <strong className="small d-block mb-1">Applied To</strong>
+                                  {(detailPayment.allocations ?? []).length ? (
+                                    <>
+                                      {(detailPayment.allocations ?? []).map((allocation) => (
+                                        <div
+                                          key={allocation.id}
+                                          className="d-flex justify-content-between"
+                                        >
+                                          <span>{allocation.fee_name ?? "Fee"}</span>
+                                          <span>{formatNaira(allocation.amount)}</span>
+                                        </div>
+                                      ))}
+                                      {detailPayment.unallocated_amount &&
+                                      Number(detailPayment.unallocated_amount) > 0 ? (
+                                        <div className="d-flex justify-content-between text-muted">
+                                          <span>Not yet applied to a fee</span>
+                                          <span>
+                                            {formatNaira(detailPayment.unallocated_amount)}
+                                          </span>
+                                        </div>
+                                      ) : null}
+                                    </>
+                                  ) : (
+                                    <span className="text-muted">
+                                      {detailPayment.status === "verified"
+                                        ? "Not yet allocated to a specific fee."
+                                        : "Applied once the school verifies this payment."}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ) : null}
+                    </>
                   ))
                 ) : (
                   <tr>
@@ -548,52 +627,6 @@ export default function StudentFeesPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      ) : null}
-
-      {tab === "accounts" ? (
-        <div className="card height-auto">
-          <div className="card-body">
-            <div className="heading-layout1">
-              <div className="item-title">
-                <h3>School Payment Information</h3>
-              </div>
-            </div>
-            {accounts.length ? (
-              accounts.map((account) => (
-                <div className="border rounded p-3 mb-2" key={account.id}>
-                  <div className="d-flex justify-content-between align-items-center">
-                    <div>
-                      <strong>{account.bank_name}</strong>
-                      {account.is_default ? (
-                        <span className="badge badge-primary ml-2">Preferred</span>
-                      ) : null}
-                      <div>{account.account_name}</div>
-                      <div className="h5 mb-0">{account.account_number}</div>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-primary"
-                      onClick={() => copyAccountNumber(account.account_number)}
-                    >
-                      Copy Account Number
-                    </button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-muted">
-                Your school has not published its payment details yet.
-              </p>
-            )}
-
-            {paymentReference ? (
-              <div className="alert alert-info" role="note">
-                Put this in the transfer narration so the school can match your
-                payment: <strong>{paymentReference}</strong>
-              </div>
-            ) : null}
           </div>
         </div>
       ) : null}

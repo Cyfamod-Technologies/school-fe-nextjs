@@ -79,11 +79,16 @@ export interface Payment {
   verified_at: string | null;
   rejected_at?: string | null;
   reversed_at?: string | null;
-  bank_detail?: { id: string; bank_name: string; account_name: string } | null;
   session?: { id: string; name: string };
   term?: { id: string; name: string };
   evidence?: PaymentEvidenceFile[];
-  student?: { id: string; admission_no: string; name: string };
+  student?: {
+    id: string;
+    admission_no: string;
+    name: string;
+    class_name: string | null;
+    class_arm_name: string | null;
+  };
   submitted_by_type?: string | null;
   verified_by?: { id: string; name: string } | null;
   rejected_by?: { id: string; name: string } | null;

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { PermissionGate } from "@/components/PermissionGate";
 import {
@@ -41,7 +42,14 @@ const STATUS_TABS: { value: PaymentStatus; label: string }[] = [
 ];
 
 export default function PaymentSubmissionsPage() {
-  const [status, setStatus] = useState<PaymentStatus>("pending_verification");
+  // "Verified Payments" in the Finance nav deep-links here with ?status=
+  // verified rather than duplicating this page's own logic on a second
+  // route — an invalid or missing value falls back to the review queue.
+  const searchParams = useSearchParams();
+  const initialStatus = STATUS_TABS.find(
+    (tab) => tab.value === searchParams.get("status"),
+  )?.value;
+  const [status, setStatus] = useState<PaymentStatus>(initialStatus ?? "pending_verification");
   const [search, setSearch] = useState("");
   const [payments, setPayments] = useState<Payment[]>([]);
   const [total, setTotal] = useState(0);
@@ -291,6 +299,7 @@ export default function PaymentSubmissionsPage() {
               <thead>
                 <tr>
                   <th>Student</th>
+                  <th>Class</th>
                   <th>Amount</th>
                   <th>Method</th>
                   <th>Paid On</th>
@@ -303,7 +312,7 @@ export default function PaymentSubmissionsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="text-center">
+                    <td colSpan={9} className="text-center">
                       Loading...
                     </td>
                   </tr>
@@ -315,6 +324,12 @@ export default function PaymentSubmissionsPage() {
                         <div className="text-muted small">
                           {payment.student?.admission_no ?? ""}
                         </div>
+                      </td>
+                      <td>
+                        {payment.student?.class_name ?? "—"}
+                        {payment.student?.class_arm_name
+                          ? ` ${payment.student.class_arm_name}`
+                          : ""}
                       </td>
                       <td>
                         <strong>{formatNaira(payment.amount)}</strong>
@@ -428,7 +443,7 @@ export default function PaymentSubmissionsPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8} className="text-center">
+                    <td colSpan={9} className="text-center">
                       Nothing here.
                     </td>
                   </tr>

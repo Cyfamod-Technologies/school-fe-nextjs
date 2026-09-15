@@ -37,6 +37,17 @@ export interface FinanceReportFilters {
   term_id?: string;
   school_class_id?: string;
   class_arm_id?: string;
+  /** Narrows "expected"/"verified" to one fee. Ignored by the outstanding
+   * report, which lists individual students rather than a total. */
+  fee_item_id?: string;
+  /** A date range applied to *when a payment was made*, not to the bill
+   * itself. Ignored by the outstanding report (a balance is a snapshot,
+   * not a period). */
+  from?: string;
+  to?: string;
+  /** One derived bill status (see BillStatus). Only meaningful on the
+   * outstanding report; ignored elsewhere. */
+  status?: BillStatus;
   [key: string]: string | number | undefined;
 }
 

@@ -5,10 +5,18 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { listClassArms, type ClassArm } from "@/lib/classArms";
 import { listClasses, type SchoolClass } from "@/lib/classes";
-import { listFeeItems, type FeeItem } from "@/lib/fees";
-import { getFinanceOverview, type FinanceOverview } from "@/lib/financeReports";
+import {
+  getOutstandingStudents,
+  outstandingCsvUrl,
+  type OutstandingStudentRow,
+} from "@/lib/financeReports";
 import { listSessions, type Session } from "@/lib/sessions";
-import { formatNaira } from "@/lib/studentBills";
+import {
+  BILL_STATUS_BADGES,
+  BILL_STATUS_LABELS,
+  formatNaira,
+  type BillStatus,
+} from "@/lib/studentBills";
 import { listTermsBySession, type Term } from "@/lib/terms";
 
 interface Filters {
@@ -16,9 +24,7 @@ interface Filters {
   termId: string;
   schoolClassId: string;
   classArmId: string;
-  feeItemId: string;
-  from: string;
-  to: string;
+  status: BillStatus | "";
 }
 
 interface FeedbackState {
@@ -26,23 +32,20 @@ interface FeedbackState {
   message: string;
 }
 
-export default function FinanceOverviewPage() {
+export default function OutstandingFeesPage() {
   const { schoolContext } = useAuth();
   const [filters, setFilters] = useState<Filters>({
     sessionId: "",
     termId: "",
     schoolClassId: "",
     classArmId: "",
-    feeItemId: "",
-    from: "",
-    to: "",
+    status: "",
   });
   const [sessions, setSessions] = useState<Session[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [arms, setArms] = useState<ClassArm[]>([]);
-  const [feeItems, setFeeItems] = useState<FeeItem[]>([]);
-  const [overview, setOverview] = useState<FinanceOverview | null>(null);
+  const [rows, setRows] = useState<OutstandingStudentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
 
@@ -55,7 +58,6 @@ export default function FinanceOverviewPage() {
 
   useEffect(() => {
     listClasses().then(setClasses).catch((error) => fail(error, "Unable to load classes."));
-    listFeeItems().then(setFeeItems).catch((error) => fail(error, "Unable to load fee items."));
     listSessions()
       .then((loaded) => {
         setSessions(loaded);
@@ -113,26 +115,24 @@ export default function FinanceOverviewPage() {
     void loadArms(filters.schoolClassId);
   }, [filters.schoolClassId, loadArms]);
 
-  const loadOverview = useCallback(
+  const loadOutstanding = useCallback(
     async (current: Filters) => {
       if (!current.sessionId || !current.termId) {
         return;
       }
       setLoading(true);
       try {
-        setOverview(
-          await getFinanceOverview({
+        setRows(
+          await getOutstandingStudents({
             session_id: current.sessionId,
             term_id: current.termId,
             school_class_id: current.schoolClassId || undefined,
             class_arm_id: current.classArmId || undefined,
-            fee_item_id: current.feeItemId || undefined,
-            from: current.from || undefined,
-            to: current.to || undefined,
+            status: current.status || undefined,
           }),
         );
       } catch (error) {
-        fail(error, "Unable to load finance data.");
+        fail(error, "Unable to load outstanding fees.");
       } finally {
         setLoading(false);
       }
@@ -141,19 +141,19 @@ export default function FinanceOverviewPage() {
   );
 
   useEffect(() => {
-    void loadOverview(filters);
-  }, [filters, loadOverview]);
+    void loadOutstanding(filters);
+  }, [filters, loadOutstanding]);
 
   return (
     <>
       <div className="breadcrumbs-area">
-        <h3>Finance Overview</h3>
+        <h3>Outstanding Fees</h3>
         <ul>
           <li>
             <Link href="/v10/dashboard">Home</Link>
           </li>
           <li>Finance</li>
-          <li>Overview</li>
+          <li>Outstanding Fees</li>
         </ul>
       </div>
 
@@ -167,9 +167,9 @@ export default function FinanceOverviewPage() {
         <div className="card-body">
           <div className="form-row">
             <div className="col-md-3 form-group">
-              <label htmlFor="fo-session">Session</label>
+              <label htmlFor="of-session">Session</label>
               <select
-                id="fo-session"
+                id="of-session"
                 className="form-control"
                 value={filters.sessionId}
                 onChange={(event) =>
@@ -185,9 +185,9 @@ export default function FinanceOverviewPage() {
               </select>
             </div>
             <div className="col-md-3 form-group">
-              <label htmlFor="fo-term">Term</label>
+              <label htmlFor="of-term">Term</label>
               <select
-                id="fo-term"
+                id="of-term"
                 className="form-control"
                 value={filters.termId}
                 onChange={(event) => setFilters((prev) => ({ ...prev, termId: event.target.value }))}
@@ -200,18 +200,14 @@ export default function FinanceOverviewPage() {
                 ))}
               </select>
             </div>
-            <div className="col-md-3 form-group">
-              <label htmlFor="fo-class">Class</label>
+            <div className="col-md-2 form-group">
+              <label htmlFor="of-class">Class</label>
               <select
-                id="fo-class"
+                id="of-class"
                 className="form-control"
                 value={filters.schoolClassId}
                 onChange={(event) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    schoolClassId: event.target.value,
-                    classArmId: "",
-                  }))
+                  setFilters((prev) => ({ ...prev, schoolClassId: event.target.value, classArmId: "" }))
                 }
               >
                 <option value="">All classes</option>
@@ -222,10 +218,10 @@ export default function FinanceOverviewPage() {
                 ))}
               </select>
             </div>
-            <div className="col-md-3 form-group">
-              <label htmlFor="fo-arm">Class Arm</label>
+            <div className="col-md-2 form-group">
+              <label htmlFor="of-arm">Class Arm</label>
               <select
-                id="fo-arm"
+                id="of-arm"
                 className="form-control"
                 value={filters.classArmId}
                 onChange={(event) => setFilters((prev) => ({ ...prev, classArmId: event.target.value }))}
@@ -239,92 +235,98 @@ export default function FinanceOverviewPage() {
                 ))}
               </select>
             </div>
-          </div>
-
-          <div className="form-row">
-            <div className="col-md-4 form-group">
-              <label htmlFor="fo-fee-item">Fee Type</label>
+            <div className="col-md-2 form-group">
+              <label htmlFor="of-status">Status</label>
               <select
-                id="fo-fee-item"
+                id="of-status"
                 className="form-control"
-                value={filters.feeItemId}
-                onChange={(event) => setFilters((prev) => ({ ...prev, feeItemId: event.target.value }))}
+                value={filters.status}
+                onChange={(event) =>
+                  setFilters((prev) => ({ ...prev, status: event.target.value as BillStatus | "" }))
+                }
               >
-                <option value="">All fees</option>
-                {feeItems.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
+                <option value="">All statuses</option>
+                {(Object.keys(BILL_STATUS_LABELS) as BillStatus[]).map((status) => (
+                  <option key={status} value={status}>
+                    {BILL_STATUS_LABELS[status]}
                   </option>
                 ))}
               </select>
-            </div>
-            <div className="col-md-4 form-group">
-              <label htmlFor="fo-from">Paid From</label>
-              <input
-                id="fo-from"
-                type="date"
-                className="form-control"
-                value={filters.from}
-                onChange={(event) => setFilters((prev) => ({ ...prev, from: event.target.value }))}
-              />
-            </div>
-            <div className="col-md-4 form-group">
-              <label htmlFor="fo-to">Paid To</label>
-              <input
-                id="fo-to"
-                type="date"
-                className="form-control"
-                value={filters.to}
-                onChange={(event) => setFilters((prev) => ({ ...prev, to: event.target.value }))}
-              />
             </div>
           </div>
         </div>
       </div>
 
-      {loading ? (
-        <div className="card height-auto">
-          <div className="card-body">Loading...</div>
-        </div>
-      ) : (
-        <div className="row">
-          <div className="col-md-3">
-            <div className="border rounded p-3 mb-3">
-              <div className="text-muted small">Total Expected Fees</div>
-              <h3 className="mb-0">{formatNaira(overview?.expected)}</h3>
+      <div className="card height-auto">
+        <div className="card-body">
+          <div className="heading-layout1">
+            <div className="item-title">
+              <h3>{rows.length} Student(s)</h3>
             </div>
+            <a
+              className="btn btn-outline-primary"
+              href={outstandingCsvUrl({
+                session_id: filters.sessionId,
+                term_id: filters.termId,
+                school_class_id: filters.schoolClassId || undefined,
+                class_arm_id: filters.classArmId || undefined,
+                status: filters.status || undefined,
+              })}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Export CSV
+            </a>
           </div>
-          <div className="col-md-3">
-            <div className="border rounded p-3 mb-3">
-              <div className="text-muted small">Total Verified Payments</div>
-              <h3 className="mb-0 text-success">{formatNaira(overview?.verified)}</h3>
-            </div>
-          </div>
-          <div className="col-md-3">
-            <div className="border rounded p-3 mb-3">
-              <div className="text-muted small">Pending Verification</div>
-              <h3 className="mb-0 text-warning">{formatNaira(overview?.pending)}</h3>
-            </div>
-          </div>
-          <div className="col-md-3">
-            <div className="border rounded p-3 mb-3">
-              <div className="text-muted small">Outstanding</div>
-              <h3 className="mb-0 text-danger">{formatNaira(overview?.outstanding)}</h3>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="row mt-2">
-        <div className="col-md-6">
-          <Link href="/v23/outstanding-fees" className="btn btn-outline-secondary btn-block">
-            View Outstanding Fees
-          </Link>
-        </div>
-        <div className="col-md-6">
-          <Link href="/v23/reports" className="btn btn-outline-secondary btn-block">
-            View Reports
-          </Link>
+          <table className="table table-bordered">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Class</th>
+                <th>Total</th>
+                <th>Paid</th>
+                <th>Outstanding</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="text-center">
+                    Loading...
+                  </td>
+                </tr>
+              ) : rows.length ? (
+                rows.map((row) => (
+                  <tr key={row.student_bill_id}>
+                    <td>
+                      {row.student_name}
+                      <div className="text-muted small">{row.admission_no}</div>
+                    </td>
+                    <td>
+                      {row.class_name ?? "—"} {row.class_arm_name ?? ""}
+                    </td>
+                    <td>{formatNaira(row.total)}</td>
+                    <td>{formatNaira(row.verified_paid)}</td>
+                    <td>
+                      <strong>{formatNaira(row.outstanding)}</strong>
+                    </td>
+                    <td>
+                      <span className={`badge badge-${BILL_STATUS_BADGES[row.status]}`}>
+                        {BILL_STATUS_LABELS[row.status]}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="text-center">
+                    Nobody owes anything for these filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </>

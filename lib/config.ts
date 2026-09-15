@@ -174,7 +174,6 @@ export const API_ROUTES = {
   studentFeesBill: "/api/v1/student/fees/bill",
   studentFeesBills: "/api/v1/student/fees/bills",
   studentFeesPayments: "/api/v1/student/fees/payments",
-  studentFeesPaymentAccounts: "/api/v1/student/fees/payment-accounts",
   studentFeesReceipt: (paymentId: string) => `/api/v1/student/fees/payments/${paymentId}/receipt.pdf`,
   paymentReceipt: (paymentId: string) => `/api/v1/fees/payments/${paymentId}/receipt.pdf`,
   feeBillItemAdjustments: (billItemId: string) => `/api/v1/fees/bill-items/${billItemId}/adjustments`,
