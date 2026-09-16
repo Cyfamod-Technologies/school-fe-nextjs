@@ -76,6 +76,25 @@ A modern, responsive frontend for the School Management System built with Next.j
 
 ## 🧪 Available Scripts
 
+### Broadsheet security verification errors
+
+The broadsheet preview is fetched by the Next.js server from
+`/api/v1/broadsheet/print`. A Cloudflare browser challenge on that request
+prevents Laravel from generating the report; changing the displayed error alone
+does not restore generation.
+
+Configure `BACKEND_INTERNAL_URL` in the frontend server environment to a trusted
+Laravel origin reachable from that server, then restart/redeploy the frontend.
+It must point to the same backend as `NEXT_PUBLIC_BACKEND_URL`, without `/api/v1`.
+Use a private network or a secured origin with HTTPS; do not expose an unprotected
+origin publicly. This variable is server-only and currently applies to broadsheets.
+Alternatively, have the Cloudflare administrator review Security Events and
+adjust the challenge rule narrowly for the portal server and this endpoint,
+keeping Laravel authentication and other security controls enabled.
+
+Broadsheet responses are not cached, and upstream HTML errors are never displayed
+as raw source in the preview.
+
 ```bash
 npm run dev       # Start development server
 npm run build     # Build for production

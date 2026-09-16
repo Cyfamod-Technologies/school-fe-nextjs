@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { BACKEND_URL } from "@/lib/config";
 import { decryptCookieValue } from "@/lib/cookieCipher";
+import { getBroadsheetError } from "@/lib/broadsheetResponse";
 
 const REQUIRED_PARAMS = ["session_id", "term_id", "school_class_id"] as const;
 
@@ -37,6 +38,7 @@ const buildErrorResponse = (message: string, status: number) =>
     status,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "private, no-store",
     },
   });
 
@@ -56,7 +58,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const backendUrl = new URL(`${BACKEND_URL}/api/v1/broadsheet/print`);
+    // Optional trusted internal origin for server-to-server requests only.
+    const backendBase = (process.env.BACKEND_INTERNAL_URL?.trim() || BACKEND_URL).replace(/\/+$/, "");
+    const backendUrl = new URL(`${backendBase}/api/v1/broadsheet/print`);
+    if (!["http:", "https:"].includes(backendUrl.protocol)) {
+      throw new Error("Invalid backend protocol");
+    }
 
     [...REQUIRED_PARAMS, "class_arm_id", "autoprint", "embedded"].forEach((param) => {
       const value = searchParams.get(param);
@@ -90,42 +97,28 @@ export async function GET(request: NextRequest) {
     const response = await fetch(backendUrl.toString(), {
       headers: proxyHeaders,
       credentials: "include",
+      cache: "no-store",
+      signal: AbortSignal.timeout(30_000),
     });
 
-    if (!response.ok) {
-      let message = "Unable to load broadsheet.";
-      const contentType = response.headers.get("content-type") || "";
-
-      if (contentType.includes("application/json")) {
-        try {
-          const errorData = await response.json();
-          message = errorData.message || errorData.error || message;
-        } catch {
-          // ignore parse errors
-        }
-      } else {
-        const text = await response.text().catch(() => "");
-        if (text.trim()) {
-          message = text.trim();
-        }
-      }
-
-      return buildErrorResponse(message, response.status);
-    }
-
     const html = await response.text();
+    const upstreamError = getBroadsheetError(response, html);
+    if (upstreamError) {
+      return buildErrorResponse(upstreamError.message, upstreamError.status);
+    }
 
     return new NextResponse(html, {
       status: 200,
       headers: {
         "Content-Type": response.headers.get("content-type") ?? "text/html; charset=utf-8",
+        "Cache-Control": "private, no-store",
       },
     });
   } catch (error) {
     console.error("Broadsheet print route failed", error);
     return buildErrorResponse(
-      error instanceof Error ? error.message : "Unexpected error while generating broadsheet.",
-      500,
+      "The broadsheet service could not be reached. Please try again or contact your administrator.",
+      502,
     );
   }
 }
