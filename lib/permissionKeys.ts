@@ -297,6 +297,38 @@ export const PERMISSIONS = {
   FINANCE_FEE_STRUCTURES_COPY: 'finance.fee-structures.copy',
 
   // ============================================
+  // Finance - Fee Assignments (v23)
+  // ============================================
+  FINANCE_ASSIGNMENTS_VIEW: 'finance.assignments.view',
+  FINANCE_ASSIGNMENTS_CREATE: 'finance.assignments.create',
+  FINANCE_ASSIGNMENTS_UPDATE: 'finance.assignments.update',
+  FINANCE_ASSIGNMENTS_DELETE: 'finance.assignments.delete',
+
+  // ============================================
+  // Finance - Student Bills (v23)
+  // ============================================
+  FINANCE_BILLS_VIEW: 'finance.bills.view',
+  FINANCE_BILLS_GENERATE: 'finance.bills.generate',
+  FINANCE_BILL_ITEMS_ADJUST: 'finance.bill-items.adjust',
+
+  // ============================================
+  // Finance - Payments (v23)
+  // ============================================
+  FINANCE_PAYMENTS_VIEW: 'finance.payments.view',
+  FINANCE_PAYMENTS_RECORD: 'finance.payments.record',
+  FINANCE_PAYMENTS_VERIFY: 'finance.payments.verify',
+  FINANCE_PAYMENTS_REJECT: 'finance.payments.reject',
+  FINANCE_PAYMENTS_REVERSE: 'finance.payments.reverse',
+  FINANCE_PAYMENTS_ALLOCATE: 'finance.payments.allocate',
+
+  // ============================================
+  // Finance - Reporting (v23)
+  // ============================================
+  FINANCE_DASHBOARD_VIEW: 'finance.dashboard.view',
+  FINANCE_REPORTS_VIEW: 'finance.reports.view',
+  FINANCE_AUDIT_VIEW: 'finance.audit.view',
+
+  // ============================================
   // Roles (v24)
   // ============================================
   ROLES_VIEW: 'roles.view',
@@ -538,6 +570,22 @@ export const PERMISSION_GROUPS = {
       PERMISSIONS.FINANCE_FEE_STRUCTURES_CREATE,
       PERMISSIONS.FINANCE_FEE_STRUCTURES_UPDATE,
       PERMISSIONS.FINANCE_FEE_STRUCTURES_DELETE,
+      PERMISSIONS.FINANCE_ASSIGNMENTS_VIEW,
+      PERMISSIONS.FINANCE_ASSIGNMENTS_CREATE,
+      PERMISSIONS.FINANCE_ASSIGNMENTS_UPDATE,
+      PERMISSIONS.FINANCE_ASSIGNMENTS_DELETE,
+      PERMISSIONS.FINANCE_BILLS_VIEW,
+      PERMISSIONS.FINANCE_BILLS_GENERATE,
+      PERMISSIONS.FINANCE_BILL_ITEMS_ADJUST,
+      PERMISSIONS.FINANCE_PAYMENTS_VIEW,
+      PERMISSIONS.FINANCE_PAYMENTS_RECORD,
+      PERMISSIONS.FINANCE_PAYMENTS_VERIFY,
+      PERMISSIONS.FINANCE_PAYMENTS_REJECT,
+      PERMISSIONS.FINANCE_PAYMENTS_REVERSE,
+      PERMISSIONS.FINANCE_PAYMENTS_ALLOCATE,
+      PERMISSIONS.FINANCE_DASHBOARD_VIEW,
+      PERMISSIONS.FINANCE_REPORTS_VIEW,
+      PERMISSIONS.FINANCE_AUDIT_VIEW,
     ],
   },
   roles: {
