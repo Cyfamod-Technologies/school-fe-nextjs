@@ -231,7 +231,7 @@ export function LoginForm() {
               className="btn btn-sm btn-outline-secondary"
               onClick={() => applyDemoCredentials("staff")}
             >
-              Staff: chika-nnaji@demointernational.edu.ng / password
+              Staff: folake-balarabe@demointernational.edu.ng / password
             </button>
           </div>
         </div>

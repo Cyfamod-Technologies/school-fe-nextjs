@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import Image, { type ImageLoader } from "next/image";
-import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BACKEND_URL, EMAIL_VERIFICATION_ENABLED, SCHOOL_REGISTRATION_ENABLED } from "@/lib/config";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default function RegisterPage() {
+function RegisterPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const registrationEnabled = SCHOOL_REGISTRATION_ENABLED;
   const verificationEnabled = EMAIL_VERIFICATION_ENABLED;
 
@@ -18,6 +19,7 @@ export default function RegisterPage() {
     email: "",
     address: "",
     subdomain: "",
+    referral_code: "",
     password: "",
     password_confirmation: "",
   });
@@ -27,6 +29,22 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const referralFromQuery = searchParams.get("ref") ?? searchParams.get("referral_code");
+    if (!referralFromQuery) {
+      return;
+    }
+
+    setFormData((prev) =>
+      prev.referral_code.trim() !== ""
+        ? prev
+        : {
+            ...prev,
+            referral_code: referralFromQuery,
+          },
+    );
+  }, [searchParams]);
 
   const updateField = (
     key: keyof typeof formData,
@@ -95,8 +113,8 @@ export default function RegisterPage() {
   if (!registrationEnabled) {
     return (
       <>
-        <div className="login-page-wrap">
-          <div className="login-page-content">
+        <div className="login-page-wrap register-page-wrap">
+          <div className="login-page-content register-page-content">
             <div className="login-box text-center py-5 px-4">
               <div className="item-logo mb-4">
                 <Image
@@ -127,8 +145,8 @@ export default function RegisterPage() {
 
   return (
     <>
-      <div className="login-page-wrap">
-        <div className="login-page-content">
+      <div className="login-page-wrap register-page-wrap">
+        <div className="login-page-content register-page-content">
           <div className="register-login-cta mb-4 p-3 d-flex align-items-center justify-content-between flex-wrap">
             <div className="d-flex align-items-center">
               <span className="register-login-icon d-inline-flex align-items-center justify-content-center mr-3">
@@ -147,7 +165,7 @@ export default function RegisterPage() {
               Go to Login
             </Link>
           </div>
-          <div className="login-box">
+          <div className="login-box register-login-box">
             <div className="item-logo">
               <Image
                 src="/assets/img/logo2.png"
@@ -228,6 +246,17 @@ export default function RegisterPage() {
                     required
                     value={formData.subdomain}
                     onChange={(event) => updateField("subdomain", event.target.value)}
+                  />
+                </div>
+                <div className="col-lg-6 col-12 form-group">
+                  <label htmlFor="referral_code">Referral Code (Optional)</label>
+                  <input
+                    id="referral_code"
+                    type="text"
+                    placeholder="Enter referral code"
+                    className="form-control"
+                    value={formData.referral_code}
+                    onChange={(event) => updateField("referral_code", event.target.value)}
                   />
                 </div>
                 <div className="col-lg-6 col-12 form-group position-relative">
@@ -325,9 +354,45 @@ export default function RegisterPage() {
   );
 }
 
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="login-page-wrap register-page-wrap">Loading...</div>}>
+      <RegisterPageContent />
+    </Suspense>
+  );
+}
+
 const passthroughLoader: ImageLoader = ({ src }) => src;
 
 const styles = `
+.register-page-wrap {
+  position: relative;
+  min-height: 100vh;
+  height: auto;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.register-page-content {
+  min-height: 100vh;
+  height: auto;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 30px 24px 48px;
+}
+
+.register-page-content .register-login-cta,
+.register-page-content .register-login-box,
+.register-page-content .register-login-footer {
+  width: min(100%, 1040px);
+}
+
+.register-page-content .register-login-box {
+  min-width: 0;
+  padding: 3rem 2.5rem;
+}
+
 .register-login-cta {
   background: linear-gradient(135deg, #4076ff 0%, #6cc5ff 100%);
   border-radius: 18px;
@@ -385,5 +450,38 @@ const styles = `
 .register-login-footer .register-login-footer-link:hover {
   color: #0f4fe0;
   border-color: rgba(15, 79, 224, 0.6);
+}
+
+@media only screen and (max-width: 991px) {
+  .register-page-content {
+    padding: 24px 16px 32px;
+  }
+
+  .register-page-content .register-login-box {
+    padding: 2.25rem 1.5rem;
+  }
+}
+
+@media only screen and (max-width: 575px) {
+  .register-page-wrap {
+    min-height: 100dvh;
+    background-size: cover;
+    background-position: center top;
+  }
+
+  .register-page-content {
+    min-height: 100dvh;
+    padding: 18px 14px 28px;
+  }
+
+  .register-login-cta {
+    border-radius: 14px;
+    margin-bottom: 0.85rem !important;
+  }
+
+  .register-login-action {
+    width: 100%;
+    margin-top: 0.7rem;
+  }
 }
 `;
